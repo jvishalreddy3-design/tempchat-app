@@ -15,7 +15,7 @@
 
   <!-- Tailwind CSS -->
   <script src="https://cdn.tailwindcss.com"></script>
-  <script src="/socket.io/socket.io.js"></script>
+  <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
 
   <script>
     tailwind.config = {
@@ -1707,7 +1707,7 @@
         return;
       }
 
-      socket = window.io({
+      socket = window.io('https://tempchat-app-backend.onrender.com', {
         timeout: 8000,
         reconnection: true,
         reconnectionAttempts: 5
