@@ -1,0 +1,2906 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TempChat | Chat Without Limits</title>
+  
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  
+  <!-- FontAwesome for Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="/socket.io/socket.io.js"></script>
+
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Manrope', 'sans-serif'],
+          },
+          colors: {
+            accent: 'var(--accent-color)',
+            'accent-hover': 'var(--accent-hover)',
+          },
+          animation: {
+            'fade-in-up': 'fadeInUp 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards',
+            'pop-in': 'popIn 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards',
+            'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+          },
+          keyframes: {
+            fadeInUp: {
+              '0%': { opacity: '0', transform: 'translateY(10px) scale(0.98)' },
+              '100%': { opacity: '1', transform: 'translateY(0) scale(1)' },
+            },
+            popIn: {
+              '0%': { opacity: '0', transform: 'scale(0.8)' },
+              '70%': { opacity: '1', transform: 'scale(1.05)' },
+              '100%': { opacity: '1', transform: 'scale(1)' },
+            }
+          }
+        }
+      }
+    }
+  </script>
+
+  <style>
+    :root {
+      --bg-base: #fff0f5;
+      --bg-surface: #fffdfd;
+      --bg-panel: rgba(255, 255, 255, 0.85);
+      --bg-elevated: rgba(255, 255, 255, 0.95);
+      --bg-soft: #fff5f8;
+      --text-main: #1a1a2e;
+      --text-muted: #5d4e5c;
+      --text-faint: #9a8b96;
+      --border-color: rgba(212, 120, 168, 0.18);
+      --border-strong: rgba(212, 120, 168, 0.35);
+      --accent-color: #d478a8;
+      --accent-hover: #c06894;
+      --accent-gradient: linear-gradient(135deg, #ec4899 0%, #f43f5e 35%, #fb7185 70%, #fda4af 100%);
+      --accent-wash: rgba(236, 72, 153, 0.12);
+      --bubble-me: var(--accent-gradient);
+      --bubble-them: rgba(255, 255, 255, 0.9);
+      --text-bubble-me: #ffffff;
+      --text-bubble-them: #1a1a2e;
+      --online: #22c55e;
+      --warning: #f59e0b;
+      --danger: #ef4444;
+      --shadow-sm: 0 4px 20px rgba(212, 120, 168, 0.08);
+      --shadow-md: 0 12px 40px rgba(212, 120, 168, 0.12);
+      --shadow-lg: 0 24px 80px rgba(212, 120, 168, 0.18);
+      --radius-panel: 28px;
+      --radius-control: 16px;
+      --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+      --glass-bg: rgba(255, 255, 255, 0.7);
+      --glass-border: rgba(212, 120, 168, 0.15);
+      --glass-shadow: 0 8px 32px rgba(212, 120, 168, 0.1);
+      --liquid-pink-1: rgba(255, 182, 193, 0.4);
+      --liquid-pink-2: rgba(255, 192, 203, 0.35);
+      --liquid-pink-3: rgba(244, 114, 182, 0.25);
+      --liquid-white: rgba(255, 255, 255, 0.6);
+    }
+    :root[data-atmosphere="dark"] {
+      --bg-base: #1a0a14;
+      --bg-surface: #24101b;
+      --bg-panel: rgba(36, 16, 27, 0.85);
+      --bg-elevated: rgba(48, 22, 35, 0.9);
+      --bg-soft: #2d1520;
+      --text-main: #ffeef5;
+      --text-muted: #d4b8c8;
+      --text-faint: #8b6b7d;
+      --border-color: rgba(255, 150, 180, 0.25);
+      --glass-bg: rgba(30, 12, 22, 0.8);
+      --glass-border: rgba(255, 150, 180, 0.2);
+      --glass-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+      --liquid-pink-1: rgba(255, 100, 150, 0.3);
+      --liquid-pink-2: rgba(255, 130, 170, 0.25);
+      --liquid-pink-3: rgba(236, 72, 153, 0.2);
+      --liquid-white: rgba(255, 255, 255, 0.1);
+    }
+    :root[data-atmosphere="system"] {
+      --bg-base: #fff5f8;
+      --bg-surface: #fffdfd;
+      --bg-soft: #fff0f5;
+      --border-color: rgba(212, 120, 168, 0.16);
+    }
+
+    * { box-sizing: border-box; }
+    html { background: var(--bg-base); }
+    body {
+      background:
+        radial-gradient(ellipse 60% 50% at 10% 0%, var(--liquid-pink-1), transparent 55%),
+        radial-gradient(ellipse 45% 40% at 90% 100%, var(--liquid-pink-2), transparent 50%),
+        radial-gradient(ellipse 35% 35% at 50% 50%, var(--liquid-pink-3), transparent 45%),
+        linear-gradient(135deg, #fffafc 0%, #ffeef5 35%, #fff8fa 70%, #ffeef5 100%);
+      color: var(--text-main);
+      font-family: 'Manrope', sans-serif;
+      overflow: hidden;
+      isolation: isolate;
+    }
+    button, input, textarea { font: inherit; }
+    button { -webkit-tap-highlight-color: transparent; }
+    button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 3px solid rgba(236, 72, 153, 0.26); outline-offset: 3px; }
+    ::selection { background: rgba(236, 72, 153, 0.18); color: var(--text-main); }
+    ::-webkit-scrollbar { width: 8px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: rgba(115, 121, 146, 0.28); border: 2px solid transparent; border-radius: 999px; background-clip: padding-box; }
+    ::-webkit-scrollbar-thumb:hover { background: rgba(115, 121, 146, 0.48); border: 2px solid transparent; background-clip: padding-box; }
+
+    /* ===== LIQUID MORPHISM BACKGROUND CANVAS ===== */
+    #liquid-canvas {
+      position: fixed;
+      inset: 0;
+      z-index: -1;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+    }
+
+    .liquid-blob {
+      position: fixed;
+      border-radius: 50%;
+      filter: blur(80px);
+      pointer-events: none;
+      z-index: -1;
+      opacity: 0.5;
+      animation: liquidDrift 20s ease-in-out infinite alternate;
+    }
+    .liquid-blob-1 { width: 40vw; height: 40vw; max-width: 500px; max-height: 500px; top: -10vw; right: -10vw; background: radial-gradient(circle, var(--liquid-pink-1), transparent 70%); animation-delay: 0s; }
+    .liquid-blob-2 { width: 35vw; height: 35vw; max-width: 400px; max-height: 400px; bottom: -15vw; left: -10vw; background: radial-gradient(circle, var(--liquid-pink-2), transparent 70%); animation-delay: -7s; }
+    .liquid-blob-3 { width: 30vw; height: 30vw; max-width: 350px; max-height: 350px; top: 40%; left: 50%; transform: translate(-50%, -50%); background: radial-gradient(circle, var(--liquid-pink-3), transparent 70%); animation-delay: -14s; }
+
+    @keyframes liquidDrift {
+      0% { transform: translate3d(0, 0, 0) scale(1) rotate(0deg); }
+      25% { transform: translate3d(30px, -20px, 0) scale(1.05) rotate(2deg); }
+      50% { transform: translate3d(-20px, 30px, 0) scale(0.98) rotate(-1deg); }
+      75% { transform: translate3d(15px, 25px, 0) scale(1.03) rotate(1deg); }
+      100% { transform: translate3d(-10px, -15px, 0) scale(1) rotate(0deg); }
+    }
+
+    .glass {
+      background: var(--glass-bg);
+      border: 1px solid var(--glass-border);
+      box-shadow: var(--glass-shadow);
+      backdrop-filter: blur(24px) saturate(1.2);
+      -webkit-backdrop-filter: blur(24px) saturate(1.2);
+    }
+
+    .btn-primary {
+      color: white;
+      background: var(--accent-gradient);
+      box-shadow: 0 10px 30px rgba(236, 72, 153, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.3);
+      transition: transform 180ms var(--ease-out), box-shadow 180ms ease, filter 180ms ease;
+    }
+    .btn-primary:hover { transform: translateY(-3px); filter: saturate(1.08); box-shadow: 0 16px 40px rgba(236, 72, 153, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.3); }
+    .btn-primary:active { transform: translateY(0) scale(0.98); box-shadow: 0 6px 20px rgba(236, 72, 153, 0.25); }
+
+    .product-nav { background: rgba(252, 252, 254, 0.68); border-bottom-color: rgba(76, 84, 110, 0.1); }
+    .product-nav .fa-bolt { display: grid; width: 30px; height: 30px; place-items: center; color: #fff; font-size: 13px; border-radius: 10px; background: var(--accent-gradient); box-shadow: 0 7px 17px rgba(93, 92, 230, 0.24); }
+    .landing-artwork { position: absolute; inset: 5.5rem 0 auto; width: min(68vw, 780px); height: min(68vw, 520px); right: -9vw; z-index: 0; object-fit: contain; opacity: 0.2; mix-blend-mode: multiply; filter: saturate(0.84) contrast(0.94); pointer-events: none; user-select: none; animation: artworkFloat 16s ease-in-out infinite alternate; }
+    .love-atmosphere { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
+    .love-symbol { position: absolute; color: rgba(212, 120, 168, 0.15); font-size: clamp(1.4rem, 3vw, 2.8rem); line-height: 1; text-shadow: 0 6px 18px rgba(212, 120, 168, 0.12); animation: loveFloat 14s ease-in-out infinite alternate; }
+    .love-symbol:nth-child(1) { left: 7%; top: 18%; animation-delay: -2s; }
+    .love-symbol:nth-child(2) { left: 20%; top: 65%; font-size: 1.6rem; animation-delay: -9s; }
+    .love-symbol:nth-child(3) { right: 11%; top: 19%; font-size: 1.8rem; animation-delay: -4s; }
+    .love-symbol:nth-child(4) { right: 28%; bottom: 13%; font-size: 2.2rem; animation-delay: -11s; }
+    .love-symbol:nth-child(5) { left: 46%; top: 29%; font-size: 1.2rem; animation-delay: -6s; }
+    .love-symbol:nth-child(6) { left: 4%; bottom: 8%; font-size: 2.3rem; animation-delay: -1s; }
+    .landing-hero { min-height: 42rem; position: relative; z-index: 1; }
+    .landing-hero::after { content: ''; position: absolute; width: 26rem; height: 26rem; border-radius: 50%; right: 5%; top: 8%; background: radial-gradient(circle, rgba(255, 255, 255, 0.6), transparent 65%); pointer-events: none; }
+    .landing-hero h1 { letter-spacing: -0.06em; max-width: 10ch; }
+    .landing-hero h1 span { background: var(--accent-gradient); -webkit-background-clip: text; background-clip: text; color: transparent; }
+    .hero-preview { border-color: rgba(255, 255, 255, 0.78); box-shadow: var(--shadow-lg), inset 0 1px 0 rgba(255, 255, 255, 0.88); }
+    .hero-preview::before { content: ''; position: absolute; inset: -1px; z-index: -1; border-radius: inherit; background: linear-gradient(135deg, rgba(255,255,255,0.82), rgba(255,255,255,0.08)); }
+    .hero-preview .bg-gradient-to-tr { opacity: 0.24; animation: breathe 8s ease-in-out infinite; }
+    #landing-view > section:nth-of-type(1) { background: rgba(255, 255, 255, 0.46); border-top: 1px solid rgba(255,255,255,0.58); border-bottom: 1px solid rgba(76,84,110,0.08); }
+    #landing-view #features > div > div > div { border-color: rgba(255,255,255,0.75); transition: transform 220ms var(--ease-out), box-shadow 220ms ease, border-color 220ms ease; }
+    #landing-view #features > div > div > div:hover { transform: translateY(-5px); border-color: var(--border-strong); box-shadow: var(--shadow-md); }
+
+    /* Landing-only: a deliberately darker, deeper glass world. The chat view
+       keeps its separate light readability system. */
+    #landing-view.landing-experience {
+      color: #f7f5ff;
+      overflow-x: hidden;
+      background:
+        radial-gradient(ellipse 58% 48% at 14% 3%, rgba(70, 91, 210, 0.43), transparent 68%),
+        radial-gradient(ellipse 44% 52% at 88% 22%, rgba(190, 72, 188, 0.34), transparent 70%),
+        radial-gradient(ellipse 40% 38% at 58% 88%, rgba(70, 159, 255, 0.18), transparent 74%),
+        linear-gradient(136deg, #07112c 0%, #11113b 42%, #271340 100%);
+      isolation: isolate;
+      scrollbar-color: rgba(194, 188, 255, 0.42) transparent;
+    }
+    #landing-view.landing-experience::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      z-index: -3;
+      pointer-events: none;
+      background-image:
+        linear-gradient(rgba(208, 219, 255, 0.035) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(208, 219, 255, 0.035) 1px, transparent 1px);
+      background-size: 72px 72px;
+      mask-image: radial-gradient(ellipse at center, black, transparent 76%);
+    }
+    #landing-view.landing-experience::after {
+      content: '';
+      position: fixed;
+      inset: 0;
+      z-index: -2;
+      pointer-events: none;
+      background: radial-gradient(ellipse at center, transparent 34%, rgba(1, 5, 22, 0.42) 100%);
+    }
+    #landing-view.landing-experience .landing-artwork {
+      inset: 8rem -9vw auto auto;
+      width: min(66vw, 780px);
+      height: min(56vw, 620px);
+      z-index: -1;
+      opacity: 0.11;
+      mix-blend-mode: screen;
+      filter: saturate(1.12) contrast(1.1) brightness(1.13);
+      mask-image: radial-gradient(ellipse at 52% 48%, #000 31%, transparent 70%);
+      -webkit-mask-image: radial-gradient(ellipse at 52% 48%, #000 31%, transparent 70%);
+    }
+    #landing-view.landing-experience .love-atmosphere { z-index: 0; }
+    #landing-view.landing-experience .love-symbol { color: rgba(255, 179, 231, 0.34); text-shadow: 0 0 24px rgba(243, 124, 226, 0.55); }
+    #landing-view.landing-experience .future-particles { position: absolute; inset: 0; z-index: 0; overflow: hidden; pointer-events: none; }
+    #landing-view.landing-experience .future-particle { position: absolute; width: 4px; height: 4px; border-radius: 50%; background: #d7c7ff; box-shadow: 0 0 13px 3px rgba(178,151,255,0.7); opacity: 0.66; animation: particleDrift 10s ease-in-out infinite alternate; }
+    #landing-view.landing-experience .future-particle:nth-child(1) { top: 15%; left: 5%; } #landing-view.landing-experience .future-particle:nth-child(2) { top: 31%; left: 48%; width: 3px; height: 3px; animation-delay: -3s; } #landing-view.landing-experience .future-particle:nth-child(3) { top: 11%; right: 18%; width: 6px; height: 6px; background: #ffaeda; animation-delay: -7s; } #landing-view.landing-experience .future-particle:nth-child(4) { top: 60%; right: 8%; animation-delay: -2s; } #landing-view.landing-experience .future-particle:nth-child(5) { top: 76%; left: 18%; width: 2px; height: 2px; animation-delay: -8s; } #landing-view.landing-experience .future-particle:nth-child(6) { top: 88%; left: 73%; background: #9dd9ff; animation-delay: -5s; } #landing-view.landing-experience .future-particle:nth-child(7) { top: 45%; left: 33%; width: 3px; height: 3px; animation-delay: -9s; }
+    #landing-view.landing-experience .product-nav {
+      position: fixed;
+      top: 20px;
+      left: 50%;
+      width: min(calc(100% - 32px), 1160px);
+      height: 68px;
+      transform: translateX(-50%);
+      border: 1px solid rgba(225, 228, 255, 0.23);
+      border-radius: 22px;
+      background: linear-gradient(115deg, rgba(255,255,255,0.16), rgba(210,202,255,0.07));
+      box-shadow: 0 20px 60px rgba(0, 0, 24, 0.35), inset 0 1px 0 rgba(255,255,255,0.28), inset 0 -1px 0 rgba(208,203,255,0.05);
+      backdrop-filter: blur(30px) saturate(1.35);
+      -webkit-backdrop-filter: blur(30px) saturate(1.35);
+    }
+    #landing-view.landing-experience .product-nav > div { max-width: none; height: 100%; padding: 0 20px; }
+    #landing-view.landing-experience .brand-lockup { color: #fff; letter-spacing: -0.04em; }
+    #landing-view.landing-experience .product-nav .fa-bolt { width: 32px; height: 32px; border-radius: 11px; background: linear-gradient(135deg, #9e77ff, #d76cce); box-shadow: 0 7px 22px rgba(164, 113, 255, 0.48), inset 0 1px 1px rgba(255,255,255,0.5); }
+    #landing-view.landing-experience .future-nav-link { color: rgba(240, 240, 255, 0.72); transition: color 180ms ease, text-shadow 180ms ease; }
+    #landing-view.landing-experience .future-nav-link:hover { color: #fff; text-shadow: 0 0 16px rgba(204, 197, 255, 0.75); }
+    #landing-view.landing-experience .future-cta {
+      color: #fff;
+      border: 1px solid rgba(255,255,255,0.3);
+      background: linear-gradient(120deg, rgba(150, 107, 255, 0.88), rgba(236, 104, 188, 0.83));
+      box-shadow: 0 8px 26px rgba(165, 87, 246, 0.36), inset 0 1px 0 rgba(255,255,255,0.44);
+      transition: transform 180ms var(--ease-out), box-shadow 180ms ease, filter 180ms ease;
+    }
+    #landing-view.landing-experience .future-cta:hover { transform: translateY(-2px); filter: brightness(1.08); box-shadow: 0 13px 34px rgba(175, 94, 255, 0.55), inset 0 1px 0 rgba(255,255,255,0.55); }
+    #landing-view.landing-experience .future-hero {
+      position: relative;
+      z-index: 1;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(420px, 0.9fr);
+      align-items: center;
+      gap: clamp(36px, 7vw, 110px);
+      width: min(100% - 48px, 1160px);
+      min-height: 730px;
+      margin: 0 auto;
+      padding: 132px 0 68px;
+    }
+    #landing-view.landing-experience .future-copy { position: relative; z-index: 4; }
+    #landing-view.landing-experience .future-eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 9px;
+      padding: 8px 13px;
+      color: #f5edff;
+      font-size: 0.75rem;
+      font-weight: 700;
+      letter-spacing: 0.055em;
+      text-transform: uppercase;
+      border: 1px solid rgba(226, 217, 255, 0.28);
+      border-radius: 999px;
+      background: rgba(205, 191, 255, 0.11);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.27), 0 9px 30px rgba(0,0,0,0.16);
+      backdrop-filter: blur(16px);
+    }
+    #landing-view.landing-experience .future-eyebrow::before { content: ''; width: 7px; height: 7px; border-radius: 99px; background: #f3a6e8; box-shadow: 0 0 14px #f49ce5; }
+    #landing-view.landing-experience .future-title { max-width: 680px; margin: 21px 0 22px; color: #fff; font-size: clamp(3.4rem, 6.8vw, 6.6rem); font-weight: 800; line-height: 0.94; letter-spacing: -0.078em; text-shadow: 0 10px 38px rgba(0,0,0,0.23); }
+    #landing-view.landing-experience .future-title > span { display: block; color: transparent; background: linear-gradient(105deg, #fff 0%, #d7c6ff 36%, #faafd8 70%, #95c8ff 100%); -webkit-background-clip: text; background-clip: text; }
+    #landing-view.landing-experience .future-description { max-width: 540px; margin-bottom: 32px; color: rgba(234, 236, 255, 0.75); font-size: clamp(1rem, 1.5vw, 1.15rem); line-height: 1.75; }
+    #landing-view.landing-experience .future-actions { position: relative; z-index: 6; display: flex; flex-wrap: wrap; align-items: center; gap: 14px; }
+    #landing-view.landing-experience .future-primary {
+      position: relative;
+      isolation: isolate;
+      overflow: hidden;
+      min-height: 56px;
+      padding: 0 23px;
+      color: #fff;
+      font-weight: 800;
+      border: 1px solid rgba(255,255,255,0.35);
+      border-radius: 17px;
+      background: linear-gradient(115deg, #7561ff, #a56dff 49%, #ea7eb9 100%);
+      box-shadow: 0 14px 34px rgba(112, 81, 255, 0.37), inset 0 1px 0 rgba(255,255,255,0.38);
+      animation: ctaBreath 3.4s ease-in-out infinite;
+      transition: transform 180ms var(--ease-out), box-shadow 180ms ease;
+    }
+    #landing-view.landing-experience .future-primary::after { content: ''; position: absolute; inset: 0; z-index: -1; background: linear-gradient(104deg, transparent 25%, rgba(255,255,255,0.42) 49%, transparent 69%); transform: translateX(-120%); transition: transform 520ms var(--ease-out); }
+    #landing-view.landing-experience .future-primary:hover { transform: translateY(-3px) scale(1.015); box-shadow: 0 20px 42px rgba(148, 94, 255, 0.54), inset 0 1px 0 rgba(255,255,255,0.47); }
+    #landing-view.landing-experience .future-primary:hover::after { transform: translateX(120%); }
+    #landing-view.landing-experience .future-primary:active { transform: translateY(0) scale(0.985); box-shadow: 0 8px 20px rgba(112, 81, 255, 0.36), inset 0 1px 0 rgba(255,255,255,0.32); }
+    #landing-view.landing-experience .future-primary, #landing-view.landing-experience .future-secondary { pointer-events: auto; }
+    #landing-view.landing-experience .future-secondary { min-height: 56px; padding: 0 19px; color: rgba(249,248,255,0.9); font-weight: 800; border: 1px solid rgba(255,255,255,0.22); border-radius: 17px; background: rgba(255,255,255,0.08); box-shadow: inset 0 1px 0 rgba(255,255,255,0.16); backdrop-filter: blur(14px); transition: transform 180ms var(--ease-out), color 180ms ease, background-color 180ms ease, border-color 180ms ease; }
+    #landing-view.landing-experience .future-secondary:hover { color: #fff; border-color: rgba(255,255,255,0.43); background: rgba(255,255,255,0.15); transform: translateY(-2px); }
+    #landing-view.landing-experience .future-secondary:active { transform: translateY(0) scale(0.985); background: rgba(255,255,255,0.2); }
+    #landing-view.landing-experience .future-secondary i { color: #e5b9fa; }
+    #landing-view.landing-experience .future-note { display: flex; align-items: center; gap: 8px; margin-top: 25px; color: rgba(217,218,247,0.58); font-size: 0.77rem; }
+    #landing-view.landing-experience .future-note i { color: #93e5d0; }
+
+    #landing-view.landing-experience .phone-scene { position: relative; display: grid; min-height: 590px; place-items: center; perspective: 1100px; }
+    #landing-view.landing-experience .phone-scene::before, #landing-view.landing-experience .phone-scene::after { content: ''; position: absolute; border-radius: 50%; pointer-events: none; filter: blur(2px); }
+    #landing-view.landing-experience .phone-scene::before { width: 410px; height: 410px; background: radial-gradient(circle, rgba(106, 108, 255, 0.45), transparent 68%); animation: glowDrift 9s ease-in-out infinite alternate; }
+    #landing-view.landing-experience .phone-scene::after { width: 300px; height: 300px; right: -35px; bottom: 2px; background: radial-gradient(circle, rgba(244, 113, 195, 0.28), transparent 70%); animation: glowDrift 11s ease-in-out infinite alternate-reverse; }
+    #landing-view.landing-experience .glass-phone {
+      position: relative;
+      z-index: 3;
+      width: min(100%, 382px);
+      padding: 11px;
+      overflow: hidden;
+      border: 1px solid rgba(238, 238, 255, 0.39);
+      border-radius: 45px;
+      background: linear-gradient(145deg, rgba(255,255,255,0.24), rgba(176,151,255,0.1) 44%, rgba(34,42,95,0.33));
+      box-shadow: 0 34px 80px rgba(0,0,16,0.53), 0 0 0 1px rgba(170,160,255,0.12), inset 0 1px 1px rgba(255,255,255,0.6), inset 0 -14px 30px rgba(12,12,51,0.21);
+      backdrop-filter: blur(30px) saturate(1.45);
+      -webkit-backdrop-filter: blur(30px) saturate(1.45);
+      transform: rotateY(-10deg) rotateX(6deg) rotateZ(2deg);
+      animation: phoneFloat 7s ease-in-out infinite;
+      transform-style: preserve-3d;
+    }
+    #landing-view.landing-experience .glass-phone::before { content: ''; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; background: linear-gradient(124deg, rgba(255,255,255,0.5), transparent 22%, transparent 66%, rgba(232,181,255,0.2)); mix-blend-mode: screen; }
+    #landing-view.landing-experience .glass-phone::after { content: ''; position: absolute; top: 12px; left: 22%; width: 39%; height: 23px; border-radius: 999px; background: rgba(7,9,34,0.76); box-shadow: inset 0 1px 1px rgba(255,255,255,0.12); }
+    #landing-view.landing-experience .phone-screen { position: relative; min-height: 548px; overflow: hidden; padding: 44px 14px 15px; border: 1px solid rgba(255,255,255,0.22); border-radius: 36px; background: linear-gradient(154deg, rgba(19,25,71,0.78), rgba(47,30,91,0.52) 53%, rgba(69,37,105,0.66)); box-shadow: inset 0 1px 0 rgba(255,255,255,0.22); }
+    #landing-view.landing-experience .phone-screen::before { content: ''; position: absolute; inset: 0; pointer-events: none; opacity: 0.78; background: radial-gradient(circle at 12% 20%, rgba(116,185,255,0.35), transparent 30%), radial-gradient(circle at 86% 70%, rgba(255,125,201,0.26), transparent 35%); }
+    #landing-view.landing-experience .phone-chat-head { position: relative; z-index: 1; display: flex; align-items: center; gap: 10px; padding: 0 5px 14px; border-bottom: 1px solid rgba(255,255,255,0.13); }
+    #landing-view.landing-experience .phone-avatar { position: relative; display: grid; width: 34px; height: 34px; place-items: center; flex: 0 0 auto; color: #fff; font-size: 0.76rem; font-weight: 800; border: 1px solid rgba(255,255,255,0.38); border-radius: 13px; background: linear-gradient(135deg, #8c78ff, #f27dc4); box-shadow: 0 6px 18px rgba(140,99,255,0.38), inset 0 1px 0 rgba(255,255,255,0.45); }
+    #landing-view.landing-experience .phone-avatar::after { content: ''; position: absolute; right: -2px; bottom: -2px; width: 9px; height: 9px; border: 2px solid #2b1b5b; border-radius: 999px; background: #74edb8; box-shadow: 0 0 9px #74edb8; }
+    #landing-view.landing-experience .phone-contact { min-width: 0; flex: 1; }
+    #landing-view.landing-experience .phone-contact strong { display: block; color: #fff; font-size: 0.78rem; line-height: 1.15; }
+    #landing-view.landing-experience .phone-contact span { color: rgba(218,245,236,0.82); font-size: 0.61rem; }
+    #landing-view.landing-experience .phone-head-actions { display: flex; gap: 7px; color: rgba(255,255,255,0.75); font-size: 0.73rem; }
+    #landing-view.landing-experience .phone-message-list { position: relative; z-index: 1; display: flex; min-height: 379px; padding: 20px 3px 12px; flex-direction: column; justify-content: flex-end; gap: 9px; }
+    #landing-view.landing-experience .phone-time { align-self: center; color: rgba(238,235,255,0.45); font-size: 0.55rem; }
+    #landing-view.landing-experience .phone-bubble { max-width: 78%; padding: 9px 11px; color: rgba(255,255,255,0.94); font-size: 0.67rem; line-height: 1.45; border: 1px solid rgba(255,255,255,0.2); box-shadow: inset 0 1px 0 rgba(255,255,255,0.22), 0 8px 14px rgba(0,0,40,0.16); backdrop-filter: blur(12px); }
+    #landing-view.landing-experience .phone-bubble.incoming { align-self: flex-start; border-radius: 15px 15px 15px 5px; background: rgba(255,255,255,0.15); }
+    #landing-view.landing-experience .phone-bubble.outgoing { align-self: flex-end; border-color: rgba(255,255,255,0.27); border-radius: 15px 15px 5px 15px; background: linear-gradient(128deg, rgba(136,105,255,0.72), rgba(236,114,188,0.62)); }
+    #landing-view.landing-experience .phone-bubble .bubble-stamp { display: block; margin-top: 4px; color: rgba(255,255,255,0.56); font-size: 0.48rem; text-align: right; }
+    #landing-view.landing-experience .phone-typing { display: flex; width: max-content; align-items: center; gap: 4px; padding: 8px 10px; border: 1px solid rgba(255,255,255,0.18); border-radius: 14px 14px 14px 5px; background: rgba(255,255,255,0.11); }
+    #landing-view.landing-experience .phone-typing i { width: 4px; height: 4px; border-radius: 99px; background: #e6d7ff; animation: phoneDot 1.1s ease-in-out infinite; }
+    #landing-view.landing-experience .phone-typing i:nth-child(2) { animation-delay: 120ms; } #landing-view.landing-experience .phone-typing i:nth-child(3) { animation-delay: 240ms; }
+    #landing-view.landing-experience .phone-composer { position: relative; z-index: 1; display: flex; align-items: center; gap: 7px; padding: 6px 7px 6px 10px; color: rgba(255,255,255,0.6); font-size: 0.65rem; border: 1px solid rgba(255,255,255,0.22); border-radius: 15px; background: rgba(255,255,255,0.11); box-shadow: inset 0 1px 0 rgba(255,255,255,0.16); }
+    #landing-view.landing-experience .phone-composer .composer-copy { flex: 1; } #landing-view.landing-experience .phone-composer .phone-send { display: grid; width: 24px; height: 24px; place-items: center; color: #fff; border-radius: 9px; background: linear-gradient(135deg, #8b75ff, #ef7ec2); box-shadow: 0 4px 10px rgba(164,112,255,0.46); }
+
+    #landing-view.landing-experience .float-chip { position: absolute; z-index: 5; display: grid; place-items: center; color: #fff; border: 1px solid rgba(255,255,255,0.36); background: linear-gradient(135deg, rgba(255,255,255,0.28), rgba(195,174,255,0.13)); box-shadow: 0 16px 36px rgba(0,0,25,0.3), inset 0 1px 0 rgba(255,255,255,0.5); backdrop-filter: blur(18px) saturate(1.3); -webkit-backdrop-filter: blur(18px) saturate(1.3); animation: chipFloat 6s ease-in-out infinite; }
+    #landing-view.landing-experience .float-chip.heart { top: 10%; left: -5%; width: 64px; height: 64px; font-size: 1.55rem; border-radius: 23px; color: #ffc6e8; transform: rotate(-13deg); animation-delay: -1.2s; }
+    #landing-view.landing-experience .float-chip.chat { right: -9%; top: 28%; width: 69px; height: 53px; font-size: 1.28rem; border-radius: 20px; color: #bfcbff; transform: rotate(12deg); animation-delay: -4s; }
+    #landing-view.landing-experience .float-chip.notice { bottom: 12%; left: -8%; display: flex; width: 121px; height: 48px; gap: 8px; padding: 0 11px; border-radius: 18px; font-size: 0.62rem; transform: rotate(-6deg); animation-delay: -2.5s; }
+    #landing-view.landing-experience .float-chip.notice b { display: grid; width: 21px; height: 21px; place-items: center; border-radius: 8px; background: rgba(255,168,219,0.4); }
+    #landing-view.landing-experience .float-ring { position: absolute; z-index: 1; width: 246px; height: 246px; right: -3%; top: 22%; border: 1px solid rgba(188,183,255,0.27); border-radius: 50%; box-shadow: 0 0 40px rgba(142,123,255,0.17), inset 0 0 35px rgba(165,128,255,0.1); animation: ringTurn 17s linear infinite; }
+    #landing-view.landing-experience .float-ring::before, #landing-view.landing-experience .float-ring::after { content: ''; position: absolute; border-radius: 50%; background: #eab3f5; box-shadow: 0 0 15px #dd9eff; }
+    #landing-view.landing-experience .float-ring::before { width: 7px; height: 7px; top: 10px; left: 50%; } #landing-view.landing-experience .float-ring::after { width: 5px; height: 5px; right: 21px; bottom: 26px; background: #8bd3ff; box-shadow: 0 0 13px #8bd3ff; }
+
+    #landing-view.landing-experience .future-features { position: relative; z-index: 2; width: min(100% - 48px, 1160px); margin: 0 auto 76px; padding: 18px; border: 1px solid rgba(231,229,255,0.22); border-radius: 28px; background: linear-gradient(120deg, rgba(255,255,255,0.14), rgba(202,187,255,0.07)); box-shadow: 0 26px 62px rgba(0,0,28,0.3), inset 0 1px 0 rgba(255,255,255,0.29); backdrop-filter: blur(30px) saturate(1.3); -webkit-backdrop-filter: blur(30px) saturate(1.3); }
+    #landing-view.landing-experience .future-feature-grid { display: grid; grid-template-columns: repeat(4, 1fr); }
+    #landing-view.landing-experience .future-feature { display: flex; min-width: 0; align-items: center; gap: 13px; padding: 19px 20px; border-right: 1px solid rgba(239,237,255,0.15); transition: transform 230ms var(--ease-out), background-color 230ms ease; }
+    #landing-view.landing-experience .future-feature:last-child { border-right: 0; }
+    #landing-view.landing-experience .future-feature:hover { transform: translateY(-5px) rotateX(3deg); border-radius: 18px; background: rgba(255,255,255,0.08); }
+    #landing-view.landing-experience .feature-icon { display: grid; width: 42px; height: 42px; place-items: center; flex: 0 0 auto; font-size: 1rem; border: 1px solid rgba(255,255,255,0.28); border-radius: 14px; background: linear-gradient(145deg, rgba(255,255,255,0.24), rgba(185,164,255,0.13)); box-shadow: inset 0 1px 0 rgba(255,255,255,0.38), 0 8px 17px rgba(0,0,35,0.2); }
+    #landing-view.landing-experience .future-feature h3 { margin: 0 0 3px; color: #fff; font-size: 0.83rem; font-weight: 800; letter-spacing: -0.02em; }
+    #landing-view.landing-experience .future-feature p { margin: 0; color: rgba(224,223,250,0.64); font-size: 0.67rem; line-height: 1.45; }
+    #landing-view.landing-experience .future-bottom { position: relative; z-index: 1; padding: 2rem 1.5rem 5rem; color: rgba(222,222,247,0.5); font-size: 0.78rem; text-align: center; }
+
+    @keyframes phoneFloat { 0%, 100% { transform: rotateY(-10deg) rotateX(6deg) rotateZ(2deg) translate3d(0, 0, 0); } 50% { transform: rotateY(-7deg) rotateX(3deg) rotateZ(1deg) translate3d(0, -14px, 0); } }
+    @keyframes chipFloat { 0%, 100% { translate: 0 0; } 50% { translate: 0 -13px; } }
+    @keyframes glowDrift { from { transform: translate3d(-12px, 5px, 0) scale(0.92); opacity: 0.64; } to { transform: translate3d(18px, -12px, 0) scale(1.09); opacity: 1; } }
+    @keyframes ringTurn { to { transform: rotate(360deg); } }
+    @keyframes ctaBreath { 0%, 100% { box-shadow: 0 14px 34px rgba(112, 81, 255, 0.37), inset 0 1px 0 rgba(255,255,255,0.38); } 50% { box-shadow: 0 16px 43px rgba(228, 100, 202, 0.49), 0 0 0 7px rgba(177,115,255,0.07), inset 0 1px 0 rgba(255,255,255,0.42); } }
+    @keyframes phoneDot { 0%, 100% { transform: translateY(1px); opacity: 0.42; } 50% { transform: translateY(-2px); opacity: 1; } }
+    @keyframes particleDrift { from { transform: translate3d(0, 0, 0) scale(0.74); opacity: 0.25; } to { transform: translate3d(24px, -38px, 0) scale(1.2); opacity: 0.9; } }
+
+    /* Shared midnight-glass treatment for the functional app views. */
+    .entry-stage, .chat-shell, #active-game-container {
+      --bg-base: #090d24;
+      --bg-surface: rgba(23, 27, 62, 0.76);
+      --bg-panel: rgba(18, 21, 54, 0.62);
+      --bg-elevated: rgba(38, 42, 87, 0.78);
+      --bg-soft: rgba(255, 255, 255, 0.075);
+      --text-main: #f6f4ff;
+      --text-muted: #aeb6d4;
+      --text-faint: #7781a6;
+      --border-color: rgba(220, 220, 255, 0.17);
+      --border-strong: rgba(187, 157, 255, 0.52);
+      --bubble-them: rgba(255, 255, 255, 0.11);
+      --text-bubble-them: #f5f4ff;
+      color: var(--text-main);
+      background:
+        radial-gradient(ellipse 56% 54% at 11% 10%, rgba(83, 101, 230, 0.32), transparent 68%),
+        radial-gradient(ellipse 48% 54% at 91% 80%, rgba(221, 80, 183, 0.24), transparent 70%),
+        linear-gradient(135deg, #070b20 0%, #11123a 55%, #29133e 100%);
+    }
+    .entry-stage::before, .chat-shell::before, #active-game-container::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      z-index: 0;
+      pointer-events: none;
+      background-image: radial-gradient(rgba(221, 220, 255, 0.16) 0.7px, transparent 0.7px);
+      background-size: 19px 19px;
+      opacity: 0.22;
+      mask-image: radial-gradient(ellipse at center, black, transparent 76%);
+    }
+    .entry-stage > * { position: relative; z-index: 1; }
+    .entry-card {
+      border-color: rgba(235, 233, 255, 0.24) !important;
+      background: linear-gradient(145deg, rgba(255,255,255,0.16), rgba(183,166,255,0.08) 48%, rgba(20,22,61,0.56)) !important;
+      box-shadow: 0 30px 90px rgba(0,0,24,0.52), inset 0 1px 0 rgba(255,255,255,0.32), inset 0 -18px 36px rgba(4,5,25,0.16) !important;
+      backdrop-filter: blur(30px) saturate(1.35) !important;
+      -webkit-backdrop-filter: blur(30px) saturate(1.35) !important;
+    }
+    .entry-card::before { background: radial-gradient(circle, rgba(167, 125, 255, 0.28), transparent 68%) !important; filter: blur(11px) !important; }
+    .entry-card input {
+      color: #f7f5ff !important;
+      background: rgba(7, 10, 34, 0.38) !important;
+      border-color: rgba(230, 230, 255, 0.18) !important;
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.08) !important;
+    }
+    .entry-card input::placeholder { color: #8892b7; }
+    .entry-card input:focus { background: rgba(8, 10, 38, 0.6) !important; border-color: rgba(184, 156, 255, 0.7) !important; box-shadow: 0 0 0 4px rgba(150, 116, 255, 0.17) !important; }
+    .entry-card #toggle-mode-btn { color: #c0b1ff !important; }
+    .entry-card .btn-primary { background: linear-gradient(112deg, #7162ff, #9a70ee 52%, #e175b4) !important; box-shadow: 0 12px 28px rgba(125, 87, 255, 0.36), inset 0 1px 0 rgba(255,255,255,0.36) !important; }
+    .chat-header {
+      background: linear-gradient(115deg, rgba(37, 40, 83, 0.64), rgba(25, 25, 61, 0.47)) !important;
+      border-color: rgba(231, 230, 255, 0.2) !important;
+      box-shadow: 0 16px 42px rgba(0,0,28,0.3), inset 0 1px 0 rgba(255,255,255,0.2) !important;
+    }
+    .header-action:hover, .composer-action:hover { background: rgba(255,255,255,0.11) !important; color: #d6c9ff !important; }
+    .people-popover { background: rgba(23, 26, 62, 0.86) !important; border-color: rgba(234,232,255,0.2) !important; box-shadow: 0 20px 52px rgba(0,0,24,0.46) !important; }
+    .people-popover li:hover { background: rgba(185,162,255,0.13) !important; }
+    .message-stage { background: rgba(7, 10, 33, 0.22); }
+    #chat-bg-layer { background: radial-gradient(circle at 8% 18%, rgba(120, 130, 255, 0.27), transparent 20rem), radial-gradient(circle at 95% 82%, rgba(244, 123, 197, 0.2), transparent 24rem), radial-gradient(circle at 72% 0%, rgba(126, 219, 211, 0.12), transparent 19rem) !important; }
+    .date-divider > span, .message-system > span { color: #b8c0dc !important; background: rgba(27, 30, 65, 0.64) !important; border-color: rgba(230,230,255,0.15) !important; }
+    .message-bubble { border-color: rgba(255,255,255,0.17); box-shadow: 0 7px 20px rgba(0,0,32,0.22), inset 0 1px 0 rgba(255,255,255,0.15); }
+    .bubble-them { background: rgba(255,255,255,0.11); }
+    .message-meta { color: #919abd; }
+    .typing-surface { color: #c3c9e2 !important; border-color: rgba(255,255,255,0.16); background: rgba(255,255,255,0.1); box-shadow: 0 8px 21px rgba(0,0,32,0.25); }
+    .composer-dock { background: linear-gradient(110deg, rgba(29,31,72,0.63), rgba(19,20,54,0.48)) !important; border-color: rgba(230,230,255,0.18) !important; box-shadow: 0 18px 38px rgba(0,0,30,0.22) !important; }
+    .composer-shell { background: rgba(6, 9, 31, 0.42) !important; border-color: rgba(228,228,255,0.18) !important; box-shadow: inset 0 1px 0 rgba(255,255,255,0.1), 0 5px 16px rgba(0,0,24,0.16) !important; }
+    .composer-shell:focus-within { border-color: rgba(185,157,255,0.62) !important; box-shadow: 0 0 0 4px rgba(152,118,255,0.15), 0 10px 24px rgba(0,0,24,0.22), inset 0 1px 0 rgba(255,255,255,0.15) !important; }
+    #message-input { color: #f6f4ff !important; } #message-input::placeholder { color: #8e98b9; }
+    #active-game-container { isolation: isolate; }
+    #theme-modal > .glass, #game-menu-modal > .glass, #game-invite-modal .glass { background: linear-gradient(145deg, rgba(44,46,91,0.86), rgba(23,24,60,0.91)) !important; border-color: rgba(235,233,255,0.2) !important; box-shadow: 0 30px 80px rgba(0,0,24,0.58), inset 0 1px 0 rgba(255,255,255,0.21) !important; }
+    #theme-modal > div:first-child, #game-menu-modal > div:first-child { background: rgba(3, 5, 22, 0.6) !important; backdrop-filter: blur(11px) !important; }
+
+    @media (max-width: 960px) {
+      #landing-view.landing-experience .future-hero { grid-template-columns: 1fr; gap: 12px; width: min(100% - 40px, 690px); padding-top: 132px; text-align: center; }
+      #landing-view.landing-experience .future-copy { display: flex; align-items: center; flex-direction: column; }
+      #landing-view.landing-experience .future-title { max-width: 10ch; }
+      #landing-view.landing-experience .future-description { max-width: 560px; }
+      #landing-view.landing-experience .phone-scene { min-height: 580px; margin-top: 2px; }
+      #landing-view.landing-experience .future-features { width: min(100% - 40px, 690px); }
+      #landing-view.landing-experience .future-feature-grid { grid-template-columns: repeat(2, 1fr); }
+      #landing-view.landing-experience .future-feature:nth-child(2) { border-right: 0; }
+      #landing-view.landing-experience .future-feature:nth-child(-n+2) { border-bottom: 1px solid rgba(239,237,255,0.15); }
+    }
+
+    .entry-stage { background: transparent; }
+    .entry-card { border-color: rgba(255,255,255,0.8); box-shadow: var(--shadow-lg), inset 0 1px 0 rgba(255,255,255,0.82); }
+    .entry-card::before { content: ''; position: absolute; width: 13rem; height: 13rem; border-radius: 50%; background: rgba(188, 179, 255, 0.2); filter: blur(4px); right: -4rem; top: -5rem; pointer-events: none; }
+    .entry-card input { background: rgba(255, 255, 255, 0.64); border-color: var(--border-color); box-shadow: inset 0 1px 0 rgba(255,255,255,0.8); }
+    .entry-card input:focus { background: rgba(255,255,255,0.92); border-color: var(--accent-color); box-shadow: 0 0 0 4px var(--accent-wash); }
+
+    .chat-shell { background: transparent; }
+    .chat-header { height: 78px; margin: 14px 16px 0; border-radius: 22px; border-color: rgba(255,255,255,0.78); background: rgba(255,255,255,0.64); box-shadow: var(--shadow-sm), inset 0 1px 0 rgba(255,255,255,0.86); }
+    .chat-header h2 { letter-spacing: -0.025em; }
+    #header-room-code { color: var(--accent-color); background: var(--accent-wash); border: 1px solid rgba(93,92,230,0.12); border-radius: 9px; font-family: 'DM Mono', monospace; font-size: 0.72rem; letter-spacing: 0.06em; }
+    .header-action, .composer-action { transition: transform 180ms var(--ease-out), background-color 180ms ease, color 180ms ease, box-shadow 180ms ease; }
+    .header-action:hover, .composer-action:hover { background: rgba(255,255,255,0.88) !important; color: var(--accent-color) !important; transform: translateY(-1px); box-shadow: var(--shadow-sm); }
+    .presence-orb { background: var(--online); box-shadow: 0 0 0 4px rgba(43,166,122,0.12), 0 0 14px rgba(43,166,122,0.32); }
+    .presence-orb::after { content: ''; position: absolute; inset: -5px; border: 1px solid rgba(43,166,122,0.35); border-radius: 999px; animation: presencePulse 2.5s ease-out infinite; }
+    .people-popover { top: 72px !important; right: 0 !important; width: 282px !important; border-radius: 20px; border-color: rgba(255,255,255,0.82); background: rgba(255,255,255,0.82); box-shadow: var(--shadow-md); }
+    .people-popover li { padding: 7px 4px; border-radius: 12px; transition: background-color 160ms ease; }
+    .people-popover li:hover { background: var(--accent-wash); }
+
+    .message-stage { margin: 0 16px; padding: 30px clamp(16px, 4vw, 68px) 18px; border-radius: 28px 28px 0 0; }
+    #chat-bg-layer { opacity: 1 !important; background:
+      radial-gradient(circle at 8% 18%, rgba(197, 204, 255, 0.38), transparent 20rem),
+      radial-gradient(circle at 95% 82%, rgba(255, 208, 225, 0.3), transparent 24rem),
+      radial-gradient(circle at 72% 0%, rgba(210, 242, 231, 0.3), transparent 19rem); }
+    #chat-bg-layer::after { content: ''; position: absolute; inset: 0; opacity: 0.72; background-image: radial-gradient(rgba(84, 90, 120, 0.1) 0.7px, transparent 0.7px); background-size: 18px 18px; mask-image: linear-gradient(to bottom, transparent, black 24%, black 72%, transparent); }
+    .date-divider > span { background: rgba(255,255,255,0.72); border-color: rgba(76,84,110,0.1); box-shadow: 0 5px 14px rgba(42,45,71,0.045); }
+    .message-row { animation: messageSettle 360ms var(--ease-out) both; }
+    .message-row--outgoing { animation-name: messageSettleOutgoing; }
+    .message-sender { letter-spacing: 0.005em; }
+    .message-bubble { border: 1px solid rgba(255,255,255,0.68); box-shadow: 0 5px 15px rgba(42,45,71,0.055), inset 0 1px 0 rgba(255,255,255,0.72); transition: transform 180ms var(--ease-out), box-shadow 180ms ease; }
+    .message-bubble:hover { transform: translateY(-1px); box-shadow: 0 10px 24px rgba(42,45,71,0.08), inset 0 1px 0 rgba(255,255,255,0.72); }
+    .bubble-me { background: var(--accent-gradient); color: var(--text-bubble-me); border-color: rgba(255,255,255,0.28); border-radius: 18px 18px 6px 18px; box-shadow: 0 10px 20px rgba(93,92,230,0.18), inset 0 1px 0 rgba(255,255,255,0.32); }
+    .bubble-them { background: var(--bubble-them); color: var(--text-bubble-them); border-radius: 18px 18px 18px 6px; }
+    .message-meta { color: var(--text-faint); }
+    .message-system > span { background: rgba(255,255,255,0.62); border-color: rgba(76,84,110,0.1); box-shadow: var(--shadow-sm); }
+    .typing-surface { display: inline-flex; align-items: center; gap: 9px; padding: 8px 12px 8px 14px; background: rgba(255,255,255,0.66); border: 1px solid rgba(255,255,255,0.78); border-radius: 15px 15px 15px 6px; box-shadow: var(--shadow-sm); animation: typingReveal 260ms var(--ease-out) both; }
+    .typing-liquid { position: relative; display: flex; align-items: center; gap: 3px; width: 30px; height: 18px; }
+    .typing-liquid::before { content: ''; position: absolute; width: 19px; height: 11px; left: 5px; top: 3px; background: rgba(93,92,230,0.11); filter: blur(4px); border-radius: 99px; }
+    .typing-dot { position: relative; width: 6px; height: 6px; border-radius: 50%; background: var(--accent-color); box-shadow: 0 1px 5px rgba(93,92,230,0.22); animation: fluidDot 1.4s ease-in-out infinite; }
+    .typing-dot:nth-child(2) { animation-delay: 130ms; }
+    .typing-dot:nth-child(3) { animation-delay: 260ms; }
+
+    .composer-dock { margin: 0 16px 14px; padding: 12px; border-radius: 0 0 24px 24px; border-top: 0; border-color: rgba(255,255,255,0.78); background: rgba(255,255,255,0.54); box-shadow: 0 18px 38px rgba(42,45,71,0.05); }
+    .composer-shell { padding: 5px 6px 5px 8px; background: rgba(255,255,255,0.8); border-color: rgba(76,84,110,0.13); border-radius: 20px; box-shadow: inset 0 1px 0 rgba(255,255,255,0.86), 0 4px 14px rgba(42,45,71,0.04); transition: border-color 180ms ease, box-shadow 180ms ease, transform 180ms var(--ease-out); }
+    .composer-shell:focus-within { transform: translateY(-1px); border-color: rgba(93,92,230,0.44); box-shadow: 0 0 0 4px var(--accent-wash), 0 10px 24px rgba(68,61,143,0.09), inset 0 1px 0 rgba(255,255,255,0.9); }
+    #message-input { line-height: 1.5; }
+    .game-action { background: var(--accent-wash) !important; color: var(--accent-color) !important; box-shadow: none !important; }
+    .game-action:hover { background: var(--accent-gradient) !important; color: #fff !important; }
+    .send-button { position: relative; overflow: hidden; background: var(--accent-gradient) !important; box-shadow: 0 7px 16px rgba(93,92,230,0.25), inset 0 1px 0 rgba(255,255,255,0.28); transition: transform 150ms var(--ease-out), box-shadow 150ms ease; }
+    .send-button::after { content: ''; position: absolute; inset: 0; background: linear-gradient(110deg, transparent 30%, rgba(255,255,255,0.32) 48%, transparent 66%); transform: translateX(-130%); transition: transform 380ms var(--ease-out); }
+    .send-button:hover::after { transform: translateX(130%); }
+    .send-button:hover { transform: translateY(-1px); box-shadow: 0 11px 20px rgba(93,92,230,0.32), inset 0 1px 0 rgba(255,255,255,0.28); }
+    .send-button:active { transform: scale(0.93); }
+
+    #toast-container > div { background: rgba(255,255,255,0.82); border-color: rgba(255,255,255,0.84); box-shadow: var(--shadow-md); }
+    #theme-modal > div:first-child, #game-menu-modal > div:first-child { background: rgba(52, 49, 78, 0.2); backdrop-filter: blur(6px); }
+    #theme-modal > .glass, #game-menu-modal > .glass, #game-invite-modal .glass { background: rgba(253,253,255,0.84); border-color: rgba(255,255,255,0.84); box-shadow: var(--shadow-lg); }
+    #theme-modal > .glass { border-radius: var(--radius-panel); }
+    #active-game-container { background: var(--bg-base); }
+
+    .bg-pattern-grid { background-image: radial-gradient(rgba(84,90,120,0.24) 1px, transparent 1px); background-size: 20px 20px; }
+    .bg-pattern-dots { background-image: radial-gradient(rgba(84,90,120,0.28) 1.5px, transparent 1.5px); background-size: 28px 28px; }
+
+    @keyframes ambientDrift { from { transform: translate3d(0, 0, 0) scale(1); } to { transform: translate3d(3rem, -2rem, 0) scale(1.08); } }
+    @keyframes artworkFloat { from { transform: translate3d(0, 8px, 0) rotate(-1deg); } to { transform: translate3d(-18px, -12px, 0) rotate(1deg); } }
+    @keyframes loveFloat { from { transform: translate3d(0, 8px, 0) rotate(-7deg) scale(0.92); opacity: 0.42; } to { transform: translate3d(12px, -14px, 0) rotate(9deg) scale(1.08); opacity: 0.9; } }
+    @keyframes breathe { 0%, 100% { transform: scale(0.97); opacity: 0.18; } 50% { transform: scale(1.04); opacity: 0.29; } }
+    @keyframes messageSettle { from { opacity: 0; transform: translate3d(-8px, 10px, 0) scale(0.985); } 70% { opacity: 1; transform: translate3d(0, -1px, 0) scale(1.006); } to { opacity: 1; transform: translate3d(0, 0, 0) scale(1); } }
+    @keyframes messageSettleOutgoing { from { opacity: 0; transform: translate3d(8px, 10px, 0) scale(0.985); } 70% { opacity: 1; transform: translate3d(0, -1px, 0) scale(1.006); } to { opacity: 1; transform: translate3d(0, 0, 0) scale(1); } }
+    @keyframes presencePulse { 0% { transform: scale(0.65); opacity: 0.7; } 80%, 100% { transform: scale(1.2); opacity: 0; } }
+    @keyframes fluidDot { 0%, 100% { transform: translateY(2px) scale(0.76, 0.94); opacity: 0.5; } 45% { transform: translateY(-2px) scale(1.14, 0.82); opacity: 1; } 65% { transform: translateY(0) scale(0.9, 1.08); } }
+    @keyframes typingReveal { from { opacity: 0; transform: translateY(5px) scale(0.98); } to { opacity: 1; transform: translateY(0) scale(1); } }
+
+    @media (max-width: 640px) {
+      .product-nav > div { padding-left: 18px; padding-right: 18px; }
+      .landing-hero { min-height: auto; padding-top: 7.5rem; }
+      .landing-hero h1 { letter-spacing: -0.055em; }
+      .landing-artwork { inset: 7rem -42vw auto auto; width: 120vw; height: 84vw; opacity: 0.13; }
+      #landing-view.landing-experience .product-nav { top: 12px; width: calc(100% - 24px); height: 58px; border-radius: 18px; }
+      #landing-view.landing-experience .product-nav > div { padding: 0 13px; }
+      #landing-view.landing-experience .brand-lockup { font-size: 1rem; }
+      #landing-view.landing-experience .product-nav .fa-bolt { width: 27px; height: 27px; font-size: 11px; border-radius: 9px; }
+      #landing-view.landing-experience .future-cta { padding: 8px 12px; font-size: 0.74rem; }
+      #landing-view.landing-experience .landing-artwork { inset: 7rem -42vw auto auto; width: 120vw; height: 84vw; opacity: 0.08; }
+      #landing-view.landing-experience .future-hero { width: calc(100% - 32px); min-height: auto; padding: 112px 0 38px; gap: 2px; }
+      #landing-view.landing-experience .future-eyebrow { padding: 7px 11px; font-size: 0.63rem; }
+      #landing-view.landing-experience .future-title { margin: 18px 0; font-size: clamp(3.25rem, 17vw, 4.6rem); }
+      #landing-view.landing-experience .future-description { margin-bottom: 25px; font-size: 0.94rem; line-height: 1.66; }
+      #landing-view.landing-experience .future-primary { min-height: 52px; padding: 0 19px; border-radius: 15px; font-size: 0.92rem; }
+      #landing-view.landing-experience .future-note { justify-content: center; font-size: 0.68rem; }
+      #landing-view.landing-experience .phone-scene { min-height: 488px; margin-top: 13px; transform: scale(0.92); transform-origin: top center; margin-bottom: -38px; }
+      #landing-view.landing-experience .glass-phone { width: 334px; border-radius: 40px; }
+      #landing-view.landing-experience .phone-screen { min-height: 484px; padding-top: 42px; border-radius: 32px; }
+      #landing-view.landing-experience .phone-message-list { min-height: 318px; }
+      #landing-view.landing-experience .float-chip.heart { left: -5px; top: 9%; } #landing-view.landing-experience .float-chip.chat { right: -6px; top: 25%; } #landing-view.landing-experience .float-chip.notice { display: none; }
+      #landing-view.landing-experience .float-ring { right: -47px; top: 25%; width: 210px; height: 210px; }
+      #landing-view.landing-experience .future-features { width: calc(100% - 32px); margin-bottom: 45px; padding: 9px; border-radius: 23px; }
+      #landing-view.landing-experience .future-feature-grid { grid-template-columns: 1fr; }
+      #landing-view.landing-experience .future-feature { padding: 14px; border-right: 0; border-bottom: 1px solid rgba(239,237,255,0.14); }
+      #landing-view.landing-experience .future-feature:nth-child(2) { border-bottom: 1px solid rgba(239,237,255,0.14); }
+      #landing-view.landing-experience .future-feature:last-child { border-bottom: 0; }
+      #landing-view.landing-experience .future-bottom { padding: 0 1.5rem 3rem; font-size: 0.69rem; }
+      .chat-header { height: 68px; margin: 8px 8px 0; padding-left: 14px; padding-right: 14px; border-radius: 18px; }
+      .message-stage { margin: 0 8px; padding: 20px 14px 12px; border-radius: 20px 20px 0 0; }
+      .composer-dock { margin: 0 8px 8px; padding: 8px; border-radius: 0 0 18px 18px; }
+      .composer-shell { border-radius: 17px; }
+      .people-popover { right: -5px !important; }
+      .message-bubble { max-width: 88vw !important; }
+    }
+
+    /* Final functional-view overrides: these intentionally come after the
+       legacy light styles so a joined room always matches the landing page. */
+    #entry-view.entry-stage, #chat-view.chat-shell, #active-game-container {
+      --bg-base: #080b20;
+      --bg-surface: rgba(22, 25, 59, 0.8);
+      --bg-panel: rgba(17, 20, 51, 0.74);
+      --bg-elevated: rgba(38, 42, 86, 0.9);
+      --bg-soft: rgba(255, 255, 255, 0.075);
+      --text-main: #f8f7ff;
+      --text-muted: #b1b9d7;
+      --text-faint: #7c87aa;
+      --border-color: rgba(227, 226, 255, 0.18);
+      --border-strong: rgba(189, 160, 255, 0.6);
+      --bubble-them: rgba(255, 255, 255, 0.105);
+      --text-bubble-them: #f7f6ff;
+      background:
+        radial-gradient(ellipse 57% 52% at 8% 8%, rgba(70, 84, 209, 0.42), transparent 70%),
+        radial-gradient(ellipse 48% 54% at 94% 92%, rgba(205, 73, 173, 0.3), transparent 71%),
+        linear-gradient(135deg, #06091d 0%, #101039 54%, #231235 100%) !important;
+    }
+    #entry-view.entry-stage .entry-card {
+      border-color: rgba(238, 236, 255, 0.25) !important;
+      background: linear-gradient(145deg, rgba(255,255,255,0.17), rgba(175,157,255,0.09) 48%, rgba(17,19,56,0.72)) !important;
+      box-shadow: 0 34px 92px rgba(0,0,25,0.58), inset 0 1px 0 rgba(255,255,255,0.34), inset 0 -20px 38px rgba(3,4,22,0.22) !important;
+    }
+    #entry-view.entry-stage .entry-card input { color: #f7f5ff !important; background: rgba(5, 8, 29, 0.58) !important; border-color: rgba(230,230,255,0.2) !important; }
+    #entry-view.entry-stage .entry-card input::placeholder { color: #8892b7; }
+    #entry-view.entry-stage .entry-card input:focus { background: rgba(5, 8, 29, 0.74) !important; border-color: rgba(190,160,255,0.72) !important; }
+    #chat-view.chat-shell .chat-header {
+      background: linear-gradient(112deg, rgba(44, 45, 93, 0.82), rgba(24, 24, 61, 0.77)) !important;
+      border-color: rgba(238, 236, 255, 0.2) !important;
+      box-shadow: 0 17px 44px rgba(0,0,28,0.42), inset 0 1px 0 rgba(255,255,255,0.24) !important;
+    }
+    #chat-view.chat-shell .message-stage {
+      border: 1px solid rgba(228, 226, 255, 0.13);
+      border-bottom: 0;
+      background: linear-gradient(140deg, rgba(7, 10, 34, 0.96), rgba(16, 15, 51, 0.94) 58%, rgba(39, 20, 57, 0.93)) !important;
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.09), 0 18px 45px rgba(0,0,26,0.22);
+    }
+    #chat-view.chat-shell #chat-bg-layer {
+      opacity: 1 !important;
+      background:
+        radial-gradient(circle at 8% 18%, rgba(98, 111, 255, 0.28), transparent 22rem),
+        radial-gradient(circle at 95% 82%, rgba(239, 101, 190, 0.23), transparent 25rem),
+        radial-gradient(circle at 70% 0%, rgba(97, 222, 217, 0.12), transparent 20rem) !important;
+    }
+    #chat-view.chat-shell #chat-bg-layer::after { opacity: 0.36; background-image: radial-gradient(rgba(223, 219, 255, 0.2) 0.65px, transparent 0.65px); }
+    #chat-view.chat-shell .date-divider > span, #chat-view.chat-shell .message-system > span { color: #c5cbe2 !important; background: rgba(41, 44, 88, 0.72) !important; border-color: rgba(233,232,255,0.15) !important; }
+    #chat-view.chat-shell .bubble-them { color: #f8f7ff !important; background: rgba(255,255,255,0.105) !important; border-color: rgba(255,255,255,0.17) !important; box-shadow: 0 9px 22px rgba(0,0,34,0.25), inset 0 1px 0 rgba(255,255,255,0.15) !important; }
+    #chat-view.chat-shell .composer-dock {
+      background: linear-gradient(112deg, rgba(33, 34, 78, 0.91), rgba(20, 20, 56, 0.9)) !important;
+      border-color: rgba(232,230,255,0.18) !important;
+      box-shadow: 0 21px 48px rgba(0,0,28,0.34), inset 0 1px 0 rgba(255,255,255,0.1) !important;
+    }
+    #chat-view.chat-shell .composer-shell { background: rgba(5, 8, 28, 0.65) !important; border-color: rgba(227,225,255,0.22) !important; }
+    #chat-view.chat-shell .people-popover { background: rgba(20, 22, 56, 0.95) !important; border-color: rgba(234,232,255,0.2) !important; }
+    #chat-view.chat-shell .composer-dock { padding: 10px 12px 12px !important; }
+    #chat-view.chat-shell .composer-shell { min-height: 56px; padding: 6px 7px 6px 8px; border-radius: 19px; }
+    #chat-view.chat-shell .attachment-action { color: #c8c1ee !important; }
+    #chat-view.chat-shell .attachment-action:hover { color: #fff !important; background: rgba(169, 145, 255, 0.18) !important; }
+    #chat-view.chat-shell .send-button:disabled { transform: none !important; filter: grayscale(0.2); }
+    #chat-view.chat-shell .attachment-preview { display: flex; max-height: 170px; gap: 8px; margin: 0 4px 9px; padding: 7px; overflow-x: auto; border: 1px solid rgba(229, 227, 255, 0.17); border-radius: 17px; background: rgba(11, 13, 43, 0.64); box-shadow: inset 0 1px 0 rgba(255,255,255,0.1), 0 8px 22px rgba(0,0,29,0.18); backdrop-filter: blur(18px); }
+    #chat-view.chat-shell .attachment-preview.hidden { display: none; }
+    #chat-view.chat-shell .attachment-preview-item { position: relative; display: flex; width: min(100%, 240px); min-width: 195px; align-items: center; gap: 9px; padding: 8px 30px 8px 8px; overflow: hidden; border: 1px solid rgba(242, 240, 255, 0.14); border-radius: 13px; background: rgba(255,255,255,0.075); }
+    #chat-view.chat-shell .attachment-preview-thumb { display: grid; width: 37px; height: 37px; flex: 0 0 auto; place-items: center; overflow: hidden; color: #e5ddff; border: 1px solid rgba(255,255,255,0.18); border-radius: 10px; background: rgba(157, 125, 255, 0.16); }
+    #chat-view.chat-shell .attachment-preview-thumb img, #chat-view.chat-shell .attachment-preview-thumb video { width: 100%; height: 100%; object-fit: cover; }
+    #chat-view.chat-shell .attachment-preview-name { overflow: hidden; color: #f7f5ff; font-size: 0.72rem; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
+    #chat-view.chat-shell .attachment-preview-meta { color: #aeb7d3; font-size: 0.62rem; white-space: nowrap; }
+    #chat-view.chat-shell .attachment-remove { position: absolute; top: 5px; right: 5px; display: grid; width: 20px; height: 20px; place-items: center; color: #c8c9e3; border-radius: 7px; background: transparent; transition: background-color 150ms ease, color 150ms ease; }
+    #chat-view.chat-shell .attachment-remove:hover { color: #fff; background: rgba(244, 119, 174, 0.27); }
+    #chat-view.chat-shell .attachment-card { width: min(340px, 78vw); overflow: hidden; border: 1px solid rgba(255,255,255,0.17); border-radius: 17px; background: rgba(255,255,255,0.095); box-shadow: 0 10px 26px rgba(0,0,35,0.24), inset 0 1px 0 rgba(255,255,255,0.14); }
+    #chat-view.chat-shell .attachment-card--outgoing { border-color: rgba(255,255,255,0.22); background: linear-gradient(132deg, rgba(120, 99, 244, 0.74), rgba(212, 101, 175, 0.63)); }
+    #chat-view.chat-shell .attachment-card-main { display: flex; align-items: center; gap: 10px; padding: 10px; }
+    #chat-view.chat-shell .attachment-type-icon { display: grid; width: 39px; height: 39px; flex: 0 0 auto; place-items: center; color: #e8e2ff; font-size: 1rem; border: 1px solid rgba(255,255,255,0.17); border-radius: 12px; background: rgba(255,255,255,0.11); }
+    #chat-view.chat-shell .attachment-details { min-width: 0; flex: 1; }
+    #chat-view.chat-shell .attachment-name { overflow: hidden; color: #fff; font-size: 0.75rem; font-weight: 800; text-overflow: ellipsis; white-space: nowrap; }
+    #chat-view.chat-shell .attachment-meta, #chat-view.chat-shell .attachment-status { margin-top: 2px; color: rgba(242,241,255,0.68); font-size: 0.61rem; }
+    #chat-view.chat-shell .attachment-progress { height: 3px; overflow: hidden; background: rgba(255,255,255,0.14); }
+    #chat-view.chat-shell .attachment-progress > span { display: block; width: 0; height: 100%; border-radius: inherit; background: linear-gradient(90deg, #bfb0ff, #ffc0e6); transition: width 180ms ease; }
+    #chat-view.chat-shell .attachment-media { max-height: 210px; border-top: 1px solid rgba(255,255,255,0.12); background: rgba(3, 5, 24, 0.2); }
+    #chat-view.chat-shell .attachment-media img, #chat-view.chat-shell .attachment-media video { display: block; width: 100%; max-height: 210px; object-fit: cover; }
+    #chat-view.chat-shell .attachment-media audio { display: block; width: calc(100% - 20px); margin: 10px; }
+    #chat-view.chat-shell .attachment-open { display: inline-flex; align-items: center; gap: 6px; margin: 0 10px 10px; color: #fff; font-size: 0.66rem; font-weight: 800; }
+
+    #landing-view.liquid-landing {
+      --liquid-ink: #5b183d;
+      --liquid-muted: #8c476b;
+      --liquid-pink: #ed5295;
+      --liquid-rose: #ff8fba;
+      --liquid-white: #fff8fb;
+      color: var(--liquid-ink);
+      overflow-x: hidden;
+      background:
+        radial-gradient(ellipse 58% 58% at 12% -12%, rgba(255,255,255,0.98) 0%, rgba(255,239,246,0.35) 55%, transparent 75%),
+        radial-gradient(ellipse 56% 48% at 88% 14%, rgba(255,158,201,0.58) 0%, rgba(255,186,217,0.2) 58%, transparent 76%),
+        radial-gradient(ellipse 55% 45% at 48% 100%, rgba(252,110,166,0.26) 0%, transparent 70%),
+        linear-gradient(135deg, #fff9fc 0%, #ffe3ef 43%, #ffc5df 100%);
+      isolation: isolate;
+      scrollbar-color: rgba(213, 76, 135, 0.38) transparent;
+    }
+    #landing-view.liquid-landing::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      z-index: -2;
+      pointer-events: none;
+      opacity: 0.42;
+      background-image: radial-gradient(rgba(196, 63, 123, 0.14) 0.7px, transparent 0.7px);
+      background-size: 22px 22px;
+      mask-image: radial-gradient(ellipse at center, #000 15%, transparent 74%);
+      -webkit-mask-image: radial-gradient(ellipse at center, #000 15%, transparent 74%);
+    }
+    #landing-view.liquid-landing::after {
+      content: '';
+      position: fixed;
+      inset: 0;
+      z-index: -1;
+      pointer-events: none;
+      background: linear-gradient(120deg, rgba(255,255,255,0.28), transparent 37%, rgba(255,255,255,0.13) 71%, transparent);
+      mix-blend-mode: soft-light;
+    }
+    #landing-view.liquid-landing .liquid-field,
+    #landing-view.liquid-landing .petal-field { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
+    #landing-view.liquid-landing .liquid-field { z-index: 0; }
+    #landing-view.liquid-landing .liquid-orb { position: absolute; display: block; border-radius: 46% 54% 60% 40% / 44% 43% 57% 56%; filter: blur(12px); opacity: 0.72; will-change: transform; animation: liquidMorph 18s ease-in-out infinite alternate; }
+    #landing-view.liquid-landing .liquid-orb--one { width: 36vw; height: 36vw; top: 13%; left: -15%; background: radial-gradient(circle at 60% 40%, rgba(255,255,255,0.88), rgba(255,149,197,0.26) 45%, transparent 72%); }
+    #landing-view.liquid-landing .liquid-orb--two { width: 45vw; height: 45vw; top: 5%; right: -20%; background: radial-gradient(circle at 35% 52%, rgba(248,92,159,0.34), rgba(255,219,235,0.42) 46%, transparent 72%); animation-delay: -7s; }
+    #landing-view.liquid-landing .liquid-orb--three { width: 33vw; height: 33vw; bottom: -18%; left: 34%; background: radial-gradient(circle at 45% 40%, rgba(239,76,148,0.25), rgba(255,255,255,0.4) 50%, transparent 73%); animation-delay: -11s; }
+    #landing-view.liquid-landing .petal-field { z-index: 1; }
+    #landing-view.liquid-landing .petal-field span { position: absolute; display: block; width: 11px; height: 7px; border-radius: 100% 0 100% 0; background: linear-gradient(135deg, rgba(255,255,255,0.9), rgba(239,80,152,0.66)); box-shadow: 0 4px 12px rgba(213,59,128,0.2); animation: landingPetal 13s linear infinite; }
+    #landing-view.liquid-landing .petal-field span:nth-child(1) { top: 14%; left: 4%; animation-delay: -2s; } #landing-view.liquid-landing .petal-field span:nth-child(2) { top: 38%; left: 14%; animation-delay: -8s; } #landing-view.liquid-landing .petal-field span:nth-child(3) { top: 12%; right: 17%; animation-delay: -5s; } #landing-view.liquid-landing .petal-field span:nth-child(4) { top: 76%; right: 9%; animation-delay: -11s; } #landing-view.liquid-landing .petal-field span:nth-child(5) { top: 63%; left: 51%; animation-delay: -3s; } #landing-view.liquid-landing .petal-field span:nth-child(6) { top: 30%; right: 42%; animation-delay: -9s; } #landing-view.liquid-landing .petal-field span:nth-child(7) { top: 88%; left: 24%; animation-delay: -6s; } #landing-view.liquid-landing .petal-field span:nth-child(8) { top: 47%; right: 3%; animation-delay: -12s; }
+    #landing-view.liquid-landing .liquid-nav {
+      position: fixed;
+      top: 22px;
+      left: 50%;
+      z-index: 30;
+      width: min(calc(100% - 40px), 1180px);
+      height: 70px;
+      transform: translateX(-50%);
+      border: 1px solid rgba(255,255,255,0.72);
+      border-radius: 24px;
+      background: linear-gradient(110deg, rgba(255,255,255,0.64), rgba(255,232,243,0.35));
+      box-shadow: 0 18px 48px rgba(170, 42, 102, 0.15), inset 0 1px 0 rgba(255,255,255,0.95), inset 0 -1px 0 rgba(213,68,132,0.08);
+      backdrop-filter: blur(24px) saturate(1.16);
+      -webkit-backdrop-filter: blur(24px) saturate(1.16);
+    }
+    #landing-view.liquid-landing .liquid-nav > div { max-width: none; height: 100%; padding: 0 21px; }
+    #landing-view.liquid-landing .brand-lockup { color: #6e1d4b; letter-spacing: -0.05em; }
+    #landing-view.liquid-landing .brand-mark { display: grid; width: 33px; height: 33px; place-items: center; color: #fff; font-size: 0.82rem; border: 1px solid rgba(255,255,255,0.78); border-radius: 12px; background: linear-gradient(135deg, #f35c9c, #ce3978); box-shadow: 0 8px 17px rgba(209,48,111,0.26), inset 0 1px 0 rgba(255,255,255,0.57); }
+    #landing-view.liquid-landing .liquid-nav-link { color: rgba(103,31,71,0.7); transition: color 180ms ease, transform 180ms ease; }
+    #landing-view.liquid-landing .liquid-nav-link:hover { color: #c92970; transform: translateY(-1px); }
+    #landing-view.liquid-landing .nav-start { color: #fff; border: 1px solid rgba(255,255,255,0.76); background: linear-gradient(120deg, #ec5797, #d8357b); box-shadow: 0 9px 20px rgba(202,41,108,0.26), inset 0 1px 0 rgba(255,255,255,0.48); transition: transform 180ms var(--ease-out), box-shadow 180ms ease, filter 180ms ease; }
+    #landing-view.liquid-landing .nav-start:hover { transform: translateY(-2px); filter: brightness(1.04); box-shadow: 0 14px 27px rgba(202,41,108,0.32), inset 0 1px 0 rgba(255,255,255,0.54); }
+    #landing-view.liquid-landing .nav-start:active { transform: translateY(0) scale(0.98); }
+    #landing-view.liquid-landing .story-hero { position: relative; z-index: 2; display: grid; grid-template-columns: minmax(0, 0.89fr) minmax(500px, 1.11fr); align-items: center; gap: clamp(28px, 5vw, 76px); width: min(calc(100% - 56px), 1240px); min-height: 760px; margin: 0 auto; padding: 135px 0 70px; }
+    #landing-view.liquid-landing .story-copy { position: relative; z-index: 5; max-width: 540px; }
+    #landing-view.liquid-landing .privacy-badge { display: inline-flex; align-items: center; gap: 8px; padding: 9px 13px; color: #a22e66; font-size: 0.71rem; font-weight: 800; letter-spacing: 0.12em; border: 1px solid rgba(229,74,137,0.23); border-radius: 999px; background: rgba(255,255,255,0.5); box-shadow: 0 10px 24px rgba(202,54,114,0.1), inset 0 1px 0 rgba(255,255,255,0.92); backdrop-filter: blur(12px); }
+    #landing-view.liquid-landing .privacy-badge::before { content: ''; width: 7px; height: 7px; border-radius: 50%; background: #ef5798; box-shadow: 0 0 0 4px rgba(239,87,152,0.13), 0 0 14px rgba(224,49,123,0.5); }
+    #landing-view.liquid-landing .story-title { margin: 22px 0 20px; color: #5b183d; font-size: clamp(3.7rem, 6.7vw, 6.8rem); font-weight: 800; line-height: 0.88; letter-spacing: -0.082em; text-wrap: balance; }
+    #landing-view.liquid-landing .story-title span, #landing-view.liquid-landing .story-title em { display: block; font-style: normal; }
+    #landing-view.liquid-landing .story-title span { color: transparent; background: linear-gradient(112deg, #a72b67 5%, #ee5798 46%, #ff84b7 78%); -webkit-background-clip: text; background-clip: text; }
+    #landing-view.liquid-landing .story-title em { color: #6b1a49; }
+    #landing-view.liquid-landing .story-description { max-width: 490px; margin: 0 0 31px; color: var(--liquid-muted); font-size: clamp(1rem, 1.35vw, 1.12rem); line-height: 1.72; }
+    #landing-view.liquid-landing .story-actions { position: relative; z-index: 10; display: flex; flex-wrap: wrap; gap: 13px; }
+    #landing-view.liquid-landing .story-primary, #landing-view.liquid-landing .story-secondary { min-height: 57px; padding: 0 22px; font-weight: 800; border-radius: 18px; transition: transform 180ms var(--ease-out), box-shadow 180ms ease, background-color 180ms ease, color 180ms ease; }
+    #landing-view.liquid-landing .story-primary { position: relative; overflow: hidden; color: #fff; border: 1px solid rgba(255,255,255,0.72); background: linear-gradient(115deg, #ed5799, #d8367b); box-shadow: 0 15px 28px rgba(204,45,112,0.31), inset 0 1px 0 rgba(255,255,255,0.48); }
+    #landing-view.liquid-landing .story-primary::after { content: ''; position: absolute; inset: 0; background: linear-gradient(110deg, transparent 25%, rgba(255,255,255,0.38) 48%, transparent 69%); transform: translateX(-125%); transition: transform 520ms var(--ease-out); }
+    #landing-view.liquid-landing .story-primary:hover { transform: translateY(-3px); box-shadow: 0 20px 35px rgba(204,45,112,0.36), inset 0 1px 0 rgba(255,255,255,0.55); }
+    #landing-view.liquid-landing .story-primary:hover::after { transform: translateX(120%); }
+    #landing-view.liquid-landing .story-primary:active, #landing-view.liquid-landing .story-secondary:active { transform: translateY(0) scale(0.98); }
+    #landing-view.liquid-landing .story-secondary { color: #8e2559; border: 1px solid rgba(212,57,121,0.2); background: rgba(255,255,255,0.5); box-shadow: inset 0 1px 0 rgba(255,255,255,0.94), 0 10px 22px rgba(192,51,107,0.09); backdrop-filter: blur(14px); }
+    #landing-view.liquid-landing .story-secondary:hover { color: #be286b; background: rgba(255,255,255,0.72); transform: translateY(-2px); }
+    #landing-view.liquid-landing .security-line { display: flex; align-items: center; gap: 8px; margin: 23px 0 0; color: rgba(116,39,76,0.73); font-size: 0.75rem; font-weight: 700; }
+    #landing-view.liquid-landing .security-line i { color: #dd3d83; }
+    #landing-view.liquid-landing .story-stage { position: relative; width: 100%; min-height: 590px; overflow: hidden; border: 1px solid rgba(255,255,255,0.72); border-radius: 44px; background: linear-gradient(148deg, rgba(255,255,255,0.64), rgba(255,204,225,0.32) 52%, rgba(239,116,169,0.23)); box-shadow: 0 35px 80px rgba(179,45,107,0.21), inset 0 1px 0 rgba(255,255,255,0.95), inset 0 -30px 60px rgba(213,59,124,0.08); perspective: 1100px; transform-style: preserve-3d; isolation: isolate; }
+    #landing-view.liquid-landing .story-stage::before { content: ''; position: absolute; inset: 0; z-index: 9; pointer-events: none; background: linear-gradient(115deg, rgba(255,255,255,0.54), transparent 22%, transparent 60%, rgba(255,255,255,0.24)); mix-blend-mode: screen; }
+    #landing-view.liquid-landing .story-stage::after { content: ''; position: absolute; inset: auto -14% -29%; z-index: 1; height: 56%; border-radius: 50%; background: radial-gradient(ellipse, rgba(182,51,112,0.34), rgba(255,178,210,0.18) 42%, transparent 71%); filter: blur(5px); }
+    #landing-view.liquid-landing .story-sun { position: absolute; top: 13%; left: 34%; z-index: 1; width: 110px; height: 110px; border-radius: 50%; background: radial-gradient(circle at 40% 35%, #fff, #ffe2ef 43%, rgba(255,159,199,0.35) 70%, transparent 72%); box-shadow: 0 0 52px 20px rgba(255,224,238,0.72); animation: sunPulse 8s ease-in-out infinite; }
+    #landing-view.liquid-landing .story-cloud { position: absolute; z-index: 2; width: 45%; height: 14%; border-radius: 50%; background: radial-gradient(ellipse, rgba(255,255,255,0.74), rgba(255,226,240,0.2) 56%, transparent 70%); filter: blur(9px); animation: cloudDrift 16s ease-in-out infinite alternate; }
+    #landing-view.liquid-landing .story-cloud--one { top: 14%; left: -9%; } #landing-view.liquid-landing .story-cloud--two { top: 28%; right: -14%; opacity: 0.74; animation-delay: -9s; }
+    #landing-view.liquid-landing .castle { position: absolute; z-index: 3; transform-style: preserve-3d; pointer-events: none; }
+    #landing-view.liquid-landing .castle--far { right: 7%; bottom: 23%; width: 44%; height: 41%; opacity: 0.6; filter: blur(0.25px); transform: translateZ(-90px); animation: castleParallax 13s ease-in-out infinite alternate; }
+    #landing-view.liquid-landing .castle--near { right: -2%; bottom: 7%; width: 45%; height: 63%; transform: translateZ(24px); animation: castleParallax 11s ease-in-out infinite alternate-reverse; }
+    #landing-view.liquid-landing .castle-base { position: absolute; right: 0; bottom: 0; width: 100%; height: 45%; border: 1px solid rgba(169,51,100,0.17); border-radius: 26px 26px 9px 9px; background: linear-gradient(94deg, rgba(255,228,239,0.94), rgba(255,191,219,0.75)); box-shadow: inset 12px 0 20px rgba(255,255,255,0.52), inset -12px 0 18px rgba(171,48,99,0.08); }
+    #landing-view.liquid-landing .castle-tower { position: absolute; bottom: 30%; width: 21%; border: 1px solid rgba(166,45,92,0.18); border-radius: 16px 16px 5px 5px; background: linear-gradient(90deg, rgba(255,245,249,0.95), rgba(244,163,198,0.8)); box-shadow: inset 6px 0 11px rgba(255,255,255,0.55), inset -6px 0 10px rgba(162,40,88,0.1); }
+    #landing-view.liquid-landing .castle-tower::before { content: ''; position: absolute; top: -32px; left: 50%; width: 0; height: 0; border-right: 23px solid transparent; border-bottom: 34px solid #bf3977; border-left: 23px solid transparent; filter: drop-shadow(0 -1px 0 rgba(255,255,255,0.5)); transform: translateX(-50%); }
+    #landing-view.liquid-landing .castle-tower::after { content: ''; position: absolute; top: 24%; left: 50%; width: 9px; height: 20px; border-radius: 9px 9px 3px 3px; background: rgba(167,44,93,0.38); box-shadow: 0 36px 0 rgba(167,44,93,0.32); transform: translateX(-50%); }
+    #landing-view.liquid-landing .castle-tower--one { left: 3%; height: 49%; } #landing-view.liquid-landing .castle-tower--two { left: 38%; height: 72%; } #landing-view.liquid-landing .castle-tower--three { right: 4%; height: 57%; }
+    #landing-view.liquid-landing .castle--far .castle-tower::before { transform: translateX(-50%) scale(0.78); transform-origin: bottom; } #landing-view.liquid-landing .castle--far .castle-base { border-radius: 18px 18px 6px 6px; }
+    #landing-view.liquid-landing .royal-gallery { position: absolute; right: 9%; bottom: 8%; z-index: 6; width: 31%; height: 46%; min-width: 156px; border: 1px solid rgba(255,255,255,0.65); border-radius: 80px 80px 20px 20px; background: linear-gradient(145deg, rgba(250,188,212,0.72), rgba(164,42,87,0.34)); box-shadow: 0 12px 30px rgba(150,33,78,0.18), inset 0 1px 0 rgba(255,255,255,0.72); transform: translateZ(74px); overflow: hidden; }
+    #landing-view.liquid-landing .royal-gallery::before { content: ''; position: absolute; inset: 8px 8px 0; border: 1px solid rgba(255,235,244,0.52); border-bottom: 0; border-radius: 72px 72px 0 0; }
+    #landing-view.liquid-landing .royal-drape { position: absolute; top: 0; right: 14%; width: 28%; height: 44%; border-radius: 0 0 30px 30px; background: linear-gradient(90deg, #9f245d, #ea579a 50%, #8f2054); box-shadow: inset 4px 0 7px rgba(255,255,255,0.18), 0 5px 10px rgba(113,16,55,0.14); }
+    #landing-view.liquid-landing .king { position: absolute; right: 18%; bottom: 7%; z-index: 3; width: 58%; height: 68%; }
+    #landing-view.liquid-landing .king-crown { position: absolute; top: 0; left: 28%; width: 43%; height: 19%; clip-path: polygon(0 100%, 8% 19%, 30% 57%, 50% 0, 70% 57%, 92% 19%, 100% 100%); background: linear-gradient(135deg, #ffe9a6, #d69b35 58%, #fff0b1); filter: drop-shadow(0 3px 2px rgba(119,67,25,0.25)); }
+    #landing-view.liquid-landing .king-head { position: absolute; top: 14%; left: 31%; width: 39%; aspect-ratio: 1; border-radius: 48% 48% 43% 43%; background: linear-gradient(135deg, #f6c4a5, #c47a61); box-shadow: inset 6px 0 9px rgba(255,255,255,0.22); }
+    #landing-view.liquid-landing .king-robe { position: absolute; bottom: 0; left: 5%; width: 90%; height: 57%; border-radius: 48% 48% 14px 14px; background: linear-gradient(115deg, #8d1c50, #d9377b 52%, #742043); box-shadow: inset 7px 0 10px rgba(255,255,255,0.16), inset -7px 0 14px rgba(70,8,38,0.18); }
+    #landing-view.liquid-landing .king-robe::after { content: ''; position: absolute; top: 0; left: 19%; width: 62%; height: 15%; border-radius: 0 0 50% 50%; background: #fff3f4; box-shadow: 0 2px 0 rgba(126,34,70,0.1); }
+    #landing-view.liquid-landing .king-hand { position: absolute; right: -3%; top: 43%; width: 41%; height: 17%; border-radius: 14px 20px 20px 14px; background: linear-gradient(150deg, #efbc9f, #c77760); transform: rotate(-16deg); }
+    #landing-view.liquid-landing .royal-letter { position: absolute; right: 29%; top: 35%; z-index: 8; display: grid; width: 34px; height: 25px; place-items: center; color: #dc3f82; font-size: 0.55rem; border: 1px solid rgba(255,255,255,0.8); border-radius: 4px; background: #fffafb; box-shadow: 0 5px 12px rgba(118,21,58,0.23); opacity: 0; transform: rotate(-11deg) scale(0.35); animation: royalDelivery 15s ease-in-out infinite; }
+    #landing-view.liquid-landing .story-dove { position: absolute; top: 8%; left: -2%; z-index: 8; width: min(45%, 250px); height: auto; overflow: visible; transform-style: preserve-3d; animation: doveJourney 15s cubic-bezier(0.47, 0.02, 0.36, 0.98) infinite; will-change: transform, opacity; }
+    #landing-view.liquid-landing .dove-wing { transform-box: fill-box; transform-origin: 52% 66%; animation: wingBeat 760ms ease-in-out infinite alternate; }
+    #landing-view.liquid-landing .dove-wing--far { opacity: 0.78; animation-delay: -390ms; } #landing-view.liquid-landing .dove-wing--near { animation-duration: 680ms; }
+    #landing-view.liquid-landing .dove-envelope { position: absolute; right: 3%; bottom: 12%; z-index: 2; display: grid; width: 56px; height: 38px; place-items: center; color: #e43e83; font-size: 0.88rem; border: 1px solid rgba(235,100,152,0.32); border-radius: 7px; background: linear-gradient(145deg, #fff, #ffe1ed); box-shadow: 0 9px 16px rgba(163,39,91,0.18), inset 0 1px 0 #fff; transform: rotate(-12deg); }
+    #landing-view.liquid-landing .dove-envelope::after { content: ''; position: absolute; top: 5px; left: 8px; width: 36px; height: 20px; border-top: 1px solid rgba(223,61,128,0.42); border-radius: 50%; transform: rotate(17deg); }
+    #landing-view.liquid-landing .story-ripple { position: absolute; left: 9%; bottom: 9%; z-index: 2; width: 63%; height: 19%; border: 1px solid rgba(220,61,126,0.18); border-radius: 50%; box-shadow: 0 0 0 20px rgba(255,255,255,0.08), 0 0 0 42px rgba(232,77,143,0.05); transform: rotate(-8deg); animation: rippleBreathe 8s ease-in-out infinite; }
+    #landing-view.liquid-landing .story-caption { position: absolute; left: 25px; bottom: 23px; z-index: 10; display: flex; align-items: center; gap: 8px; padding: 8px 11px; color: rgba(120,34,74,0.8); font-size: 0.68rem; font-weight: 800; letter-spacing: 0.04em; border: 1px solid rgba(255,255,255,0.72); border-radius: 999px; background: rgba(255,252,254,0.5); box-shadow: inset 0 1px 0 rgba(255,255,255,0.8); backdrop-filter: blur(10px); }
+    #landing-view.liquid-landing .story-caption b { display: grid; width: 18px; height: 18px; place-items: center; color: #fff; font-size: 0.55rem; border-radius: 50%; background: #de3e81; }
+    #landing-view.liquid-landing .landing-benefits { position: relative; z-index: 4; display: grid; grid-template-columns: repeat(3, 1fr); width: min(calc(100% - 56px), 1240px); margin: -15px auto 58px; overflow: hidden; border: 1px solid rgba(255,255,255,0.7); border-radius: 28px; background: rgba(255,249,252,0.4); box-shadow: 0 20px 45px rgba(179,45,107,0.1), inset 0 1px 0 rgba(255,255,255,0.9); backdrop-filter: blur(18px); }
+    #landing-view.liquid-landing .landing-benefit { display: flex; align-items: center; gap: 13px; padding: 18px 23px; border-right: 1px solid rgba(211,69,128,0.13); }
+    #landing-view.liquid-landing .landing-benefit:last-child { border-right: 0; }
+    #landing-view.liquid-landing .landing-benefit-icon { display: grid; width: 38px; height: 38px; place-items: center; flex: 0 0 auto; color: #cf397a; border: 1px solid rgba(220,63,128,0.17); border-radius: 13px; background: linear-gradient(145deg, rgba(255,255,255,0.84), rgba(255,194,221,0.5)); box-shadow: inset 0 1px 0 #fff; }
+    #landing-view.liquid-landing .landing-benefit strong { display: block; color: #702049; font-size: 0.79rem; } #landing-view.liquid-landing .landing-benefit span { display: block; margin-top: 2px; color: rgba(119,50,81,0.65); font-size: 0.69rem; }
+    #landing-view.liquid-landing .liquid-footer { position: relative; z-index: 2; padding: 0 1.5rem 3.5rem; color: rgba(117,42,76,0.58); font-size: 0.74rem; text-align: center; }
+    @keyframes liquidMorph { 0% { transform: translate3d(0,0,0) scale(1) rotate(0deg); } 45% { transform: translate3d(34px,-20px,0) scale(1.09) rotate(7deg); } 100% { transform: translate3d(-25px,26px,0) scale(0.96) rotate(-5deg); } }
+    @keyframes landingPetal { 0% { transform: translate3d(0,-15px,0) rotate(0deg); opacity: 0; } 12% { opacity: 0.82; } 86% { opacity: 0.55; } 100% { transform: translate3d(90px,260px,0) rotate(270deg); opacity: 0; } }
+    @keyframes sunPulse { 0%,100% { transform: scale(0.92); opacity: 0.72; } 50% { transform: scale(1.08); opacity: 1; } }
+    @keyframes cloudDrift { from { transform: translate3d(-14px,0,0); } to { transform: translate3d(32px,13px,0); } }
+    @keyframes castleParallax { from { transform: translate3d(-5px,5px,0) rotateY(-2deg); } to { transform: translate3d(7px,-6px,0) rotateY(2deg); } }
+    @keyframes wingBeat { from { transform: rotate(-10deg) scaleY(0.86); } to { transform: rotate(11deg) scaleY(1.08); } }
+    @keyframes doveJourney { 0% { opacity: 0; transform: translate3d(-24px,112px,0) scale(0.88) rotate(-4deg); } 7% { opacity: 1; } 34% { transform: translate3d(125px,24px,86px) scale(1) rotate(3deg); } 58% { transform: translate3d(235px,118px,125px) scale(0.76) rotate(2deg); } 72% { opacity: 1; transform: translate3d(292px,226px,92px) scale(0.47) rotate(-8deg); } 79% { opacity: 0; transform: translate3d(316px,238px,70px) scale(0.28) rotate(-9deg); } 93% { opacity: 0; transform: translate3d(-24px,112px,0) scale(0.88) rotate(-4deg); } 100% { opacity: 0; transform: translate3d(-24px,112px,0) scale(0.88) rotate(-4deg); } }
+    @keyframes royalDelivery { 0%,63% { opacity: 0; transform: rotate(-11deg) scale(0.35); } 72%,88% { opacity: 1; transform: rotate(-11deg) scale(1); } 96%,100% { opacity: 0; transform: rotate(-11deg) scale(0.35); } }
+    @keyframes rippleBreathe { 0%,100% { transform: rotate(-8deg) scale(0.96); opacity: 0.52; } 50% { transform: rotate(-8deg) scale(1.05); opacity: 0.92; } }
+    @media (max-width: 1000px) {
+      #landing-view.liquid-landing .story-hero { grid-template-columns: 1fr; gap: 30px; width: min(calc(100% - 40px), 700px); min-height: auto; padding: 128px 0 48px; }
+      #landing-view.liquid-landing .story-copy { max-width: 580px; } #landing-view.liquid-landing .story-stage { min-height: 590px; }
+      #landing-view.liquid-landing .landing-benefits { width: min(calc(100% - 40px), 700px); margin-top: 0; }
+    }
+    @media (max-width: 640px) {
+      #landing-view.liquid-landing .liquid-nav { top: 12px; width: calc(100% - 24px); height: 60px; border-radius: 20px; } #landing-view.liquid-landing .liquid-nav > div { padding: 0 14px; } #landing-view.liquid-landing .brand-lockup { font-size: 1rem; } #landing-view.liquid-landing .brand-mark { width: 29px; height: 29px; border-radius: 10px; font-size: 0.7rem; } #landing-view.liquid-landing .nav-start { padding: 8px 12px; font-size: 0.73rem; }
+      #landing-view.liquid-landing .story-hero { width: calc(100% - 30px); padding-top: 105px; gap: 28px; } #landing-view.liquid-landing .privacy-badge { padding: 8px 11px; font-size: 0.62rem; } #landing-view.liquid-landing .story-title { margin: 18px 0; font-size: clamp(3.35rem, 16vw, 4.7rem); } #landing-view.liquid-landing .story-description { margin-bottom: 24px; font-size: 0.94rem; }
+      #landing-view.liquid-landing .story-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; } #landing-view.liquid-landing .story-primary, #landing-view.liquid-landing .story-secondary { min-height: 53px; padding: 0 10px; font-size: 0.82rem; border-radius: 15px; } #landing-view.liquid-landing .security-line { align-items: flex-start; font-size: 0.67rem; line-height: 1.45; }
+      #landing-view.liquid-landing .story-stage { min-height: 442px; border-radius: 30px; } #landing-view.liquid-landing .story-sun { top: 10%; left: 27%; width: 80px; height: 80px; } #landing-view.liquid-landing .castle--far { right: 6%; bottom: 21%; width: 49%; height: 37%; } #landing-view.liquid-landing .castle--near { right: -5%; bottom: 5%; width: 51%; height: 57%; } #landing-view.liquid-landing .royal-gallery { right: 7%; bottom: 6%; min-width: 125px; } #landing-view.liquid-landing .story-dove { width: 47%; } #landing-view.liquid-landing .dove-envelope { width: 45px; height: 31px; font-size: 0.68rem; } #landing-view.liquid-landing .story-caption { left: 15px; bottom: 15px; font-size: 0.59rem; }
+      #landing-view.liquid-landing .landing-benefits { grid-template-columns: 1fr; width: calc(100% - 30px); margin-bottom: 36px; border-radius: 22px; } #landing-view.liquid-landing .landing-benefit { padding: 14px; border-right: 0; border-bottom: 1px solid rgba(211,69,128,0.13); } #landing-view.liquid-landing .landing-benefit:last-child { border-bottom: 0; } #landing-view.liquid-landing .liquid-footer { padding-bottom: 2.5rem; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; scroll-behavior: auto !important; transition-duration: 0.01ms !important; }
+    }
+    [data-reduced-motion="true"] *, [data-reduced-motion="true"] *::before, [data-reduced-motion="true"] *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+  </style>
+</head>
+<body class="h-screen w-screen flex flex-col font-sans antialiased text-sm md:text-base">
+
+  <div id="toast-container" class="fixed top-4 left-1/2 transform -translate-x-1/2 z-50 flex flex-col gap-2 pointer-events-none"></div>
+
+  <!-- ==========================================
+       VIEW 1: LANDING PAGE
+       ========================================== -->
+  <div id="landing-view" class="landing-experience liquid-landing flex-1 overflow-y-auto w-full h-full absolute inset-0 z-40 transition-opacity duration-500">
+    <div class="liquid-field" aria-hidden="true"><span class="liquid-orb liquid-orb--one"></span><span class="liquid-orb liquid-orb--two"></span><span class="liquid-orb liquid-orb--three"></span></div>
+    <div class="petal-field" aria-hidden="true"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></div>
+    <nav class="product-nav liquid-nav z-50">
+      <div class="mx-auto flex items-center justify-between">
+        <a class="brand-lockup flex items-center gap-2 font-extrabold text-xl" href="#home" data-scroll-target="home" aria-label="TempChat home">
+          <i class="fa-solid fa-paper-plane brand-mark" aria-hidden="true"></i><span>TempChat</span>
+        </a>
+        <div class="hidden items-center gap-8 text-sm font-semibold md:flex">
+          <a class="liquid-nav-link" href="#home" data-scroll-target="home">Home</a>
+          <a class="liquid-nav-link" href="#features" data-scroll-target="features">Features</a>
+          <a class="liquid-nav-link" href="#about" data-scroll-target="about">About</a>
+        </div>
+        <button type="button" data-entry-mode="create" class="nav-start rounded-xl px-4 py-2 text-sm font-bold">Get Started</button>
+      </div>
+    </nav>
+
+    <header id="home" class="story-hero">
+      <div class="story-copy">
+        <div class="privacy-badge">PRIVATE&nbsp; • &nbsp;E2EE</div>
+        <h1 class="story-title">Messages <span>That Reach</span><em>You.</em></h1>
+        <p class="story-description">Connect, share and communicate privately — with conversations protected by end-to-end encryption.</p>
+        <div class="story-actions">
+          <button type="button" data-entry-mode="create" class="story-primary">Start Chatting</button>
+          <button type="button" data-entry-mode="join" class="story-secondary"><i class="fa-solid fa-arrow-right-to-bracket mr-2" aria-hidden="true"></i>Join a Room</button>
+        </div>
+        <p class="security-line"><i class="fa-solid fa-shield-halved" aria-hidden="true"></i>End-to-end encrypted <span aria-hidden="true">•</span> No message history <span aria-hidden="true">•</span> No account required</p>
+      </div>
+
+      <div class="story-stage" role="img" aria-label="A white dove carries a private message through a rose castle landscape to a small king receiving the letter.">
+        <div class="story-sun" aria-hidden="true"></div>
+        <div class="story-cloud story-cloud--one" aria-hidden="true"></div><div class="story-cloud story-cloud--two" aria-hidden="true"></div>
+        <div class="castle castle--far" aria-hidden="true"><span class="castle-base"></span><span class="castle-tower castle-tower--one"></span><span class="castle-tower castle-tower--two"></span><span class="castle-tower castle-tower--three"></span></div>
+        <div class="castle castle--near" aria-hidden="true"><span class="castle-base"></span><span class="castle-tower castle-tower--one"></span><span class="castle-tower castle-tower--two"></span><span class="castle-tower castle-tower--three"></span></div>
+        <div class="story-ripple" aria-hidden="true"></div>
+        <div class="royal-gallery" aria-hidden="true"><span class="royal-drape"></span><span class="royal-letter"><i class="fa-solid fa-comment-dots"></i></span><span class="king"><i class="king-crown"></i><i class="king-head"></i><i class="king-robe"></i><i class="king-hand"></i></span></div>
+        <div class="story-dove" aria-hidden="true">
+          <svg viewBox="0 0 320 250" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <defs><linearGradient id="doveBody" x1="70" y1="70" x2="234" y2="201" gradientUnits="userSpaceOnUse"><stop stop-color="#fff"/><stop offset="0.64" stop-color="#fff8fb"/><stop offset="1" stop-color="#e9bad2"/></linearGradient><linearGradient id="doveWing" x1="70" y1="20" x2="185" y2="165" gradientUnits="userSpaceOnUse"><stop stop-color="#fff"/><stop offset="1" stop-color="#f2cde0"/></linearGradient></defs>
+            <g class="dove-wing dove-wing--far"><path d="M149 138C93 135 37 105 23 38C70 39 127 68 175 125L149 138Z" fill="url(#doveWing)" stroke="#E8BDD2" stroke-width="2"/><path d="M142 128C95 100 69 71 53 47M151 125C111 96 89 65 81 39M161 124C134 88 123 57 123 31" stroke="#E4B3CB" stroke-width="2" stroke-linecap="round" opacity=".68"/></g>
+            <path d="M131 147C92 164 68 186 48 224C91 213 129 193 162 162L131 147Z" fill="url(#doveWing)" stroke="#E8BDD2" stroke-width="2"/>
+            <ellipse cx="172" cy="145" rx="67" ry="42" transform="rotate(-13 172 145)" fill="url(#doveBody)" stroke="#E8BDD2" stroke-width="2"/>
+            <path d="M196 125C213 91 239 73 271 76C260 102 238 122 207 139L196 125Z" fill="url(#doveBody)" stroke="#E8BDD2" stroke-width="2"/>
+            <circle cx="258" cy="89" r="3.5" fill="#7C3157"/><path d="M275 96L294 102L277 109" fill="#E9729F"/>
+            <g class="dove-wing dove-wing--near"><path d="M170 145C150 94 154 43 196 11C219 53 213 109 187 154L170 145Z" fill="url(#doveWing)" stroke="#E8BDD2" stroke-width="2"/><path d="M177 139C178 94 184 55 198 25M184 145C193 109 204 77 218 52M191 148C208 122 222 102 240 87" stroke="#E4B3CB" stroke-width="2" stroke-linecap="round" opacity=".72"/></g>
+            <path d="M146 170C139 184 147 193 159 185M161 174C155 189 165 197 176 187" stroke="#CA6B91" stroke-width="3" stroke-linecap="round"/>
+          </svg>
+          <span class="dove-envelope"><i class="fa-solid fa-comment-dots"></i></span>
+        </div>
+        <p class="story-caption"><b>01</b> A private message begins its journey</p>
+      </div>
+    </header>
+
+    <section id="features" class="landing-benefits" aria-label="TempChat features">
+      <article class="landing-benefit"><i class="fa-solid fa-lock landing-benefit-icon" aria-hidden="true"></i><div><strong>Private by design</strong><span>Your conversation stays between you and the people you invite.</span></div></article>
+      <article class="landing-benefit"><i class="fa-solid fa-bolt landing-benefit-icon" aria-hidden="true"></i><div><strong>Instant rooms</strong><span>Start a space and share a code in a few seconds.</span></div></article>
+      <article class="landing-benefit"><i class="fa-solid fa-gamepad landing-benefit-icon" aria-hidden="true"></i><div><strong>More than messages</strong><span>Keep conversations alive with play built right in.</span></div></article>
+    </section>
+
+    <footer id="about" class="liquid-footer">&copy; 2026 TempChat · Made for the conversations that matter.</footer>
+  </div>
+
+  <!-- ==========================================
+       VIEW 2: ROOM ENTRY
+       ========================================== -->
+  <div id="entry-view" class="entry-stage hidden flex-1 items-center justify-center w-full h-full absolute inset-0 z-30 bg-[var(--bg-base)]">
+    <div class="entry-card glass p-8 rounded-3xl w-full max-w-md mx-4 shadow-2xl relative overflow-hidden">
+      <button onclick="showLandingView()" class="absolute top-4 left-4 text-[var(--text-muted)] hover:text-[var(--text-main)]">
+        <i class="fa-solid fa-arrow-left"></i>
+      </button>
+      
+      <div class="text-center mb-8 mt-4">
+        <i class="fa-solid fa-bolt text-4xl text-[var(--accent-color)] mb-4"></i>
+        <h2 class="text-2xl font-bold text-[var(--text-main)]" id="entry-title">Join a Room</h2>
+      </div>
+
+      <div class="space-y-4">
+        <div>
+          <label class="block text-sm font-medium text-[var(--text-muted)] mb-1">Your Name</label>
+          <input type="text" id="username-input" class="w-full bg-[var(--bg-base)] border border-[var(--border-color)] rounded-xl px-4 py-3 text-[var(--text-main)] focus:outline-none focus:border-[var(--accent-color)] focus:ring-1 focus:ring-[var(--accent-color)] transition-all" placeholder="Enter a display name">
+        </div>
+        
+        <div id="room-code-container">
+          <label class="block text-sm font-medium text-[var(--text-muted)] mb-1">Room Code</label>
+          <input type="text" id="room-input" class="w-full bg-[var(--bg-base)] border border-[var(--border-color)] rounded-xl px-4 py-3 text-[var(--text-main)] focus:outline-none focus:border-[var(--accent-color)] font-mono uppercase transition-all" placeholder="e.g. A1B2C">
+        </div>
+
+        <div class="flex items-center justify-between text-sm mt-2">
+          <button id="toggle-mode-btn" onclick="toggleEntryMode()" class="text-[var(--accent-color)] hover:underline">Want to create a room instead?</button>
+        </div>
+
+        <p id="connection-status" class="hidden text-center text-sm" role="status" aria-live="polite"></p>
+        <button id="enter-room-btn" onclick="handleEnterRoom()" class="w-full btn-primary py-3.5 rounded-xl font-bold text-lg mt-4 shadow-md">
+          Enter Room
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==========================================
+       VIEW 3: MAIN CHAT APP
+       ========================================== -->
+  <div id="chat-view" class="chat-shell hidden flex-col w-full h-full absolute inset-0 z-20 theme-bg">
+    
+    <!-- Chat Header -->
+    <header class="chat-header glass h-16 flex items-center justify-between px-4 lg:px-8 border-b border-[var(--border-color)] shrink-0 relative z-10">
+      <div class="flex items-center gap-4">
+        <button onclick="leaveRoom()" aria-label="Leave room" class="header-action text-[var(--text-muted)] hover:text-[var(--text-main)] md:hidden">
+          <i class="fa-solid fa-chevron-left"></i>
+        </button>
+        <div>
+          <h2 class="font-bold text-[var(--text-main)] flex items-center gap-2">
+            Room <span id="header-room-code" class="font-mono text-[var(--accent-color)] bg-[var(--accent-color)]/10 px-2 py-0.5 rounded">---</span>
+          </h2>
+          <div class="text-xs font-medium text-[var(--text-muted)] flex items-center gap-1.5">
+            <span class="relative flex h-2 w-2">
+              <span class="presence-orb relative inline-flex rounded-full h-2 w-2"></span>
+            </span>
+            <span id="header-presence">1 person online</span>
+          </div>
+        </div>
+      </div>
+      
+      <div class="flex items-center gap-2 lg:gap-4">
+        <!-- Users Dropdown Trigger (Mobile/Desktop) -->
+        <button onclick="toggleUserList()" aria-label="Show people in this room" class="header-action w-10 h-10 rounded-full hover:bg-[var(--bg-surface)] text-[var(--text-muted)] transition-colors relative">
+          <i class="fa-solid fa-users"></i>
+        </button>
+        <!-- Theme Settings -->
+        <button onclick="openModal('theme-modal')" aria-label="Open appearance settings" class="header-action w-10 h-10 rounded-full hover:bg-[var(--bg-surface)] text-[var(--text-muted)] transition-colors">
+          <i class="fa-solid fa-gear"></i>
+        </button>
+      </div>
+
+      <!-- Users Dropdown Panel -->
+      <div id="users-dropdown" class="people-popover absolute top-16 right-4 w-64 glass rounded-2xl shadow-xl border border-[var(--border-color)] p-4 hidden flex-col gap-3 origin-top-right transition-all">
+        <h3 class="text-xs font-bold uppercase tracking-wider text-[var(--text-muted)] mb-1">In this room</h3>
+        <ul id="users-list-container" class="flex flex-col gap-2">
+          <!-- Populated by JS -->
+        </ul>
+      </div>
+    </header>
+
+    <!-- Message Area -->
+    <main id="message-container" class="message-stage flex-1 overflow-y-auto p-4 lg:p-8 flex flex-col gap-4 relative" aria-live="polite">
+      <!-- Background pattern layer -->
+      <div id="chat-bg-layer" class="absolute inset-0 opacity-5 pointer-events-none transition-all"></div>
+      
+      <!-- Date Separator Example (Injected dynamically but showing structure here) -->
+      <div class="date-divider text-center my-4 relative z-0">
+        <span class="bg-[var(--bg-surface)] px-3 py-1 rounded-full text-xs font-medium text-[var(--text-muted)] border border-[var(--border-color)] shadow-sm">Today</span>
+      </div>
+
+      <!-- Messages inject here -->
+      <div id="messages-list" class="flex flex-col gap-1 w-full max-w-4xl mx-auto z-10 pb-4"></div>
+      
+      <!-- Typing indicator container -->
+      <div id="typing-indicator-container" class="hidden w-full max-w-4xl mx-auto z-10" aria-live="polite">
+        <div class="typing-surface text-[var(--text-muted)] text-sm mb-2">
+          <span id="typing-username" class="font-medium">Someone</span><span>is shaping a thought</span>
+          <div class="typing-liquid" aria-hidden="true">
+            <div class="typing-dot"></div>
+            <div class="typing-dot"></div>
+            <div class="typing-dot"></div>
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <!-- Input Area -->
+    <footer class="composer-dock glass p-3 lg:p-4 border-t border-[var(--border-color)] shrink-0 z-10">
+      <div class="max-w-4xl mx-auto">
+        <div id="attachment-preview" class="attachment-preview hidden" aria-live="polite"></div>
+        <div class="composer-shell flex items-end gap-2 bg-[var(--bg-surface)] border border-[var(--border-color)] rounded-2xl p-1.5 shadow-sm focus-within:border-[var(--accent-color)] focus-within:ring-1 focus-within:ring-[var(--accent-color)] transition-all">
+        <input id="attachment-input" type="file" class="hidden" multiple aria-label="Choose files to attach">
+        <button id="attachment-button" onclick="document.getElementById('attachment-input').click()" aria-label="Attach files" class="composer-action attachment-action w-10 h-10 shrink-0 rounded-xl hover:bg-[var(--bg-base)] text-[var(--text-muted)] flex items-center justify-center transition-colors" title="Attach files">
+          <i class="fa-solid fa-paperclip text-lg"></i>
+        </button>
+        
+        <!-- Play Together Button -->
+        <button onclick="openModal('game-menu-modal')" aria-label="Play a game together" class="composer-action game-action w-10 h-10 shrink-0 rounded-xl bg-gradient-to-br from-[var(--accent-color)] to-purple-500 text-white flex items-center justify-center shadow-md hover:scale-105 transition-transform" title="Play Together">
+          <i class="fa-solid fa-gamepad text-lg"></i>
+        </button>
+
+        <textarea id="message-input" rows="1" class="flex-1 bg-transparent border-none focus:outline-none focus:ring-0 resize-none py-2.5 px-2 text-[var(--text-main)] max-h-32 min-h-[44px]" placeholder="Message..."></textarea>
+        
+        <button onclick="sendMessage()" id="send-btn" aria-label="Send message" disabled class="send-button w-10 h-10 shrink-0 rounded-xl bg-[var(--accent-color)] text-white flex items-center justify-center hover:bg-[var(--accent-hover)] transition-colors shadow-sm mb-0.5 mr-0.5 disabled:cursor-not-allowed disabled:opacity-45 disabled:shadow-none">
+          <i class="fa-solid fa-paper-plane"></i>
+        </button>
+        </div>
+      </div>
+    </footer>
+  </div>
+
+  <!-- ==========================================
+       MODALS & OVERLAYS
+       ========================================== -->
+       
+  <!-- Theme Modal -->
+  <div id="theme-modal" class="fixed inset-0 z-50 flex items-center justify-center hidden">
+    <div class="absolute inset-0 bg-black/40 backdrop-blur-sm" onclick="closeModal('theme-modal')"></div>
+    <div class="glass w-full max-w-lg rounded-3xl shadow-2xl relative z-10 m-4 flex flex-col max-h-[90vh] animate-pop-in">
+      <div class="p-6 border-b border-[var(--border-color)] flex justify-between items-center shrink-0">
+        <h2 class="text-xl font-bold text-[var(--text-main)]"><i class="fa-solid fa-palette mr-2"></i> Appearance</h2>
+        <button onclick="closeModal('theme-modal')" class="w-8 h-8 rounded-full bg-[var(--bg-surface)] text-[var(--text-muted)] hover:text-[var(--text-main)] flex items-center justify-center"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      
+      <div class="p-6 overflow-y-auto flex-1 space-y-8">
+        
+        <!-- Live Preview -->
+        <div>
+          <label class="block text-xs font-bold uppercase tracking-wider text-[var(--text-muted)] mb-3">Live Preview</label>
+          <div class="bg-[var(--bg-base)] border border-[var(--border-color)] rounded-2xl p-4 flex flex-col gap-2 relative overflow-hidden transition-colors">
+            <div id="preview-bg" class="absolute inset-0 opacity-10 pointer-events-none"></div>
+            <div class="bg-[var(--bubble-them)] text-[var(--text-bubble-them)] py-2 px-3 rounded-2xl rounded-tl-sm self-start max-w-[80%] text-sm z-10 shadow-sm border border-black/5 dark:border-white/5">
+              Hey! 👋
+            </div>
+            <div class="bg-[var(--bubble-me)] text-[var(--text-bubble-me)] py-2 px-3 rounded-2xl rounded-tr-sm self-end max-w-[80%] text-sm z-10 shadow-sm">
+              Looking good! ✨
+            </div>
+          </div>
+        </div>
+
+        <!-- Mode -->
+        <div>
+          <label class="block text-xs font-bold uppercase tracking-wider text-[var(--text-muted)] mb-3">Light atmosphere</label>
+          <div class="grid grid-cols-3 gap-3">
+            <button onclick="setThemeMode('light')" class="bg-[var(--bg-surface)] border border-[var(--border-color)] py-2 rounded-xl text-sm font-medium hover:border-[var(--accent-color)] flex flex-col items-center gap-1 transition-all" id="theme-btn-light">
+              <i class="fa-solid fa-sun text-amber-500 text-lg"></i> Pearl
+            </button>
+            <button onclick="setThemeMode('dark')" class="bg-[var(--bg-surface)] border border-[var(--border-color)] py-2 rounded-xl text-sm font-medium hover:border-[var(--accent-color)] flex flex-col items-center gap-1 transition-all" id="theme-btn-dark">
+              <i class="fa-solid fa-droplet text-rose-400 text-lg"></i> Blush
+            </button>
+            <button onclick="setThemeMode('system')" class="bg-[var(--bg-surface)] border border-[var(--border-color)] py-2 rounded-xl text-sm font-medium hover:border-[var(--accent-color)] flex flex-col items-center gap-1 transition-all" id="theme-btn-system">
+              <i class="fa-solid fa-cloud-sun text-sky-500 text-lg"></i> Mist
+            </button>
+          </div>
+        </div>
+
+        <!-- Accent Color -->
+        <div>
+          <label class="block text-xs font-bold uppercase tracking-wider text-[var(--text-muted)] mb-3">Accent Color</label>
+          <div class="flex flex-wrap gap-4">
+            <button onclick="setAccent('#5d5ce6')" aria-label="Indigo accent" class="w-10 h-10 rounded-full bg-indigo-500 shadow-md ring-2 ring-offset-2 ring-offset-[var(--bg-panel)] ring-transparent focus:ring-indigo-500 transition-all" id="accent-indigo"></button>
+            <button onclick="setAccent('#a855f7')" aria-label="Purple accent" class="w-10 h-10 rounded-full bg-purple-500 shadow-md ring-2 ring-offset-2 ring-offset-[var(--bg-panel)] ring-transparent focus:ring-purple-500 transition-all" id="accent-purple"></button>
+            <button onclick="setAccent('#22c55e')" aria-label="Green accent" class="w-10 h-10 rounded-full bg-green-500 shadow-md ring-2 ring-offset-2 ring-offset-[var(--bg-panel)] ring-transparent focus:ring-green-500 transition-all" id="accent-green"></button>
+            <button onclick="setAccent('#ec4899')" aria-label="Pink accent" class="w-10 h-10 rounded-full bg-pink-500 shadow-md ring-2 ring-offset-2 ring-offset-[var(--bg-panel)] ring-transparent focus:ring-pink-500 transition-all" id="accent-pink"></button>
+            <button onclick="setAccent('#f97316')" aria-label="Orange accent" class="w-10 h-10 rounded-full bg-orange-500 shadow-md ring-2 ring-offset-2 ring-offset-[var(--bg-panel)] ring-transparent focus:ring-orange-500 transition-all" id="accent-orange"></button>
+            <button onclick="setAccent('#ef4444')" aria-label="Red accent" class="w-10 h-10 rounded-full bg-red-500 shadow-md ring-2 ring-offset-2 ring-offset-[var(--bg-panel)] ring-transparent focus:ring-red-500 transition-all" id="accent-red"></button>
+          </div>
+        </div>
+
+        <!-- Background -->
+        <div>
+          <label class="block text-xs font-bold uppercase tracking-wider text-[var(--text-muted)] mb-3">Chat Background</label>
+          <div class="grid grid-cols-3 gap-3">
+            <button onclick="setChatBg('plain')" class="bg-[var(--bg-surface)] border border-[var(--border-color)] py-2 rounded-xl text-sm font-medium hover:border-[var(--accent-color)] transition-all" id="bg-btn-plain">Plain</button>
+            <button onclick="setChatBg('grid')" class="bg-[var(--bg-surface)] border border-[var(--border-color)] py-2 rounded-xl text-sm font-medium hover:border-[var(--accent-color)] relative overflow-hidden transition-all" id="bg-btn-grid">
+              <div class="absolute inset-0 bg-pattern-grid opacity-20 pointer-events-none"></div>
+              Grid
+            </button>
+            <button onclick="setChatBg('dots')" class="bg-[var(--bg-surface)] border border-[var(--border-color)] py-2 rounded-xl text-sm font-medium hover:border-[var(--accent-color)] relative overflow-hidden transition-all" id="bg-btn-dots">
+              <div class="absolute inset-0 bg-pattern-dots opacity-20 pointer-events-none"></div>
+              Dots
+            </button>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- Game Menu Modal -->
+  <div id="game-menu-modal" class="fixed inset-0 z-50 flex items-end sm:items-center justify-center hidden">
+    <div class="absolute inset-0 bg-black/50 backdrop-blur-sm" onclick="closeModal('game-menu-modal')"></div>
+    <div class="glass w-full max-w-md rounded-t-3xl sm:rounded-3xl shadow-2xl relative z-10 flex flex-col animate-fade-in-up">
+      <div class="p-6 border-b border-[var(--border-color)] flex justify-between items-center text-center sm:text-left">
+        <h2 class="text-xl font-bold text-[var(--text-main)] w-full sm:w-auto"><i class="fa-solid fa-gamepad mr-2 text-[var(--accent-color)]"></i> Play Together</h2>
+        <button onclick="closeModal('game-menu-modal')" class="w-8 h-8 rounded-full bg-[var(--bg-surface)] text-[var(--text-muted)] hover:text-[var(--text-main)] flex items-center justify-center absolute right-6 sm:relative sm:right-auto"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      <div class="p-4 flex flex-col gap-3">
+        <button onclick="sendGameInvite('rps')" class="w-full flex items-center p-4 bg-[var(--bg-surface)] hover:bg-[var(--bg-base)] border border-[var(--border-color)] rounded-2xl transition-all group">
+          <div class="w-12 h-12 rounded-xl bg-orange-100 text-orange-500 flex items-center justify-center text-2xl mr-4 group-hover:scale-110 transition-transform shadow-inner">✊</div>
+          <div class="text-left flex-1">
+            <h3 class="font-bold text-[var(--text-main)] text-lg">Rock Paper Scissors</h3>
+            <p class="text-xs text-[var(--text-muted)]">A classic battle of wits.</p>
+          </div>
+          <i class="fa-solid fa-chevron-right text-[var(--text-muted)]"></i>
+        </button>
+
+        <button onclick="sendGameInvite('ttt')" class="w-full flex items-center p-4 bg-[var(--bg-surface)] hover:bg-[var(--bg-base)] border border-[var(--border-color)] rounded-2xl transition-all group">
+          <div class="w-12 h-12 rounded-xl bg-blue-100 text-blue-500 flex items-center justify-center text-2xl mr-4 group-hover:scale-110 transition-transform shadow-inner">❌</div>
+          <div class="text-left flex-1">
+            <h3 class="font-bold text-[var(--text-main)] text-lg">Tic Tac Toe</h3>
+            <p class="text-xs text-[var(--text-muted)]">Get 3 in a row.</p>
+          </div>
+          <i class="fa-solid fa-chevron-right text-[var(--text-muted)]"></i>
+        </button>
+
+        <button onclick="sendGameInvite('race')" class="w-full flex items-center p-4 bg-[var(--bg-surface)] hover:bg-[var(--bg-base)] border border-[var(--border-color)] rounded-2xl transition-all group">
+          <div class="w-12 h-12 rounded-xl bg-red-100 text-red-500 flex items-center justify-center text-2xl mr-4 group-hover:scale-110 transition-transform shadow-inner">🏎️</div>
+          <div class="text-left flex-1">
+            <h3 class="font-bold text-[var(--text-main)] text-lg">Mini Car Race</h3>
+            <p class="text-xs text-[var(--text-muted)]">Dodge traffic, hit the finish line.</p>
+          </div>
+          <i class="fa-solid fa-chevron-right text-[var(--text-muted)]"></i>
+        </button>
+
+        <button onclick="sendGameInvite('tap')" class="w-full flex items-center p-4 bg-[var(--bg-surface)] hover:bg-[var(--bg-base)] border border-[var(--border-color)] rounded-2xl transition-all group">
+          <div class="w-12 h-12 rounded-xl bg-yellow-100 text-yellow-500 flex items-center justify-center text-2xl mr-4 group-hover:scale-110 transition-transform shadow-inner">⚡</div>
+          <div class="text-left flex-1">
+            <h3 class="font-bold text-[var(--text-main)] text-lg">Quick Tap Battle</h3>
+            <p class="text-xs text-[var(--text-muted)]">Test your reaction time.</p>
+          </div>
+          <i class="fa-solid fa-chevron-right text-[var(--text-muted)]"></i>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Game Invite Received Modal -->
+  <div id="game-invite-modal" class="fixed top-20 left-1/2 transform -translate-x-1/2 z-50 hidden">
+    <div class="glass border border-[var(--border-color)] shadow-2xl rounded-2xl p-4 w-80 animate-pop-in flex flex-col items-center text-center">
+      <div id="invite-icon" class="text-4xl mb-2 mt-2">🎮</div>
+      <h3 class="font-bold text-[var(--text-main)] text-lg" id="invite-title">Game Challenge</h3>
+      <p class="text-sm text-[var(--text-muted)] mb-4" id="invite-desc">Alex challenged you</p>
+      <div class="flex gap-2 w-full">
+        <button id="btn-accept-invite" class="flex-1 btn-primary py-2 rounded-xl font-bold shadow-md">Accept</button>
+        <button onclick="declineInvite()" class="flex-1 bg-[var(--bg-surface)] border border-[var(--border-color)] text-[var(--text-main)] hover:bg-[var(--bg-base)] py-2 rounded-xl font-bold transition-colors">Decline</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ACTIVE GAME CONTAINER OVERLAY -->
+  <div id="active-game-container" class="fixed inset-0 z-[60] bg-[var(--bg-base)] hidden flex-col">
+    <!-- Header -->
+    <div class="glass h-16 flex items-center justify-between px-4 border-b border-[var(--border-color)] shrink-0">
+      <h2 id="active-game-title" class="font-bold text-[var(--text-main)] text-lg flex items-center gap-2">🎮 Game</h2>
+      <button onclick="quitGame()" class="text-[var(--text-muted)] hover:text-red-500 font-medium px-3 py-1 rounded-lg hover:bg-red-500/10 transition-colors">Quit</button>
+    </div>
+    
+    <!-- Game specific views injected here -->
+    <div id="game-area" class="flex-1 relative overflow-hidden flex items-center justify-center p-4">
+      
+      <!-- Countdown Overlay -->
+      <div id="game-countdown" class="absolute inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center hidden">
+        <span id="countdown-text" class="text-8xl font-black text-white drop-shadow-2xl animate-pop-in">3</span>
+      </div>
+
+      <!-- DOM Container for simple games (RPS, TTT, Tap) -->
+      <div id="game-dom" class="w-full max-w-md hidden flex-col gap-6 items-center"></div>
+
+      <!-- Canvas for Car Race -->
+      <canvas id="game-canvas" class="hidden rounded-xl shadow-2xl bg-slate-900 border-4 border-slate-700 max-w-full"></canvas>
+      
+      <!-- Mobile Controls for Car Race -->
+      <div id="mobile-race-controls" class="absolute bottom-8 left-4 right-4 flex justify-between gap-4 hidden z-20 max-w-md mx-auto">
+        <button id="btn-left" class="w-24 h-24 rounded-2xl bg-white/10 backdrop-blur-md border border-white/20 text-white text-4xl flex items-center justify-center active:bg-white/30 active:scale-95 transition-all select-none touch-none"><i class="fa-solid fa-caret-left"></i></button>
+        <button id="btn-right" class="w-24 h-24 rounded-2xl bg-white/10 backdrop-blur-md border border-white/20 text-white text-4xl flex items-center justify-center active:bg-white/30 active:scale-95 transition-all select-none touch-none"><i class="fa-solid fa-caret-right"></i></button>
+      </div>
+
+    </div>
+  </div>
+
+
+  <!-- ==========================================
+       APPLICATION LOGIC
+       ========================================== -->
+  <script>
+    // --- STATE ---
+    const AppState = {
+      user: { id: null, username: '' },
+      room: { code: '', users: [] },
+      theme: { mode: 'light', accent: '#5d5ce6', bg: 'plain' },
+      isMock: false,
+      currentGame: null,
+      gameSession: null
+    };
+
+    // --- CRYPTO MODULE (E2EE) ---
+    const Crypto = (() => {
+      const ALGO_KEY_AGREEMENT = { name: 'ECDH', namedCurve: 'P-256' };
+      const ALGO_AES_GCM = { name: 'AES-GCM', length: 256 };
+      const ALGO_HKDF = { name: 'HKDF', hash: 'SHA-256' };
+      const NONCE_LENGTH = 12;
+      const SALT_LENGTH = 16;
+      const KEY_ID_LENGTH = 8;
+      const PROTOCOL_VERSION = 1;
+
+      let identityKeyPair = null;
+      let peerKeys = new Map();
+      let sessionKeys = new Map();
+      let messageCounters = new Map();
+      let keyFingerprints = new Map();
+
+      function arrayBufferToBase64(buf) {
+        const bytes = new Uint8Array(buf);
+        let binary = '';
+        for (let i = 0; i < bytes.byteLength; i++) binary += String.fromCharCode(bytes[i]);
+        return btoa(binary);
+      }
+
+      function base64ToArrayBuffer(b64) {
+        const binary = atob(b64);
+        const bytes = new Uint8Array(binary.length);
+        for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+        return bytes.buffer;
+      }
+
+      function uint8ArrayToHex(bytes) {
+        return Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join('');
+      }
+
+      async function generateIdentityKeyPair() {
+        identityKeyPair = await crypto.subtle.generateKey(ALGO_KEY_AGREEMENT, true, ['deriveKey', 'deriveBits']);
+        const publicKeyRaw = await crypto.subtle.exportKey('raw', identityKeyPair.publicKey);
+        const fingerprint = await computeFingerprint(publicKeyRaw);
+        keyFingerprints.set('self', fingerprint);
+        return { publicKey: arrayBufferToBase64(publicKeyRaw), fingerprint };
+      }
+
+      async function computeFingerprint(publicKeyRaw) {
+        const hash = await crypto.subtle.digest('SHA-256', publicKeyRaw);
+        const bytes = new Uint8Array(hash);
+        return uint8ArrayToHex(bytes.slice(0, 16)).toUpperCase().match(/.{1,4}/g).join(' ');
+      }
+
+      async function importPeerPublicKey(peerId, publicKeyB64) {
+        const publicKeyRaw = base64ToArrayBuffer(publicKeyB64);
+        const publicKey = await crypto.subtle.importKey('raw', publicKeyRaw, ALGO_KEY_AGREEMENT, true, []);
+        peerKeys.set(peerId, publicKey);
+        const fingerprint = await computeFingerprint(publicKeyRaw);
+        keyFingerprints.set(peerId, fingerprint);
+        await deriveSessionKeys(peerId);
+      }
+
+      async function deriveSessionKeys(peerId) {
+        const peerPublicKey = peerKeys.get(peerId);
+        if (!peerPublicKey || !identityKeyPair) return;
+
+        const sharedSecret = await crypto.subtle.deriveBits(
+          { name: 'ECDH', public: peerPublicKey },
+          identityKeyPair.privateKey,
+          256
+        );
+
+        const salt = new Uint8Array(SALT_LENGTH);
+        crypto.getRandomValues(salt);
+
+        const baseKey = await crypto.subtle.importKey('raw', sharedSecret, ALGO_HKDF, false, ['deriveKey']);
+
+        const { messageKey, fileKey } = await deriveContentKeys(baseKey, salt);
+
+        sessionKeys.set(peerId, {
+          baseKey,
+          messageKey,
+          fileKey,
+          salt: arrayBufferToBase64(salt),
+          counter: 0
+        });
+
+        messageCounters.set(peerId, 0);
+      }
+
+      async function deriveContentKeys(baseKey, salt) {
+        const messageKey = await crypto.subtle.deriveKey(
+          { name: 'HKDF', hash: 'SHA-256', salt, info: new TextEncoder().encode('tempchat-message-v1') },
+          baseKey,
+          { name: 'AES-GCM', length: 256 },
+          false,
+          ['encrypt', 'decrypt']
+        );
+
+        const fileKey = await crypto.subtle.deriveKey(
+          { name: 'HKDF', hash: 'SHA-256', salt, info: new TextEncoder().encode('tempchat-file-v1') },
+          baseKey,
+          { name: 'AES-GCM', length: 256 },
+          false,
+          ['encrypt', 'decrypt']
+        );
+
+        return { messageKey, fileKey };
+      }
+
+      async function getIncomingContentKey(peerId, saltB64, keyType) {
+        const session = sessionKeys.get(peerId);
+        if (!session || !saltB64) throw new Error('No session key for sender');
+        const keys = await deriveContentKeys(session.baseKey, new Uint8Array(base64ToArrayBuffer(saltB64)));
+        return keyType === 'file' ? keys.fileKey : keys.messageKey;
+      }
+
+      function getNextNonce(peerId, keyType = 'message') {
+        const session = sessionKeys.get(peerId);
+        if (!session) throw new Error('No session key for peer');
+        const counter = (session.counter++).toString().padStart(16, '0');
+        const counterBytes = new TextEncoder().encode(counter);
+        const nonce = new Uint8Array(NONCE_LENGTH);
+        const hash = new Uint8Array(32);
+        for (let i = 0; i < 32; i++) hash[i] = counterBytes[i % counterBytes.length] ^ (session.salt.charCodeAt(i % session.salt.length) || 0);
+        for (let i = 0; i < NONCE_LENGTH; i++) nonce[i] = hash[i];
+        return nonce;
+      }
+
+      async function encryptMessage(peerId, plaintext, senderId, messageId) {
+        const session = sessionKeys.get(peerId);
+        if (!session) throw new Error('No session key for peer');
+
+        const nonce = getNextNonce(peerId, 'message');
+        const aad = new TextEncoder().encode(JSON.stringify({
+          v: PROTOCOL_VERSION,
+          from: senderId,
+          to: peerId,
+          id: messageId
+        }));
+
+        const encoded = new TextEncoder().encode(plaintext);
+        const ciphertext = await crypto.subtle.encrypt(
+          { name: 'AES-GCM', iv: nonce, additionalData: aad, tagLength: 128 },
+          session.messageKey,
+          encoded
+        );
+
+        return {
+          v: PROTOCOL_VERSION,
+          id: messageId,
+          from: senderId,
+          to: peerId,
+          ct: arrayBufferToBase64(ciphertext),
+          iv: arrayBufferToBase64(nonce),
+          salt: session.salt
+        };
+      }
+
+      async function decryptMessage(payload) {
+        if (!payload || payload.v !== PROTOCOL_VERSION) throw new Error('Invalid protocol version');
+        if (!payload.id || !payload.from || !payload.ct || !payload.iv || !payload.salt) throw new Error('Invalid payload structure');
+        const messageKey = await getIncomingContentKey(payload.from, payload.salt, 'message');
+
+        const aad = new TextEncoder().encode(JSON.stringify({
+          v: PROTOCOL_VERSION,
+          from: payload.from,
+          to: AppState.user.id,
+          id: payload.id
+        }));
+
+        try {
+          const decrypted = await crypto.subtle.decrypt(
+            { name: 'AES-GCM', iv: base64ToArrayBuffer(payload.iv), additionalData: aad, tagLength: 128 },
+            messageKey,
+            base64ToArrayBuffer(payload.ct)
+          );
+          return new TextDecoder().decode(decrypted);
+        } catch (e) {
+          throw new Error('Decryption failed: authentication tag mismatch');
+        }
+      }
+
+      async function encryptFile(file, peerId, progressCallback) {
+        const session = sessionKeys.get(peerId);
+        if (!session) throw new Error('No session key for peer');
+
+        const CHUNK_SIZE = 1024 * 1024;
+        const fileKey = session.fileKey;
+        const salt = base64ToArrayBuffer(session.salt);
+        const fileId = arrayBufferToBase64(crypto.getRandomValues(new Uint8Array(16)));
+        const chunks = [];
+
+        const reader = file.stream().getReader();
+        let chunkIndex = 0;
+        let totalSize = 0;
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          const nonce = getNextNonce(peerId, 'file');
+          const aad = new TextEncoder().encode(JSON.stringify({
+            v: PROTOCOL_VERSION,
+            fid: fileId,
+            idx: chunkIndex,
+            from: AppState.user.id,
+            to: peerId
+          }));
+
+          const ciphertext = await crypto.subtle.encrypt(
+            { name: 'AES-GCM', iv: nonce, additionalData: aad, tagLength: 128 },
+            fileKey,
+            value
+          );
+
+          chunks.push({
+            idx: chunkIndex,
+            ct: arrayBufferToBase64(ciphertext),
+            iv: arrayBufferToBase64(nonce)
+          });
+
+          totalSize += value.byteLength;
+          chunkIndex++;
+          if (progressCallback) progressCallback(totalSize, file.size);
+        }
+
+        return {
+          v: PROTOCOL_VERSION,
+          fid: fileId,
+          name: file.name,
+          type: file.type,
+          size: file.size,
+          chunks,
+          salt: session.salt
+        };
+      }
+
+      async function decryptFile(payload, senderId, progressCallback) {
+        if (!payload || payload.v !== PROTOCOL_VERSION) throw new Error('Invalid protocol version');
+        if (!payload.fid || !payload.chunks || !payload.chunks.length || !payload.salt) throw new Error('Invalid file payload');
+
+        const fileKey = await getIncomingContentKey(senderId, payload.salt, 'file');
+        const chunks = [];
+
+        for (let i = 0; i < payload.chunks.length; i++) {
+          const chunk = payload.chunks[i];
+          const aad = new TextEncoder().encode(JSON.stringify({
+            v: PROTOCOL_VERSION,
+            fid: payload.fid,
+            idx: chunk.idx,
+            from: senderId,
+            to: AppState.user.id
+          }));
+
+          try {
+            const decrypted = await crypto.subtle.decrypt(
+              { name: 'AES-GCM', iv: base64ToArrayBuffer(chunk.iv), additionalData: aad, tagLength: 128 },
+              fileKey,
+              base64ToArrayBuffer(chunk.ct)
+            );
+            chunks.push(new Uint8Array(decrypted));
+          } catch (e) {
+            throw new Error(`File chunk ${chunk.idx} decryption failed`);
+          }
+
+          if (progressCallback) progressCallback(i + 1, payload.chunks.length);
+        }
+
+        const blob = new Blob(chunks, { type: payload.type });
+        return { blob, name: payload.name, type: payload.type, size: payload.size };
+      }
+
+      function getFingerprint(peerId) {
+        return keyFingerprints.get(peerId) || 'Unknown';
+      }
+
+      function hasSessionKey(peerId) {
+        return sessionKeys.has(peerId);
+      }
+
+      function removePeer(peerId) {
+        peerKeys.delete(peerId);
+        sessionKeys.delete(peerId);
+        messageCounters.delete(peerId);
+        keyFingerprints.delete(peerId);
+      }
+
+      function getIdentityPublicKey() {
+        if (!identityKeyPair) return null;
+        return crypto.subtle.exportKey('raw', identityKeyPair.publicKey).then(arrayBufferToBase64);
+      }
+
+      return {
+        generateIdentityKeyPair,
+        importPeerPublicKey,
+        encryptMessage,
+        decryptMessage,
+        encryptFile,
+        decryptFile,
+        getFingerprint,
+        hasSessionKey,
+        removePeer,
+        getIdentityPublicKey
+      };
+    })();
+
+    // --- THEME ENGINE ---
+    function initTheme() {
+      const saved = localStorage.getItem('tempchat_theme');
+      if (saved) {
+        AppState.theme = { ...AppState.theme, ...JSON.parse(saved) };
+      }
+      applyTheme();
+    }
+
+    const ACCENT_PALETTES = {
+      '#5d5ce6': { gradient: 'linear-gradient(135deg, #5857dc 0%, #7a66e9 52%, #d478a8 100%)', wash: 'rgba(93, 92, 230, 0.11)', hover: '#4d4bd4' },
+      '#3b82f6': { gradient: 'linear-gradient(135deg, #377ee6 0%, #5c9aef 52%, #78b9d9 100%)', wash: 'rgba(59, 130, 246, 0.11)', hover: '#2871d6' },
+      '#a855f7': { gradient: 'linear-gradient(135deg, #8045d5 0%, #a855f7 52%, #d477ca 100%)', wash: 'rgba(168, 85, 247, 0.11)', hover: '#903fdc' },
+      '#22c55e': { gradient: 'linear-gradient(135deg, #168c5b 0%, #28b977 52%, #78c9b6 100%)', wash: 'rgba(34, 197, 94, 0.11)', hover: '#179a47' },
+      '#ec4899': { gradient: 'linear-gradient(135deg, #c94884 0%, #e565a7 52%, #efaa83 100%)', wash: 'rgba(236, 72, 153, 0.11)', hover: '#d53b87' },
+      '#f97316': { gradient: 'linear-gradient(135deg, #d65e2b 0%, #ef8135 52%, #e6b172 100%)', wash: 'rgba(249, 115, 22, 0.11)', hover: '#dd6010' },
+      '#ef4444': { gradient: 'linear-gradient(135deg, #ce5367 0%, #e96670 52%, #e89a75 100%)', wash: 'rgba(239, 68, 68, 0.11)', hover: '#d93745' }
+    };
+
+    function applyTheme() {
+      const { mode, accent, bg } = AppState.theme;
+      const root = document.documentElement;
+      const palette = ACCENT_PALETTES[accent.toLowerCase()] || ACCENT_PALETTES['#5d5ce6'];
+
+      // All available atmospheres remain deliberately light for comfortable
+      // long-form messaging, including previously saved "dark" selections.
+      root.classList.remove('dark');
+      root.dataset.atmosphere = mode;
+      root.style.setProperty('--accent-color', accent);
+      root.style.setProperty('--accent-hover', palette.hover);
+      root.style.setProperty('--accent-gradient', palette.gradient);
+      root.style.setProperty('--accent-wash', palette.wash);
+
+      // Background
+      const bgLayer = document.getElementById('chat-bg-layer');
+      const previewBg = document.getElementById('preview-bg');
+      if (bgLayer && previewBg) {
+        bgLayer.dataset.pattern = bg;
+        bgLayer.className = 'absolute inset-0 pointer-events-none transition-all';
+        previewBg.className = `absolute inset-0 opacity-10 pointer-events-none transition-all bg-pattern-${bg}`;
+        if (bg === 'plain') previewBg.className = 'hidden';
+      }
+
+      // Update UI Toggles
+      document.querySelectorAll('[id^="theme-btn-"]').forEach(el => el.classList.remove('ring-2', 'ring-[var(--accent-color)]'));
+      document.getElementById(`theme-btn-${mode}`)?.classList.add('ring-2', 'ring-[var(--accent-color)]');
+
+      document.querySelectorAll('[id^="accent-"]').forEach(el => el.classList.remove('scale-125'));
+      const activeColorBtn = Array.from(document.querySelectorAll('[id^="accent-"]')).find(btn => btn.getAttribute('onclick').includes(accent));
+      if (activeColorBtn) activeColorBtn.classList.add('scale-125');
+
+      document.querySelectorAll('[id^="bg-btn-"]').forEach(el => el.classList.remove('ring-2', 'ring-[var(--accent-color)]'));
+      document.getElementById(`bg-btn-${bg}`)?.classList.add('ring-2', 'ring-[var(--accent-color)]');
+
+      localStorage.setItem('tempchat_theme', JSON.stringify(AppState.theme));
+    }
+
+    function setThemeMode(m) { AppState.theme.mode = m; applyTheme(); }
+    function setAccent(c) { AppState.theme.accent = c; applyTheme(); }
+    function setChatBg(b) { AppState.theme.bg = b; applyTheme(); }
+
+    const reducedMotionQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
+    function syncMotionPreference() { document.documentElement.dataset.reducedMotion = reducedMotionQuery.matches ? 'true' : 'false'; }
+    reducedMotionQuery.addEventListener('change', syncMotionPreference);
+
+    // --- UI NAVIGATION ---
+    let entryMode = 'join'; // 'join' or 'create'
+    let entryTransitionTimer;
+
+    function showLandingView() {
+      clearTimeout(entryTransitionTimer);
+      cancelRoomEntryAttempt();
+      document.getElementById('landing-view').classList.remove('hidden', 'opacity-0');
+      document.getElementById('entry-view').classList.add('hidden');
+      document.getElementById('entry-view').classList.remove('flex');
+      document.getElementById('chat-view').classList.add('hidden');
+      document.getElementById('chat-view').classList.remove('flex');
+    }
+
+    function showEntryView(mode = 'join') {
+      entryMode = mode;
+      clearTimeout(entryTransitionTimer);
+      cancelRoomEntryAttempt();
+
+      const title = document.getElementById('entry-title');
+      const codeInput = document.getElementById('room-code-container');
+      const toggleBtn = document.getElementById('toggle-mode-btn');
+      const entryButton = document.getElementById('enter-room-btn');
+
+      if (mode === 'create') {
+        title.innerText = 'Create a Room';
+        codeInput.style.display = 'none';
+        toggleBtn.innerText = 'Want to join an existing room?';
+        entryButton.innerText = 'Create Room';
+      } else {
+        title.innerText = 'Join a Room';
+        codeInput.style.display = 'block';
+        toggleBtn.innerText = 'Want to create a room instead?';
+        entryButton.innerText = 'Join Room';
+      }
+
+      updateConnectionStatus();
+      document.getElementById('landing-view').classList.add('opacity-0');
+      entryTransitionTimer = setTimeout(() => {
+        document.getElementById('landing-view').classList.add('hidden');
+        document.getElementById('entry-view').classList.remove('hidden');
+        document.getElementById('entry-view').classList.add('flex');
+        document.getElementById('username-input').focus();
+      }, 300);
+    }
+
+    function toggleEntryMode() { showEntryView(entryMode === 'join' ? 'create' : 'join'); }
+
+    function showChatView() {
+      document.getElementById('entry-view').classList.add('hidden');
+      document.getElementById('entry-view').classList.remove('flex');
+      document.getElementById('chat-view').classList.remove('hidden');
+      document.getElementById('chat-view').classList.add('flex');
+    }
+
+    function openModal(id) { document.getElementById(id).classList.remove('hidden'); }
+    function closeModal(id) { document.getElementById(id).classList.add('hidden'); }
+
+    function showToast(message, type = 'info') {
+      const container = document.getElementById('toast-container');
+      const toast = document.createElement('div');
+      
+      let icon = 'fa-circle-info text-blue-500';
+      if (type === 'success') icon = 'fa-circle-check text-green-500';
+      if (type === 'error') icon = 'fa-circle-xmark text-red-500';
+      
+      toast.className = `glass px-4 py-3 rounded-xl shadow-lg border border-[var(--border-color)] flex items-center gap-3 animate-fade-in-up transition-all duration-300`;
+      toast.innerHTML = `<i class="fa-solid ${icon}"></i> <span class="text-sm font-semibold text-[var(--text-main)]">${message}</span>`;
+      container.appendChild(toast);
+      
+      setTimeout(() => {
+        toast.style.opacity = '0';
+        toast.style.transform = 'translateY(-10px)';
+        setTimeout(() => toast.remove(), 300);
+      }, 3000);
+    }
+
+    // --- SOCKET INTEGRATION ---
+    let socket;
+    let socketConnectionState = 'connecting';
+    let socketConnectionMessage = 'Connecting to the chat server…';
+
+    function updateConnectionStatus() {
+      const status = document.getElementById('connection-status');
+      if (!status) return;
+
+      status.classList.remove('hidden');
+      status.textContent = socketConnectionMessage;
+      status.style.color = socketConnectionState === 'connected'
+        ? '#9af0cf'
+        : socketConnectionState === 'connecting'
+          ? '#c9c4ff'
+          : '#ffadbd';
+    }
+
+    function setSocketConnectionState(state, message) {
+      socketConnectionState = state;
+      socketConnectionMessage = message;
+      updateConnectionStatus();
+    }
+
+    function initSocket() {
+      if (!window.io) {
+        setSocketConnectionState('disconnected', 'Chat server client unavailable. Start the backend and refresh this page.');
+        console.error('Socket.IO client was not loaded.');
+        return;
+      }
+
+      socket = window.io({
+        timeout: 8000,
+        reconnection: true,
+        reconnectionAttempts: 5
+      });
+
+      socket.on('connect', () => {
+        setSocketConnectionState('connected', 'Connected securely. You can enter a room.');
+        console.info('Connected to the Socket.IO server.');
+      });
+
+      socket.on('connect_error', () => {
+        setSocketConnectionState('disconnected', 'Unable to reach the chat server. Retrying…');
+      });
+
+      socket.on('disconnect', () => {
+        setSocketConnectionState('disconnected', 'Connection lost. Reconnecting…');
+      });
+
+      // Generate identity key pair on connection
+      Crypto.generateIdentityKeyPair().then(({ publicKey, fingerprint }) => {
+        AppState.user.publicKey = publicKey;
+        AppState.user.fingerprint = fingerprint;
+        console.log('[E2EE] Identity key generated, fingerprint:', fingerprint);
+      }).catch((error) => {
+        console.error('[E2EE] Failed to generate an identity key:', error);
+        showToast('Secure messaging could not be initialized', 'error');
+      });
+
+      // Bind all standard events required by your architecture
+      socket.on('update-users', (users) => {
+        AppState.room.users = users;
+        updatePresenceUI();
+      });
+
+      socket.on('system-message', (msg) => {
+        renderSystemMessage(msg);
+      });
+
+      // E2EE: Handle incoming public keys from peers
+      socket.on('e2ee:public-key', async (data) => {
+        if (!data || !data.sender || !data.publicKey) return;
+        if (data.sender === socket.id) return; // Ignore our own key echoed back
+        try {
+          await Crypto.importPeerPublicKey(data.sender, data.publicKey);
+          console.log('[E2EE] Imported peer key for', data.sender, 'fingerprint:', Crypto.getFingerprint(data.sender));
+          // Update UI to show verification status
+          updateKeyVerificationUI(data.sender);
+        } catch (e) {
+          console.error('[E2EE] Failed to import peer key:', e);
+        }
+      });
+
+      // E2EE: Handle encrypted chat messages
+      socket.on('chat-message', async (data) => {
+        setRemoteTyping({ sender: data.sender, isTyping: false });
+        try {
+          // Handle file messages
+          if (data.type === 'file' && data.file) {
+            // Only process if this file is for us
+            if (data.to !== AppState.user.id) {
+              return;
+            }
+            await handleIncomingFile(data);
+            return;
+          }
+          
+          // STRICT E2EE: Only accept valid encrypted payloads
+          // Reject any payload without proper encryption structure
+          if (!(data.v === 1 && data.ct && data.iv)) {
+            renderSystemMessage('Unsupported encrypted message format');
+            return;
+          }
+          
+          // Only attempt decryption if this message is for us
+          if (data.to !== AppState.user.id) {
+            return; // Silently ignore messages not for us
+          }
+          
+          const plaintext = await Crypto.decryptMessage(data);
+          const senderUser = AppState.room.users.find(u => u.id === data.from);
+          const senderName = senderUser ? senderUser.username : data.from;
+          renderMessage({ ...data, sender: senderName, text: plaintext }, false);
+        } catch (e) {
+          console.error('[E2EE] Decryption failed:', e);
+          renderSystemMessage('Failed to decrypt a message (key mismatch or tampering)');
+        }
+      });
+
+      async function handleIncomingFile(data) {
+        const progressContainer = document.getElementById('attachment-preview');
+        progressContainer.classList.remove('hidden');
+        progressContainer.innerHTML = `
+          <div class="flex items-center gap-3 p-3 bg-[var(--bg-surface)] border border-[var(--border-color)] rounded-xl">
+            <div class="w-10 h-10 rounded-lg bg-[var(--accent-color)]/20 flex items-center justify-center">
+              <i class="fa-solid fa-download text-[var(--accent-color)]"></i>
+            </div>
+            <div class="flex-1 min-w-0">
+              <p class="font-medium text-[var(--text-main)] truncate">Receiving ${escapeHTML(data.file.name)}...</p>
+              <div class="w-full h-2 bg-[var(--bg-base)] rounded-full overflow-hidden mt-1">
+                <div id="file-download-progress" class="h-full bg-[var(--accent-color)] transition-all duration-300" style="width: 0%"></div>
+              </div>
+              <p id="file-download-text" class="text-xs text-[var(--text-muted)] mt-1">Decrypting...</p>
+            </div>
+          </div>
+        `;
+
+        try {
+          const progressBar = document.getElementById('file-download-progress');
+          const progressText = document.getElementById('file-download-text');
+          
+          const result = await Crypto.decryptFile(data.file, data.from, (current, total) => {
+            if (progressBar && progressText) {
+              const pct = Math.round((current / total) * 100);
+              progressBar.style.width = `${pct}%`;
+              progressText.textContent = `Decrypting... ${pct}%`;
+            }
+          });
+
+          // Create download link
+          const url = URL.createObjectURL(result.blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = result.name;
+          a.click();
+          URL.revokeObjectURL(url);
+
+          // Find sender username from socket.id
+          const senderUser = AppState.room.users.find(u => u.id === data.from);
+          const senderName = senderUser ? senderUser.username : data.from;
+
+          // Show in chat
+          renderMessage({
+            sender: senderName,
+            text: `📎 Received encrypted file: ${escapeHTML(result.name)} (${formatFileSize(result.size)})`,
+            timestamp: Date.now(),
+            id: generateMessageId()
+          }, false);
+
+          if (progressBar && progressText) {
+            progressBar.style.width = '100%';
+            progressText.textContent = 'Complete!';
+            progressText.classList.add('text-green-500');
+          }
+
+        } catch (e) {
+          console.error('[E2EE] File decryption failed:', e);
+          renderSystemMessage('Failed to decrypt file (key mismatch or tampering)');
+        } finally {
+          setTimeout(() => {
+            progressContainer.classList.add('hidden');
+          }, 2000);
+        }
+      }
+
+      socket.on('typing', (data) => setRemoteTyping(data));
+
+      // E2EE: Handle user presence for key management
+      socket.on('user-connected', async (data) => {
+        if (!data || !data.socketId || data.socketId === socket.id) return;
+        // Request their public key
+        socket.emit('e2ee:public-key', { publicKey: AppState.user.publicKey });
+      });
+
+      socket.on('user-disconnected', (data) => {
+        if (!data || !data.socketId) return;
+        Crypto.removePeer(data.socketId);
+        console.log('[E2EE] Removed peer keys for', data.socketId);
+      });
+
+      // Game Events
+      socket.on('game:invite', (data) => handleGameInvite(data));
+      socket.on('game:start', (data) => startGameSession(data));
+      socket.on('game:state', (data) => updateGameState(data));
+      socket.on('game:turn', (data) => {
+        if (data.gameId === 'ttt') updateTTTStatus(`${data.username}'s turn`);
+      });
+      socket.on('game:result', (data) => handleGameResult(data));
+      socket.on('game:quit', () => {
+        if (!AppState.currentGame) return;
+        quitGame(false);
+        renderSystemMessage('The game ended because the other player left.');
+      });
+      
+      socket.on('left-room', () => {
+        showLandingView();
+        document.getElementById('messages-list').innerHTML = '';
+        // Clear all peer keys on leave
+        AppState.room.users.forEach(u => {
+          if (u.id !== socket.id) Crypto.removePeer(u.id);
+        });
+      });
+    }
+
+    // Global crypto helpers
+    function generateMessageId() {
+      const bytes = new Uint8Array(16);
+      crypto.getRandomValues(bytes);
+      let binary = '';
+      for (let i = 0; i < bytes.byteLength; i++) binary += String.fromCharCode(bytes[i]);
+      return btoa(binary);
+    }
+
+    function completeRoomEntry(username, roomCode) {
+      AppState.user.username = username;
+      // Use socket.id for real socket, or mock ID for MockSocket
+      AppState.user.id = socket.id || (AppState.isMock ? '1' : null);
+      AppState.room.code = roomCode;
+      document.getElementById('header-room-code').innerText = roomCode;
+      showChatView();
+      showToast(`Joined Room ${roomCode}`, 'success');
+      renderSystemMessage('You joined the room');
+      document.getElementById('message-input').focus();
+
+      // Publish our public key to the room for E2EE
+      if (AppState.user.publicKey) {
+        socket.emit('e2ee:public-key', { publicKey: AppState.user.publicKey });
+      }
+    }
+
+    let isEnteringRoom = false;
+    let roomEntryRequestId = 0;
+    let roomEntryTimeout;
+
+    function cancelRoomEntryAttempt() {
+      roomEntryRequestId++;
+      clearTimeout(roomEntryTimeout);
+      if (isEnteringRoom) {
+        isEnteringRoom = false;
+        setEntryBusy(false);
+      }
+    }
+
+    function setEntryBusy(isBusy) {
+      const button = document.getElementById('enter-room-btn');
+      button.disabled = isBusy;
+      button.setAttribute('aria-busy', String(isBusy));
+      button.classList.toggle('opacity-70', isBusy);
+      button.classList.toggle('cursor-wait', isBusy);
+      button.innerText = isBusy
+        ? (entryMode === 'create' ? 'Creating room…' : 'Joining room…')
+        : (entryMode === 'create' ? 'Create Room' : 'Join Room');
+    }
+
+    function handleEnterRoom() {
+      if (isEnteringRoom) return;
+      if (!socket || !socket.connected) {
+        const message = socketConnectionState === 'connecting'
+          ? 'Connecting to the chat server. Please try again in a moment.'
+          : 'Chat server is unavailable. Reconnecting now.';
+        setSocketConnectionState('connecting', 'Connecting to the chat server…');
+        socket?.connect();
+        showToast(message, 'error');
+        return;
+      }
+
+      const username = document.getElementById('username-input').value.trim();
+      const roomCode = document.getElementById('room-input').value.trim().toUpperCase();
+      
+      if (!username) return showToast('Please enter a name', 'error');
+      if (entryMode === 'join' && !roomCode) return showToast('Please enter a room code', 'error');
+
+      isEnteringRoom = true;
+      setEntryBusy(true);
+      const requestId = ++roomEntryRequestId;
+      const acknowledgeRoom = (result) => {
+        if (requestId !== roomEntryRequestId) return;
+        clearTimeout(roomEntryTimeout);
+        isEnteringRoom = false;
+        setEntryBusy(false);
+        if (!result?.success) return showToast(result?.message || 'Unable to enter that room', 'error');
+        completeRoomEntry(username, result.roomCode);
+      };
+
+      roomEntryTimeout = window.setTimeout(() => {
+        acknowledgeRoom({ success: false, message: 'The server took too long to respond. Please try again.' });
+      }, 10000);
+
+      if (entryMode === 'create') socket.emit('create-room', { username }, acknowledgeRoom);
+      else socket.emit('join-room', { username, roomCode }, acknowledgeRoom);
+    }
+
+    ['username-input', 'room-input'].forEach((id) => {
+      document.getElementById(id).addEventListener('keydown', (event) => {
+        if (event.key !== 'Enter') return;
+        event.preventDefault();
+        handleEnterRoom();
+      });
+    });
+
+    function leaveRoom() {
+      stopTyping();
+      socket.emit('leave-room');
+      AppState.room = { code: '', users: [] };
+    }
+
+    // --- CHAT LOGIC ---
+    let lastMessageSender = null;
+    let lastMessageTime = 0;
+    let typingTimeout;
+    let remoteTypingTimeout;
+    let isTyping = false;
+
+    function sendMessage() {
+      const input = document.getElementById('message-input');
+      const text = input.value.trim();
+      if (!text) return;
+
+      const messageId = generateMessageId();
+      const timestamp = Date.now();
+
+      // Encrypt for each peer in the room (group chat = encrypt per recipient)
+      const peers = AppState.room.users.filter(u => u.id !== socket.id);
+      
+      if (peers.length === 0) {
+        // No peers - still render locally but don't send
+        renderMessage({ sender: AppState.user.username, text, timestamp, id: messageId }, true);
+      } else {
+        // Send encrypted copy to each peer
+        peers.forEach(async (peer) => {
+          if (!Crypto.hasSessionKey(peer.id)) {
+            console.warn('[E2EE] No session key for peer', peer.id, '- message not sent');
+            return;
+          }
+          try {
+            const encrypted = await Crypto.encryptMessage(peer.id, text, AppState.user.id, messageId);
+            socket.emit('chat-message', encrypted);
+          } catch (e) {
+            console.error('[E2EE] Encryption failed for peer', peer.id, e);
+          }
+        });
+
+        // Render our own message locally immediately
+        renderMessage({ sender: AppState.user.username, text, timestamp, id: messageId }, true);
+      }
+      
+      stopTyping();
+      input.value = '';
+      input.style.height = 'auto';
+    }
+
+    // Auto-resize textarea
+    document.getElementById('message-input').addEventListener('input', function() {
+      this.style.height = 'auto';
+      this.style.height = (this.scrollHeight) + 'px';
+      announceTyping();
+    });
+
+    document.getElementById('message-input').addEventListener('keypress', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        sendMessage();
+      }
+    });
+
+    function announceTyping() {
+      if (!AppState.room.code || !socket) return;
+      if (!isTyping) {
+        isTyping = true;
+        socket.emit('typing', { sender: AppState.user.username, isTyping: true });
+      }
+      clearTimeout(typingTimeout);
+      typingTimeout = setTimeout(stopTyping, 1100);
+    }
+
+    function stopTyping() {
+      clearTimeout(typingTimeout);
+      if (!isTyping || !socket) return;
+      isTyping = false;
+      socket.emit('typing', { sender: AppState.user.username, isTyping: false });
+    }
+
+    function setRemoteTyping(data) {
+      if (!data?.sender || data.sender === AppState.user.username) return;
+      const indicator = document.getElementById('typing-indicator-container');
+      if (!data.isTyping) {
+        indicator.classList.add('hidden');
+        return;
+      }
+      document.getElementById('typing-username').innerText = data.sender;
+      indicator.classList.remove('hidden');
+      scrollToBottom();
+      clearTimeout(remoteTypingTimeout);
+      remoteTypingTimeout = setTimeout(() => indicator.classList.add('hidden'), 1600);
+    }
+
+    function renderMessage(data, isMe) {
+      const container = document.getElementById('messages-list');
+      const isNewGroup = lastMessageSender !== data.sender || (Date.now() - lastMessageTime > 60000); // 1 min grouping
+      
+      const wrapper = document.createElement('div');
+      wrapper.className = `message-row flex flex-col ${isMe ? 'items-end message-row--outgoing' : 'items-start'} max-w-full ${isNewGroup ? 'mt-3' : 'mt-0.5'}`;
+      
+      let html = '';
+      
+      // Header for new group (Them only, usually don't need my own name)
+      if (isNewGroup && !isMe) {
+        html += `<div class="message-sender text-xs text-[var(--text-muted)] ml-2 mb-1 font-medium">${escapeHTML(data.sender)}</div>`;
+      }
+      
+      // Bubble
+      const bubbleClass = isMe ? 'bubble-me rounded-2xl rounded-tr-sm' : 'bubble-them rounded-2xl rounded-tl-sm';
+      // If not new group, round all corners for a stacked look
+      const stackClass = isNewGroup ? '' : 'rounded-2xl'; 
+      
+      html += `
+        <div class="relative group max-w-[85%] md:max-w-[70%]">
+          <div class="message-bubble px-4 py-2.5 shadow-sm text-[15px] leading-relaxed break-words ${bubbleClass} ${stackClass}">
+            ${escapeHTML(data.text)}
+          </div>
+          <div class="message-meta text-[10px] text-[var(--text-muted)] mt-1 opacity-0 group-hover:opacity-100 transition-opacity ${isMe ? 'text-right mr-1' : 'ml-1'} absolute -bottom-4 ${isMe ? 'right-0' : 'left-0'} whitespace-nowrap">
+            ${new Date(data.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+          </div>
+        </div>
+      `;
+      
+      wrapper.innerHTML = html;
+      container.appendChild(wrapper);
+      scrollToBottom();
+      
+      lastMessageSender = data.sender;
+      lastMessageTime = data.timestamp;
+    }
+
+    function renderSystemMessage(text) {
+      const container = document.getElementById('messages-list');
+      const el = document.createElement('div');
+      el.className = 'message-system w-full text-center my-3 animate-fade-in-up';
+      el.innerHTML = `<span class="bg-[var(--bg-surface)] px-4 py-1.5 rounded-full text-xs font-semibold text-[var(--text-muted)] shadow-sm border border-[var(--border-color)]">${escapeHTML(text)}</span>`;
+      container.appendChild(el);
+      scrollToBottom();
+      lastMessageSender = null;
+    }
+
+    function renderGameResultCard(gameId, gameName, resultText, icon, colorClass) {
+       const container = document.getElementById('messages-list');
+       const el = document.createElement('div');
+       el.className = 'w-full max-w-sm mx-auto my-4 animate-pop-in';
+       el.innerHTML = `
+        <div class="glass border border-[var(--border-color)] rounded-2xl p-4 text-center shadow-lg relative overflow-hidden">
+          <div class="absolute inset-0 bg-gradient-to-br ${colorClass} opacity-10"></div>
+          <div class="text-3xl mb-2 relative z-10">${icon}</div>
+          <h4 class="font-bold text-[var(--text-main)] text-sm uppercase tracking-wide relative z-10">${gameName}</h4>
+          <div class="text-lg font-bold text-[var(--text-main)] mt-2 bg-[var(--bg-surface)] py-2 rounded-xl border border-[var(--border-color)] shadow-inner relative z-10">
+            ${resultText}
+          </div>
+          <button onclick="sendGameInvite('${gameId}')" class="mt-4 text-xs font-bold text-[var(--accent-color)] hover:underline relative z-10">Play Again</button>
+        </div>
+       `;
+       container.appendChild(el);
+       scrollToBottom();
+       lastMessageSender = null;
+    }
+
+    function scrollToBottom() {
+      const scrollEl = document.getElementById('message-container');
+      scrollEl.scrollTo({ top: scrollEl.scrollHeight, behavior: reducedMotionQuery.matches ? 'auto' : 'smooth' });
+    }
+
+    function updatePresenceUI() {
+      const count = AppState.room.users.length;
+      document.getElementById('header-presence').innerText = `${count} ${count === 1 ? 'person' : 'people'} online`;
+      
+      const listContainer = document.getElementById('users-list-container');
+      listContainer.innerHTML = '';
+      AppState.room.users.forEach(u => {
+        const isMe = u.username === AppState.user.username;
+        const fingerprint = isMe ? AppState.user.fingerprint : Crypto.getFingerprint(u.id);
+        const hasKey = isMe || Crypto.hasSessionKey(u.id);
+        const verificationClass = hasKey ? 'text-green-500' : 'text-amber-500';
+        const verificationIcon = hasKey ? 'fa-shield-check' : 'fa-shield-exclamation';
+        const verificationTitle = hasKey ? 'E2EE verified - click to verify fingerprint' : 'E2EE pending - key exchange in progress';
+        
+        listContainer.innerHTML += `
+          <li class="flex items-center gap-3 p-2 rounded-xl hover:bg-[var(--bg-soft)] cursor-pointer transition-colors" 
+              ${!isMe ? `onclick="showKeyVerification('${escapeHTML(u.id)}', '${escapeHTML(u.username)}')" title="${verificationTitle}"` : ''}>
+            <div class="w-8 h-8 rounded-full bg-gradient-to-br from-gray-200 to-gray-300 dark:from-slate-700 dark:to-slate-600 flex items-center justify-center font-bold text-gray-600 dark:text-gray-300 text-xs shadow-inner">
+              ${u.username.charAt(0).toUpperCase()}
+            </div>
+            <span class="font-medium text-[var(--text-main)] text-sm flex-1 truncate">${escapeHTML(u.username)} ${isMe ? '(You)' : ''}</span>
+            <i class="fa-solid ${verificationIcon} ${verificationClass} text-lg" aria-label="${verificationTitle}"></i>
+            <div class="w-2 h-2 rounded-full bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]"></div>
+          </li>
+        `;
+      });
+    }
+
+    function showKeyVerification(peerId, peerName) {
+      const fingerprint = Crypto.getFingerprint(peerId);
+      const myFingerprint = AppState.user.fingerprint;
+      const isVerified = Crypto.hasSessionKey(peerId);
+      
+      const modal = document.createElement('div');
+      modal.className = 'fixed inset-0 z-50 flex items-center justify-center';
+      modal.innerHTML = `
+        <div class="absolute inset-0 bg-black/50 backdrop-blur-sm" onclick="this.parentElement.remove()"></div>
+        <div class="glass w-full max-w-md rounded-3xl shadow-2xl relative z-10 m-4 flex flex-col animate-pop-in p-6">
+          <div class="flex justify-between items-center mb-4">
+            <h2 class="text-xl font-bold text-[var(--text-main)]"><i class="fa-solid fa-key mr-2 text-[var(--accent-color)]"></i> Verify Encryption</h2>
+            <button onclick="this.closest('.fixed').remove()" class="w-8 h-8 rounded-full bg-[var(--bg-surface)] text-[var(--text-muted)] hover:text-[var(--text-main)] flex items-center justify-center"><i class="fa-solid fa-xmark"></i></button>
+          </div>
+          
+          <div class="space-y-4">
+            <div class="bg-[var(--bg-surface)] border border-[var(--border-color)] rounded-2xl p-4">
+              <p class="text-sm text-[var(--text-muted)] mb-2">Compare these fingerprints with <strong>${escapeHTML(peerName)}</strong> over a secure channel (voice call, in person, etc.)</p>
+              <div class="text-center">
+                <p class="text-xs text-[var(--text-muted)] mb-1">Your fingerprint</p>
+                <code class="font-mono text-sm text-[var(--text-main)] bg-[var(--bg-base)] px-3 py-2 rounded-xl break-all">${myFingerprint}</code>
+              </div>
+              <div class="text-center mt-4">
+                <p class="text-xs text-[var(--text-muted)] mb-1">${escapeHTML(peerName)}'s fingerprint</p>
+                <code class="font-mono text-sm text-[var(--text-main)] bg-[var(--bg-base)] px-3 py-2 rounded-xl break-all">${fingerprint}</code>
+              </div>
+            </div>
+            
+            <div class="flex items-center justify-center gap-3 text-sm">
+              <i class="fa-solid ${isVerified ? 'fa-shield-check text-green-500' : 'fa-shield-exclamation text-amber-500'} text-2xl"></i>
+              <span class="font-medium ${isVerified ? 'text-green-500' : 'text-amber-500'}">
+                ${isVerified ? 'E2EE Active - Keys Verified' : 'E2EE Pending - Verify Fingerprints'}
+              </span>
+            </div>
+            
+            <p class="text-xs text-[var(--text-muted)] text-center">
+              If fingerprints don't match, <strong>do not send sensitive messages</strong>. A mismatch indicates a potential man-in-the-middle attack.
+            </p>
+          </div>
+        </div>
+      `;
+      document.body.appendChild(modal);
+    }
+
+    function updateKeyVerificationUI(peerId) {
+      // Update the user list to reflect new key status
+      updatePresenceUI();
+    }
+
+    function toggleUserList() {
+      const dropdown = document.getElementById('users-dropdown');
+      dropdown.classList.toggle('hidden');
+      dropdown.classList.toggle('flex');
+    }
+
+    function escapeHTML(str) {
+      return str.replace(/[&<>'"]/g, tag => ({
+          '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;'
+        }[tag] || tag));
+    }
+
+
+    // --- GAMES LOGIC ---
+    const GAME_MAP = {
+      'rps': { name: 'Rock Paper Scissors', icon: '✊', bg: 'from-orange-500 to-red-500' },
+      'ttt': { name: 'Tic Tac Toe', icon: '❌', bg: 'from-blue-500 to-cyan-500' },
+      'race': { name: 'Mini Car Race', icon: '🏎️', bg: 'from-red-500 to-yellow-500' },
+      'tap': { name: 'Quick Tap', icon: '⚡', bg: 'from-yellow-400 to-orange-500' }
+    };
+
+    let pendingInviteId = null;
+
+    function sendGameInvite(gameId) {
+      closeModal('game-menu-modal');
+      
+      if(AppState.room.users.length < 2 && !AppState.isMock) {
+        return showToast('Wait for someone to join the room to play.', 'error');
+      }
+
+      socket.emit('game:invite', { sender: AppState.user.username, gameId });
+      renderSystemMessage(`You challenged the room to ${GAME_MAP[gameId].name}`);
+    }
+
+    function handleGameInvite(data) {
+      if (data.sender === AppState.user.username) return; // Don't show modal for own invite
+      
+      AppState.currentGame = data.gameId;
+      document.getElementById('invite-title').innerText = `${GAME_MAP[data.gameId].name}`;
+      document.getElementById('invite-desc').innerText = `${data.sender} challenged you!`;
+      document.getElementById('invite-icon').innerText = GAME_MAP[data.gameId].icon;
+      
+      const btnAccept = document.getElementById('btn-accept-invite');
+      btnAccept.onclick = () => acceptInvite(data.gameId, data.sender);
+      
+      openModal('game-invite-modal');
+    }
+
+    function acceptInvite(gameId, challenger) {
+      closeModal('game-invite-modal');
+      socket.emit('game:accept', { gameId, accepter: AppState.user.username });
+    }
+
+    function declineInvite() {
+      closeModal('game-invite-modal');
+      socket.emit('game:decline', { sender: AppState.user.username });
+    }
+
+    function startGameSession(data) {
+      closeModal('game-invite-modal');
+      AppState.currentGame = data.gameId;
+      AppState.gameSession = { ...data, myRole: data.players[0] === AppState.user.username ? 'p1' : 'p2' };
+      
+      const ui = document.getElementById('active-game-container');
+      const title = document.getElementById('active-game-title');
+      const domContainer = document.getElementById('game-dom');
+      const canvasContainer = document.getElementById('game-canvas');
+      const mobileControls = document.getElementById('mobile-race-controls');
+      
+      title.innerHTML = `${GAME_MAP[data.gameId].icon} ${GAME_MAP[data.gameId].name}`;
+      ui.classList.remove('hidden');
+      ui.classList.add('flex');
+      
+      domContainer.classList.add('hidden');
+      canvasContainer.classList.add('hidden');
+      mobileControls.classList.add('hidden');
+      domContainer.innerHTML = '';
+
+      // Countdown
+      const countdownUI = document.getElementById('game-countdown');
+      const countText = document.getElementById('countdown-text');
+      countdownUI.classList.remove('hidden');
+      
+      let count = 3;
+      countText.innerText = count;
+      const t = setInterval(() => {
+        count--;
+        if (count > 0) {
+          countText.innerText = count;
+          countText.classList.remove('animate-pop-in');
+          void countText.offsetWidth; // trigger reflow
+          countText.classList.add('animate-pop-in');
+        } else if (count === 0) {
+          countText.innerText = 'GO!';
+        } else {
+          clearInterval(t);
+          countdownUI.classList.add('hidden');
+          initializeSpecificGame(data.gameId);
+        }
+      }, 800);
+    }
+
+    function quitGame(notifyRoom = true) {
+      document.getElementById('active-game-container').classList.add('hidden');
+      document.getElementById('active-game-container').classList.remove('flex');
+      if (window.gameLoopFrame) cancelAnimationFrame(window.gameLoopFrame);
+      AppState.currentGame = null;
+      AppState.gameSession = null;
+      if (notifyRoom) socket.emit('game:quit');
+    }
+
+
+    function initializeSpecificGame(gameId) {
+      const dom = document.getElementById('game-dom');
+      const canvas = document.getElementById('game-canvas');
+
+      if (gameId === 'rps') {
+        dom.classList.remove('hidden');
+        dom.classList.add('flex');
+        dom.innerHTML = `
+          <div class="text-center text-[var(--text-muted)] mb-4">Choose your move secretly...</div>
+          <div class="flex gap-4">
+            <button onclick="submitMove('rps', 'rock')" class="w-24 h-24 rounded-2xl bg-[var(--bg-surface)] border-2 border-[var(--border-color)] hover:border-orange-500 text-5xl hover:scale-110 transition-all shadow-md">✊</button>
+            <button onclick="submitMove('rps', 'paper')" class="w-24 h-24 rounded-2xl bg-[var(--bg-surface)] border-2 border-[var(--border-color)] hover:border-orange-500 text-5xl hover:scale-110 transition-all shadow-md">✋</button>
+            <button onclick="submitMove('rps', 'scissors')" class="w-24 h-24 rounded-2xl bg-[var(--bg-surface)] border-2 border-[var(--border-color)] hover:border-orange-500 text-5xl hover:scale-110 transition-all shadow-md">✌️</button>
+          </div>
+          <div id="rps-status" class="mt-8 font-bold text-[var(--text-main)] text-xl animate-pulse">Waiting for choices...</div>
+        `;
+      } 
+      else if (gameId === 'tap') {
+        dom.classList.remove('hidden');
+        dom.classList.add('flex');
+        dom.innerHTML = `<div id="tap-target" class="w-64 h-64 rounded-full bg-red-500 shadow-[0_0_40px_rgba(239,68,68,0.4)] border-4 border-white flex items-center justify-center text-4xl font-black text-white cursor-pointer transition-colors select-none">WAIT</div>`;
+        
+        // Random wait between 2-5 seconds locally, then turn green. 
+        // In full server architecture, server sends a 'game:tap_now' event. We simulate here for speed.
+        setTimeout(() => {
+          const target = document.getElementById('tap-target');
+          if(!target) return;
+          target.className = "w-64 h-64 rounded-full bg-green-500 shadow-[0_0_60px_rgba(34,197,94,0.6)] border-4 border-white flex items-center justify-center text-5xl font-black text-white cursor-pointer select-none active:scale-95 transition-transform";
+          target.innerText = "TAP!";
+          const startTime = performance.now();
+          
+          target.onclick = () => {
+            const reactionTime = Math.floor(performance.now() - startTime);
+            submitMove('tap', reactionTime);
+            target.onclick = null; // disable
+            target.innerText = `${reactionTime}ms`;
+            target.classList.add('bg-blue-500', 'shadow-[0_0_40px_rgba(59,130,246,0.5)]');
+          };
+        }, 2000 + Math.random() * 3000);
+      }
+      else if (gameId === 'ttt') {
+         dom.classList.remove('hidden');
+         dom.classList.add('flex');
+         let gridHtml = '<div class="grid grid-cols-3 gap-2 bg-[var(--border-color)] p-2 rounded-2xl">';
+         for(let i=0; i<9; i++) {
+            gridHtml += `<div id="cell-${i}" onclick="submitMove('ttt', ${i})" class="w-24 h-24 bg-[var(--bg-surface)] rounded-xl flex items-center justify-center text-5xl font-black cursor-pointer hover:bg-[var(--bg-base)] transition-colors"></div>`;
+         }
+         gridHtml += '</div><div id="ttt-status" class="mt-4 font-bold text-lg text-[var(--text-main)]"></div>';
+         dom.innerHTML = gridHtml;
+         updateTTTStatus("X's turn");
+      }
+      else if (gameId === 'race') {
+         canvas.classList.remove('hidden');
+         if(window.innerWidth < 768) {
+           document.getElementById('mobile-race-controls').classList.remove('hidden');
+         }
+         initCarRace();
+      }
+    }
+
+    function submitMove(gameId, moveData) {
+      if(gameId === 'rps') document.getElementById('rps-status').innerText = 'Choice locked! Waiting for opponent...';
+      socket.emit('game:move', { gameId, move: moveData });
+    }
+
+    function updateGameState(data) {
+      if(AppState.currentGame === 'ttt') {
+         const cell = document.getElementById(`cell-${data.move}`);
+         if(cell && !cell.innerText) {
+            cell.innerText = data.player === AppState.gameSession.players[0] ? 'X' : 'O';
+            cell.classList.add(cell.innerText === 'X' ? 'text-blue-500' : 'text-red-500', 'animate-pop-in');
+         }
+      }
+    }
+
+    function handleGameResult(data) {
+      quitGame(false); // The server has already closed this game for both players.
+      
+      const config = GAME_MAP[data.gameId];
+      let resultText = '';
+      
+      if (data.winner === 'draw') {
+         resultText = `🤝 It's a draw!`;
+      } else if (data.gameId === 'tap') {
+         resultText = `🏆 ${data.winner} won!<br><span class="text-xs font-normal text-[var(--text-muted)]">Time: ${data.winningScore}ms</span>`;
+      } else {
+         resultText = `🏆 ${data.winner} won!`;
+      }
+
+      renderGameResultCard(data.gameId, config.name, resultText, config.icon, config.bg);
+    }
+
+    function updateTTTStatus(txt) {
+      const s = document.getElementById('ttt-status');
+      if(s) s.innerText = txt;
+    }
+
+
+    // --- MINI CAR RACE LOGIC ---
+    let raceState = {};
+    const RACE_LEN = 10000; // pixels to finish line
+
+    function initCarRace() {
+      const canvas = document.getElementById('game-canvas');
+      const ctx = canvas.getContext('2d');
+      
+      // Responsive canvas
+      const size = Math.min(window.innerWidth - 40, 500);
+      canvas.width = size;
+      canvas.height = size * 1.4;
+
+      const laneW = canvas.width / 4;
+      
+      // Local state mapping role to lanes
+      const isP1 = AppState.gameSession.myRole === 'p1';
+      
+      raceState = {
+        p1: { lane: 0, y: canvas.height - 100, speed: 5, progress: 0 },
+        p2: { lane: 2, y: canvas.height - 100, speed: 5, progress: 0 },
+        obstacles: [],
+        cameraY: 0
+      };
+
+      // Input handling
+      const handleInput = (dir) => {
+        const p = isP1 ? 'p1' : 'p2';
+        const minLane = isP1 ? 0 : 2;
+        const maxLane = isP1 ? 1 : 3;
+        
+        if (dir === 'left' && raceState[p].lane > minLane) raceState[p].lane--;
+        if (dir === 'right' && raceState[p].lane < maxLane) raceState[p].lane++;
+        
+        // Sync move
+        socket.emit('game:move', { gameId: 'race', type: 'lane', val: raceState[p].lane });
+      };
+
+      const kd = (e) => {
+        if(AppState.currentGame !== 'race') return;
+        if(e.key === 'ArrowLeft' || e.key === 'a') handleInput('left');
+        if(e.key === 'ArrowRight' || e.key === 'd') handleInput('right');
+      };
+      window.addEventListener('keydown', kd);
+
+      document.getElementById('btn-left').onclick = () => handleInput('left');
+      document.getElementById('btn-right').onclick = () => handleInput('right');
+
+      // Add socket listener for opponent moves locally during this session
+      const moveHandler = (data) => {
+        if(data.gameId === 'race' && data.type === 'lane') {
+           const op = AppState.gameSession.myRole === 'p1' ? 'p2' : 'p1';
+           raceState[op].lane = data.val;
+        }
+      };
+      socket.on('game:move', moveHandler);
+
+      // Generate some deterministic obstacles based on room code to keep in sync without heavy network traffic
+      Math.seedrandom = function(s) {
+          let h = 0xdeadbeef;
+          for(let i=0; i<s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 2654435761);
+          return function() { h = Math.imul(h ^ (h >>> 16), 2246822507); h ^= h >>> 13; return (h >>> 0) / 4294967296; }
+      }
+      const rand = Math.seedrandom(AppState.room.code);
+      for(let i=1; i<20; i++) {
+        raceState.obstacles.push({
+           lane: Math.floor(rand() * 4),
+           y: -i * 500
+        });
+      }
+
+      // Game Loop
+      let lastTime = 0;
+      function loop(timestamp) {
+        if(AppState.currentGame !== 'race') {
+           window.removeEventListener('keydown', kd);
+           socket.off('game:move', moveHandler);
+           return;
+        }
+        
+        // Update Logic
+        ['p1', 'p2'].forEach(p => {
+          raceState[p].progress += raceState[p].speed;
+          // Slowly accelerate
+          if(raceState[p].speed < 12) raceState[p].speed += 0.05;
+        });
+
+        // Collision logic
+        const myP = isP1 ? 'p1' : 'p2';
+        raceState.obstacles.forEach(ob => {
+           // Simple AABB logic based on relative progress
+           const relativeY = ob.y + raceState[myP].progress;
+           if(raceState[myP].lane === ob.lane && relativeY > raceState[myP].y - 40 && relativeY < raceState[myP].y + 40) {
+              raceState[myP].speed = 2; // crash penalty
+              ob.hit = true; // visual only
+           }
+        });
+
+        // Win condition
+        if(raceState[myP].progress > RACE_LEN) {
+           socket.emit('game:move', { gameId: 'race', type: 'finish', time: performance.now() });
+           // Stop local loop, wait for server result
+           return; 
+        }
+
+        // Draw Logic
+        ctx.fillStyle = '#1e293b'; // Road
+        ctx.fillRect(0,0, canvas.width, canvas.height);
+
+        // Lines
+        ctx.strokeStyle = '#475569';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        for(let i=1; i<4; i++) {
+           ctx.moveTo(i*laneW, 0); ctx.lineTo(i*laneW, canvas.height);
+        }
+        ctx.stroke();
+        
+        // Center dividing line (dashed)
+        ctx.strokeStyle = '#eab308';
+        ctx.lineWidth = 4;
+        ctx.setLineDash([20, 20]);
+        // Animate dashed line
+        const offset = -(raceState[myP].progress % 40);
+        ctx.lineDashOffset = offset;
+        ctx.beginPath();
+        ctx.moveTo(2*laneW, 0); ctx.lineTo(2*laneW, canvas.height);
+        ctx.stroke();
+        ctx.setLineDash([]); // reset
+
+        // Draw Finish Line
+        const finishRelY = -RACE_LEN + raceState[myP].progress + 100;
+        if(finishRelY > -100 && finishRelY < canvas.height) {
+           ctx.fillStyle = 'white';
+           for(let i=0; i<canvas.width/20; i++) {
+             ctx.fillRect(i*20, finishRelY, 10, 10);
+             ctx.fillRect(i*20 + 10, finishRelY + 10, 10, 10);
+           }
+        }
+
+        // Draw Obstacles
+        ctx.font = '30px Arial';
+        ctx.textAlign = 'center';
+        raceState.obstacles.forEach(ob => {
+           const relativeY = ob.y + raceState[myP].progress + 100; // +100 to position car at bottom
+           if(relativeY > -50 && relativeY < canvas.height + 50) {
+              ctx.fillText(ob.hit ? '💥' : '🚧', ob.lane * laneW + laneW/2, relativeY);
+           }
+        });
+
+        // Draw Cars
+        const drawCar = (p, icon) => {
+           const x = raceState[p].lane * laneW + laneW/2;
+           // calculate relative Y based on my progress
+           const diff = raceState[myP].progress - raceState[p].progress;
+           const y = raceState[myP].y + diff;
+           ctx.fillText(icon, x, y);
+           
+           // Tag
+           ctx.font = '10px Inter';
+           ctx.fillStyle = 'white';
+           ctx.fillText(AppState.gameSession.players[p==='p1'?0:1], x, y + 20);
+           ctx.font = '30px Arial'; // reset
+        };
+
+        drawCar('p1', '🏎️');
+        drawCar('p2', '🚙');
+
+        window.gameLoopFrame = requestAnimationFrame(loop);
+      }
+      
+      window.gameLoopFrame = requestAnimationFrame(loop);
+    }
+
+    // --- MOCK SOCKET (For Sandbox Demonstration Only) ---
+    // This allows you to test the UI, animations, and game logic here.
+    // If window.io exists, this class is NEVER used.
+    class MockSocket {
+      constructor() {
+        this.events = {};
+        this.friendName = "Alex";
+        this.friendId = '2';
+        this.myId = '1';
+        AppState.isMock = true;
+        // Generate mock key pair for demo
+        this.mockKeyPair = this.generateMockKeyPair();
+      }
+
+      generateMockKeyPair() {
+        // Simple deterministic mock keys for demo
+        return {
+          publicKey: 'bW9ja19wdWJsaWNfa2V5X2Zvcl9kZW1vX3B1cnBvc2Vz',
+          privateKey: 'bW9ja19wcml2YXRlX2tleV9mb3JfZGVtb19wdXJwb3Nlcw=='
+        };
+      }
+
+      on(event, cb) { this.events[event] = cb; }
+      trigger(event, data) { if(this.events[event]) this.events[event](data); }
+      off(event, cb) { /* simple mock */ }
+
+      simulateRoomEntry(username, roomCode, callback) {
+        callback({ success: true, roomCode });
+        setTimeout(() => this.trigger('update-users', [{ id: this.myId, username }]), 50);
+        setTimeout(() => {
+          this.trigger('update-users', [{ id: this.myId, username }, { id: this.friendId, username: this.friendName }]);
+          this.trigger('system-message', `${this.friendName} joined the room`);
+          // Simulate friend's public key
+          this.trigger('e2ee:public-key', { sender: this.friendId, publicKey: this.mockKeyPair.publicKey });
+          // Simulate our key being echoed back (server relays to all including sender? No, socket.to excludes sender)
+          // But for mock, we'll simulate the friend receiving our key
+        }, 950);
+        setTimeout(() => this.trigger('typing', { sender: this.friendName, isTyping: true }), 1900);
+        setTimeout(() => {
+          this.trigger('typing', { sender: this.friendName, isTyping: false });
+          // Send encrypted demo message (simulated)
+          this.trigger('chat-message', { 
+            v: 1,
+            id: 'mock-' + Date.now(),
+            from: this.friendId,
+            to: this.myId,
+            ct: 'bW9ja19jaXBoZXJ0ZXh0', // base64 mock ciphertext
+            iv: 'bW9ja19pdl92YWx1ZQ==', // base64 mock iv
+            salt: 'bW9ja19zYWx0X3ZhbHVl' // base64 mock salt
+          });
+        }, 3000);
+      }
+
+      emit(event, data, callback) {
+        console.log(`[MockEmit] ${event}:`, data);
+
+        if (event === 'create-room') {
+          const roomCode = Math.random().toString(36).substring(2, 7).toUpperCase();
+          return this.simulateRoomEntry(data.username, roomCode, callback || (() => {}));
+        }
+        if (event === 'join-room') return this.simulateRoomEntry(data.username, data.roomCode, callback || (() => {}));
+        if (event === 'leave-room') return this.trigger('left-room');
+        
+        // E2EE: Handle public key publishing
+        if (event === 'e2ee:public-key') {
+          // In mock, simulate friend receiving our key and responding with theirs
+          setTimeout(() => {
+            this.trigger('e2ee:public-key', { sender: this.friendId, publicKey: this.mockKeyPair.publicKey });
+          }, 100);
+          return;
+        }
+
+        // E2EE: Handle encrypted chat messages
+        if (event === 'chat-message' && data.v === 1 && data.ct) {
+          // Simulate friend receiving and replying
+          setTimeout(() => {
+            // Echo back a simulated encrypted reply (in real app, friend would decrypt and reply)
+            this.trigger('chat-message', { 
+              sender: this.friendName, 
+              text: '[Encrypted reply simulation] Got your message!', 
+              timestamp: Date.now() 
+            });
+          }, 1000);
+          return;
+        }
+        
+        if (event === 'game:invite') {
+           // Simulate friend accepting invite
+           setTimeout(() => {
+             this.trigger('system-message', `${this.friendName} accepted your invite`);
+             this.trigger('game:start', { gameId: data.gameId, players: [AppState.user.username, this.friendName] });
+           }, 1500);
+        }
+        
+        if (event === 'game:move') {
+           if (data.gameId === 'rps') {
+              // Simulate friend move and game end
+              setTimeout(() => {
+                const choices = ['rock', 'paper', 'scissors'];
+                const fChoice = choices[Math.floor(Math.random()*3)];
+                let winner = AppState.user.username; // cheat logic for demo: always win unless draw
+                if(data.move === fChoice) winner = 'draw';
+                this.trigger('game:result', { gameId: 'rps', winner });
+              }, 1000);
+           }
+           
+           if (data.gameId === 'ttt') {
+             // Simulate friend move
+             setTimeout(() => {
+                let empty = [];
+                for(let i=0; i<9; i++) if(!document.getElementById(`cell-${i}`).innerText) empty.push(i);
+                if(empty.length > 0) {
+                   const fMove = empty[Math.floor(Math.random()*empty.length)];
+                   this.trigger('game:state', { move: fMove, player: this.friendName });
+                   
+                   // simple random win check trigger for demo
+                   if(empty.length < 5 && Math.random() > 0.5) {
+                      this.trigger('game:result', { gameId: 'ttt', winner: this.friendName });
+                   }
+                }
+             }, 800);
+           }
+
+           if (data.gameId === 'tap') {
+              setTimeout(() => {
+                const fTime = data.move + Math.floor(Math.random() * 200) - 50; // Random close time
+                const winner = data.move < fTime ? AppState.user.username : this.friendName;
+                this.trigger('game:result', { gameId: 'tap', winner, winningScore: Math.min(data.move, fTime) });
+              }, 500);
+           }
+           
+           if (data.gameId === 'race' && data.type === 'finish') {
+             // Race finish handling
+             this.trigger('game:result', { gameId: 'race', winner: AppState.user.username });
+           }
+        }
+      }
+    }
+
+    // Initialize application
+    document.addEventListener("DOMContentLoaded", () => {
+      syncMotionPreference();
+      initTheme();
+      initSocket();
+
+      document.querySelectorAll('[data-entry-mode]').forEach((button) => {
+        button.addEventListener('click', () => showEntryView(button.dataset.entryMode));
+      });
+
+      document.querySelectorAll('[data-scroll-target]').forEach((link) => {
+        link.addEventListener('click', (event) => {
+          event.preventDefault();
+          document.getElementById(link.dataset.scrollTarget)?.scrollIntoView({
+            behavior: document.documentElement.dataset.reducedMotion === 'true' ? 'auto' : 'smooth',
+            block: 'start'
+          });
+        });
+      });
+      
+      // File attachment handler
+      const attachmentInput = document.getElementById('attachment-input');
+      attachmentInput.addEventListener('change', handleAttachmentSelect);
+    });
+
+    async function handleAttachmentSelect(event) {
+      const files = Array.from(event.target.files);
+      if (!files.length) return;
+      
+      const peers = AppState.room.users.filter(u => u.id !== socket.id);
+      if (!peers.length) {
+        showToast('No recipients to send file to', 'error');
+        event.target.value = '';
+        return;
+      }
+
+      // Check if all peers have session keys
+      const missingKeys = peers.filter(p => !Crypto.hasSessionKey(p.id));
+      if (missingKeys.length) {
+        showToast('Waiting for encryption keys...', 'warning');
+        event.target.value = '';
+        return;
+      }
+
+      for (const file of files) {
+        if (file.size > 50 * 1024 * 1024) { // 50MB limit
+          showToast(`File ${file.name} too large (max 50MB)`, 'error');
+          continue;
+        }
+        
+        await sendEncryptedFile(file, peers);
+      }
+      
+      event.target.value = '';
+      document.getElementById('attachment-preview').classList.add('hidden');
+    }
+
+    async function sendEncryptedFile(file, peers) {
+      const progressContainer = document.getElementById('attachment-preview');
+      progressContainer.classList.remove('hidden');
+      progressContainer.innerHTML = `
+        <div class="flex items-center gap-3 p-3 bg-[var(--bg-surface)] border border-[var(--border-color)] rounded-xl">
+          <div class="w-10 h-10 rounded-lg bg-[var(--accent-color)]/20 flex items-center justify-center">
+            <i class="fa-solid fa-file text-[var(--accent-color)]"></i>
+          </div>
+          <div class="flex-1 min-w-0">
+            <p class="font-medium text-[var(--text-main)] truncate">${escapeHTML(file.name)}</p>
+            <div class="w-full h-2 bg-[var(--bg-base)] rounded-full overflow-hidden mt-1">
+              <div id="file-progress-bar" class="h-full bg-[var(--accent-color)] transition-all duration-300" style="width: 0%"></div>
+            </div>
+            <p id="file-progress-text" class="text-xs text-[var(--text-muted)] mt-1">Encrypting...</p>
+          </div>
+        </div>
+      `;
+
+      try {
+        // Encrypt file for first peer (in group, we'd encrypt for each peer)
+        // For simplicity, encrypt once per peer
+        for (const peer of peers) {
+          const progressBar = document.getElementById('file-progress-bar');
+          const progressText = document.getElementById('file-progress-text');
+          
+          const encryptedFile = await Crypto.encryptFile(file, peer.id, (loaded, total) => {
+            if (progressBar && progressText) {
+              const pct = Math.round((loaded / total) * 100);
+              progressBar.style.width = `${pct}%`;
+              progressText.textContent = `Encrypting... ${pct}%`;
+            }
+          });
+
+          // Send each chunk as a separate message (or as a single file message)
+          // For now, send the whole encrypted file as one message
+          const fileMessageId = generateMessageId();
+          const filePayload = {
+            v: 1,
+            id: fileMessageId,
+            from: AppState.user.id,
+            to: peer.id,
+            type: 'file',
+            file: encryptedFile
+          };
+
+          socket.emit('chat-message', filePayload);
+        }
+
+        if (progressBar && progressText) {
+          progressBar.style.width = '100%';
+          progressText.textContent = 'Sent!';
+          progressText.classList.add('text-green-500');
+        }
+
+        // Show sent confirmation in chat
+        renderMessage({
+          sender: AppState.user.username,
+          text: `📎 Sent encrypted file: ${escapeHTML(file.name)} (${formatFileSize(file.size)})`,
+          timestamp: Date.now(),
+          id: generateMessageId()
+        }, true);
+
+      } catch (e) {
+        console.error('[E2EE] File encryption failed:', e);
+        showToast('Failed to encrypt/send file', 'error');
+      } finally {
+        setTimeout(() => {
+          progressContainer.classList.add('hidden');
+        }, 2000);
+      }
+    }
+
+    function formatFileSize(bytes) {
+      if (bytes < 1024) return bytes + ' B';
+      if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+      return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+    }
+
+  </script>
+</body>
+</html>
