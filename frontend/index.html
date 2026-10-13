@@ -879,6 +879,122 @@
       .share-room-sheet { border-radius: 24px; }
     }
 
+    /* Functional views continue the landing page's warm rose-glass system.
+       Kept at the end of the cascade so no legacy midnight rule can leak into
+       the room-entry or active-chat experience. */
+    #entry-view.entry-stage, #chat-view.chat-shell, #active-game-container {
+      --bg-base: #fff8fb;
+      --bg-surface: rgba(255, 255, 255, 0.76);
+      --bg-panel: rgba(255, 248, 252, 0.78);
+      --bg-elevated: rgba(255, 255, 255, 0.94);
+      --bg-soft: rgba(236, 87, 151, 0.09);
+      --text-main: #5b183d;
+      --text-muted: #8c476b;
+      --text-faint: #b97798;
+      --border-color: rgba(213, 68, 132, 0.19);
+      --border-strong: rgba(213, 68, 132, 0.45);
+      --bubble-them: rgba(255, 255, 255, 0.86);
+      --text-bubble-them: #5b183d;
+      background:
+        radial-gradient(ellipse 58% 58% at 10% 4%, rgba(255,255,255,0.98), transparent 70%),
+        radial-gradient(ellipse 54% 58% at 96% 12%, rgba(255,151,198,0.45), transparent 72%),
+        radial-gradient(ellipse 58% 48% at 48% 102%, rgba(252,110,166,0.26), transparent 72%),
+        linear-gradient(135deg, #fff9fc 0%, #ffe6f0 47%, #ffc8df 100%) !important;
+    }
+    #entry-view.entry-stage::before, #chat-view.chat-shell::before {
+      background-image: radial-gradient(rgba(196, 63, 123, 0.14) 0.7px, transparent 0.7px) !important;
+    }
+    #entry-view.entry-stage .entry-card {
+      border-color: rgba(255,255,255,0.86) !important;
+      background: linear-gradient(145deg, rgba(255,255,255,0.84), rgba(255,229,241,0.65) 58%, rgba(255,192,219,0.55)) !important;
+      box-shadow: 0 30px 76px rgba(179,45,107,0.2), inset 0 1px 0 rgba(255,255,255,0.98), inset 0 -20px 38px rgba(213,59,124,0.05) !important;
+    }
+    #entry-view.entry-stage .entry-card input {
+      color: #5b183d !important;
+      background: rgba(255,255,255,0.76) !important;
+      border-color: rgba(212,57,121,0.2) !important;
+    }
+    #entry-view.entry-stage .entry-card input::placeholder { color: #ae7693; }
+    #entry-view.entry-stage .entry-card input:focus {
+      background: #fff !important;
+      border-color: rgba(212,57,121,0.58) !important;
+      box-shadow: 0 0 0 4px rgba(236,87,151,0.12) !important;
+    }
+    #entry-view.entry-stage .entry-card h1, #entry-view.entry-stage .entry-card h2,
+    #entry-view.entry-stage .entry-card p, #entry-view.entry-stage .entry-card label { color: var(--text-main); }
+    #chat-view.chat-shell .chat-header {
+      background: linear-gradient(112deg, rgba(255,255,255,0.79), rgba(255,226,239,0.66)) !important;
+      border-color: rgba(255,255,255,0.88) !important;
+      box-shadow: 0 17px 44px rgba(179,45,107,0.16), inset 0 1px 0 rgba(255,255,255,0.96) !important;
+    }
+    #chat-view.chat-shell .message-stage {
+      border-color: rgba(255,255,255,0.72) !important;
+      background: linear-gradient(140deg, rgba(255,252,254,0.82), rgba(255,238,246,0.78) 58%, rgba(255,213,231,0.76)) !important;
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.88), 0 18px 45px rgba(179,45,107,0.1) !important;
+    }
+    #chat-view.chat-shell #chat-bg-layer {
+      background:
+        radial-gradient(circle at 8% 18%, rgba(255,255,255,0.9), transparent 22rem),
+        radial-gradient(circle at 95% 82%, rgba(239,101,166,0.2), transparent 25rem),
+        radial-gradient(circle at 70% 0%, rgba(255,160,199,0.22), transparent 20rem) !important;
+    }
+    #chat-view.chat-shell #chat-bg-layer::after {
+      opacity: 0.42 !important;
+      background-image: radial-gradient(rgba(196, 63, 123, 0.16) 0.65px, transparent 0.65px) !important;
+    }
+    #chat-view.chat-shell .date-divider > span, #chat-view.chat-shell .message-system > span {
+      color: #8a3d65 !important;
+      background: rgba(255,255,255,0.72) !important;
+      border-color: rgba(212,57,121,0.17) !important;
+    }
+    #chat-view.chat-shell .bubble-them {
+      color: #5b183d !important;
+      background: rgba(255,255,255,0.82) !important;
+      border-color: rgba(255,255,255,0.92) !important;
+      box-shadow: 0 9px 22px rgba(179,45,107,0.12), inset 0 1px 0 rgba(255,255,255,0.9) !important;
+    }
+    #chat-view.chat-shell .composer-dock {
+      background: linear-gradient(112deg, rgba(255,248,252,0.93), rgba(255,223,238,0.84)) !important;
+      border-color: rgba(255,255,255,0.9) !important;
+      box-shadow: 0 21px 48px rgba(179,45,107,0.16), inset 0 1px 0 rgba(255,255,255,0.95) !important;
+    }
+    #chat-view.chat-shell .composer-shell {
+      background: rgba(255,255,255,0.82) !important;
+      border-color: rgba(212,57,121,0.2) !important;
+    }
+    #chat-view.chat-shell #message-input { color: #5b183d !important; }
+    #chat-view.chat-shell #message-input::placeholder { color: #ae7693 !important; }
+    #chat-view.chat-shell .attachment-action { color: #a42d64 !important; }
+    #chat-view.chat-shell .attachment-action:hover { color: #d8357b !important; background: rgba(236,87,151,0.12) !important; }
+    #chat-view.chat-shell .people-popover, .join-requests-popover, .share-room-sheet {
+      color: #5b183d !important;
+      border-color: rgba(255,255,255,0.85) !important;
+      background: linear-gradient(145deg, rgba(255,255,255,0.96), rgba(255,228,241,0.93)) !important;
+      box-shadow: 0 20px 54px rgba(179,45,107,0.2), inset 0 1px 0 rgba(255,255,255,0.98) !important;
+    }
+    .join-request-item { border-color: rgba(212,57,121,0.15) !important; background: rgba(255,255,255,0.62) !important; }
+    .share-room-sheet input { color: #5b183d !important; background: rgba(255,255,255,0.8) !important; border-color: rgba(212,57,121,0.2) !important; }
+    .share-action { color: #8f2559 !important; border-color: rgba(212,57,121,0.16) !important; background: rgba(255,255,255,0.66) !important; }
+    .share-action i { color: #dc3d82 !important; }
+    #chat-view.chat-shell .attachment-preview { border-color: rgba(212,57,121,0.15) !important; background: rgba(255,255,255,0.64) !important; box-shadow: inset 0 1px 0 rgba(255,255,255,0.9), 0 8px 22px rgba(179,45,107,0.1) !important; }
+    #chat-view.chat-shell .attachment-preview-item { border-color: rgba(212,57,121,0.13) !important; background: rgba(255,255,255,0.66) !important; }
+    #chat-view.chat-shell .attachment-preview-name { color: #5b183d !important; }
+    #chat-view.chat-shell .attachment-preview-meta, #chat-view.chat-shell .attachment-remove { color: #a66b89 !important; }
+    #chat-view.chat-shell .attachment-preview-thumb { color: #a42d64 !important; border-color: rgba(212,57,121,0.16) !important; background: rgba(255,205,226,0.48) !important; }
+
+    /* The landing is an independently scrolling surface.  Anchor the nav to
+       the viewport explicitly so it cannot enter the middle of the page. */
+    #landing-view.liquid-landing { overflow-y: auto; }
+    #landing-view.liquid-landing .liquid-nav {
+      position: fixed !important;
+      top: max(12px, env(safe-area-inset-top)) !important;
+      left: 50% !important;
+      right: auto !important;
+      z-index: 100 !important;
+      margin: 0 !important;
+      transform: translateX(-50%) !important;
+    }
+
     @media (prefers-reduced-motion: reduce) {
       *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; scroll-behavior: auto !important; transition-duration: 0.01ms !important; }
     }
@@ -1315,7 +1431,7 @@
     const AppState = {
       user: { id: null, username: '' },
       room: { code: '', users: [], token: '', isHost: false, pending: [] },
-      theme: { mode: 'light', accent: '#5d5ce6', bg: 'plain' },
+      theme: { mode: 'light', accent: '#ec4899', bg: 'plain' },
       isMock: false,
       currentGame: null,
       gameSession: null
