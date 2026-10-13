@@ -873,6 +873,7 @@
       .entry-card { width: 100%; margin: 0; padding: 26px 20px; border-radius: 25px; }
       .entry-card > .text-center { margin-bottom: 26px; }
       .chat-header { padding-top: env(safe-area-inset-top); height: calc(68px + env(safe-area-inset-top)); }
+      .composer-dock { padding-bottom: max(8px, env(safe-area-inset-bottom)); }
       .join-requests-popover { top: calc(62px + env(safe-area-inset-top)) !important; right: 4px !important; }
       #users-dropdown { top: calc(62px + env(safe-area-inset-top)) !important; }
       .share-room-sheet { border-radius: 24px; }
@@ -1915,15 +1916,28 @@
       }
     }
 
+    function getSharedRoomCodeFromUrl() {
+      const roomCode = new URLSearchParams(window.location.search).get('room');
+      return roomCode && /^[A-Za-z0-9]{3,12}$/.test(roomCode) ? roomCode.toUpperCase() : '';
+    }
+
     function tryRejoinSavedRoom() {
       if (!socket?.connected || rejoinAttemptSocketId === socket.id) return;
+      // A different explicit shared link wins over a previous browser session.
+      // A link for the already-admitted room can still restore safely on reload.
       const saved = readRoomSession();
+      const sharedRoom = getSharedRoomCodeFromUrl();
+      if (sharedRoom && (!saved || saved.roomCode !== sharedRoom)) return;
       if (!saved) return;
       rejoinAttemptSocketId = socket.id;
       socket.emit('rejoin-room', saved, (result) => {
         if (!result?.success) {
           clearRoomSession();
-          if (AppState.room.code) showToast(result?.message || 'Your previous room is no longer available.', 'error');
+          AppState.room = { code: '', users: [], token: '', isHost: false, pending: [] };
+          showEntryView('join');
+          document.getElementById('room-input').value = saved.roomCode;
+          const unavailable = /not found|no longer available/i.test(result?.message || '');
+          showToast(unavailable ? 'This room is no longer available.' : (result?.message || 'Unable to restore your room.'), 'error');
           return;
         }
         completeRoomEntry(result.username || saved.username, result.roomCode, {
@@ -2246,6 +2260,11 @@
       AppState.room.isHost = Boolean(options.isHost);
       AppState.room.pending = Array.isArray(options.pending) ? options.pending : (AppState.room.pending || []);
       persistRoomSession();
+      const roomUrl = new URL(window.location.href);
+      roomUrl.search = '';
+      roomUrl.hash = '';
+      roomUrl.searchParams.set('room', roomCode);
+      window.history.replaceState({}, '', roomUrl);
       document.getElementById('header-room-code').innerText = roomCode;
       showChatView();
       document.getElementById('send-btn').disabled = false;
@@ -2362,6 +2381,9 @@
     function leaveRoom() {
       stopTyping();
       clearRoomSession();
+      const landingUrl = new URL(window.location.href);
+      landingUrl.searchParams.delete('room');
+      window.history.replaceState({}, '', landingUrl);
       if (socket?.connected) socket.emit('leave-room');
     }
 
@@ -3154,10 +3176,10 @@
 
       // A shared room link only pre-fills the join form. It never admits a
       // visitor; the normal host-approval request still happens on submit.
-      const sharedRoom = new URLSearchParams(window.location.search).get('room');
-      if (sharedRoom && /^[A-Za-z0-9]{3,12}$/.test(sharedRoom)) {
+      const sharedRoom = getSharedRoomCodeFromUrl();
+      if (sharedRoom) {
         showEntryView('join');
-        document.getElementById('room-input').value = sharedRoom.toUpperCase();
+        document.getElementById('room-input').value = sharedRoom;
       }
       
       // File attachment handler
