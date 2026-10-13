@@ -158,7 +158,7 @@ io.on('connection', (socket) => {
           username: request.username,
           pending: pendingList(room)
         });
-        console.log(`[REQUEST SENT TO HOST] room=${roomId} hostSocket=${room.hostId} requestId=${request.requestId} name="${username}"`);
+        console.log(`[REQUEST SENT] room=${roomId} hostSocket=${room.hostId} requestId=${request.requestId} name="${username}"`);
       } else {
         // Host is briefly offline (refresh/reconnect). The request stays queued and is
         // delivered when the host rejoins (rejoin-room callback) or a new host is promoted.
@@ -197,8 +197,8 @@ io.on('connection', (socket) => {
     room.pending.delete(requestId);
 
     const target = io.sockets.sockets.get(requestId);
-    if (approve) console.log(`[HOST ACCEPTED] room=${room.code} host=${socket.id} requestId=${requestId} name="${request.username}"`);
-    else console.log(`[HOST REJECTED] room=${room.code} host=${socket.id} requestId=${requestId} name="${request.username}"`);
+    if (approve) console.log(`[REQUEST ACCEPTED] room=${room.code} host=${socket.id} requestId=${requestId} name="${request.username}"`);
+    else console.log(`[REQUEST REJECTED] room=${room.code} host=${socket.id} requestId=${requestId} name="${request.username}"`);
     if (target) {
       target.pendingRoomId = null;
       if (approve) {

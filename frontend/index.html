@@ -705,6 +705,7 @@
         radial-gradient(ellipse 55% 45% at 48% 100%, rgba(252,110,166,0.26) 0%, transparent 70%),
         linear-gradient(135deg, #fff9fc 0%, #ffe3ef 43%, #ffc5df 100%);
       isolation: isolate;
+      overscroll-behavior-y: contain;
       scrollbar-color: rgba(213, 76, 135, 0.38) transparent;
     }
     #landing-view.liquid-landing::before {
@@ -739,8 +740,10 @@
     #landing-view.liquid-landing .petal-field span { position: absolute; display: block; width: 11px; height: 7px; border-radius: 100% 0 100% 0; background: linear-gradient(135deg, rgba(255,255,255,0.9), rgba(239,80,152,0.66)); box-shadow: 0 4px 12px rgba(213,59,128,0.2); animation: landingPetal 13s linear infinite; }
     #landing-view.liquid-landing .petal-field span:nth-child(1) { top: 14%; left: 4%; animation-delay: -2s; } #landing-view.liquid-landing .petal-field span:nth-child(2) { top: 38%; left: 14%; animation-delay: -8s; } #landing-view.liquid-landing .petal-field span:nth-child(3) { top: 12%; right: 17%; animation-delay: -5s; } #landing-view.liquid-landing .petal-field span:nth-child(4) { top: 76%; right: 9%; animation-delay: -11s; } #landing-view.liquid-landing .petal-field span:nth-child(5) { top: 63%; left: 51%; animation-delay: -3s; } #landing-view.liquid-landing .petal-field span:nth-child(6) { top: 30%; right: 42%; animation-delay: -9s; } #landing-view.liquid-landing .petal-field span:nth-child(7) { top: 88%; left: 24%; animation-delay: -6s; } #landing-view.liquid-landing .petal-field span:nth-child(8) { top: 47%; right: 3%; animation-delay: -12s; }
     #landing-view.liquid-landing .liquid-nav {
-      position: fixed;
-      top: 22px;
+      /* The landing view is its own scrolling surface. Keep the nav attached
+         to the viewport, above that surface, so scrolling never relocates it. */
+      position: fixed !important;
+      top: max(12px, env(safe-area-inset-top));
       left: 50%;
       z-index: 30;
       width: min(calc(100% - 40px), 1180px);
@@ -842,6 +845,39 @@
       #landing-view.liquid-landing .landing-benefits { grid-template-columns: 1fr; width: calc(100% - 30px); margin-bottom: 36px; border-radius: 22px; } #landing-view.liquid-landing .landing-benefit { padding: 14px; border-right: 0; border-bottom: 1px solid rgba(211,69,128,0.13); } #landing-view.liquid-landing .landing-benefit:last-child { border-bottom: 0; } #landing-view.liquid-landing .liquid-footer { padding-bottom: 2.5rem; }
     }
 
+    /* Entry, approval, and sharing are part of the same glass product surface as
+       the landing page.  These use a natural, scrollable mobile layout rather
+       than vertically centering a modal-sized card. */
+    .entry-stage { overflow-y: auto; padding: max(24px, env(safe-area-inset-top)) 16px max(24px, env(safe-area-inset-bottom)); }
+    .entry-card { margin: auto; }
+    .pending-icon { display: grid; width: 68px; height: 68px; place-items: center; color: #fff; font-size: 1.45rem; border: 1px solid rgba(255,255,255,0.38); border-radius: 24px; background: var(--accent-gradient); box-shadow: 0 15px 34px rgba(144, 94, 246, 0.35), inset 0 1px 0 rgba(255,255,255,0.42); animation: pendingPulse 2.4s ease-in-out infinite; }
+    .pending-dots { display: flex; justify-content: center; gap: 7px; }
+    .pending-dots i { width: 7px; height: 7px; border-radius: 50%; background: var(--accent-color); box-shadow: 0 0 12px var(--accent-color); animation: pendingDot 1.1s ease-in-out infinite; }
+    .pending-dots i:nth-child(2) { animation-delay: 120ms; }.pending-dots i:nth-child(3) { animation-delay: 240ms; }
+    .request-count { position: absolute; top: -3px; right: -2px; display: grid; min-width: 18px; height: 18px; place-items: center; padding: 0 4px; color: #fff; font-size: 10px; font-weight: 800; border: 2px solid rgba(30,30,70,0.95); border-radius: 999px; background: #ef6caa; box-shadow: 0 3px 10px rgba(239, 108, 170, 0.5); }
+    .join-requests-popover { background: linear-gradient(145deg, rgba(42, 44, 90, 0.96), rgba(23, 24, 60, 0.97)) !important; border-color: rgba(235,233,255,0.2) !important; box-shadow: 0 20px 54px rgba(0,0,28,0.48) !important; }
+    .join-request-item { border: 1px solid rgba(235,233,255,0.13); border-radius: 16px; background: rgba(255,255,255,0.065); }
+    .join-request-item .request-avatar { display: grid; width: 34px; height: 34px; place-items: center; flex: 0 0 auto; color: #fff; font-size: .75rem; font-weight: 800; border-radius: 12px; background: var(--accent-gradient); }
+    .request-approve, .request-reject, .share-action { display: inline-flex; align-items: center; justify-content: center; gap: 7px; min-height: 38px; border-radius: 11px; font-size: .75rem; font-weight: 800; transition: transform 160ms var(--ease-out), filter 160ms ease, background-color 160ms ease; }
+    .request-approve { color: #fff; background: linear-gradient(135deg, #3bbf91, #56d0ad); box-shadow: 0 6px 15px rgba(48, 192, 143, 0.22); }.request-reject { color: #f8c6d7; background: rgba(248, 113, 150, 0.12); border: 1px solid rgba(248,113,150,.27); }
+    .request-approve:hover, .request-reject:hover, .share-action:hover { transform: translateY(-1px); filter: brightness(1.08); }
+    .share-room-sheet { border: 1px solid rgba(238,236,255,0.24); background: linear-gradient(145deg, rgba(46,48,97,.96), rgba(22,23,59,.97)) !important; box-shadow: 0 30px 90px rgba(0,0,24,.62), inset 0 1px 0 rgba(255,255,255,.25); }
+    .share-room-sheet input { color: #f7f5ff; background: rgba(5,8,29,.58) !important; border-color: rgba(230,230,255,.2) !important; }
+    .share-action { color: #e8e6ff; border: 1px solid rgba(237,235,255,.17); background: rgba(255,255,255,.08); }.share-action i { color: #f0a8dc; }
+    @keyframes pendingPulse { 0%,100% { transform: translateY(0) scale(1); } 50% { transform: translateY(-4px) scale(1.04); } }
+    @keyframes pendingDot { 0%,100% { transform: translateY(2px); opacity: .45; } 50% { transform: translateY(-3px); opacity: 1; } }
+
+    @media (max-width: 640px) {
+      #landing-view.liquid-landing .liquid-nav { top: max(12px, env(safe-area-inset-top)); }
+      .entry-stage { align-items: flex-start !important; justify-content: flex-start !important; padding: max(20px, env(safe-area-inset-top)) 12px max(20px, env(safe-area-inset-bottom)); }
+      .entry-card { width: 100%; margin: 0; padding: 26px 20px; border-radius: 25px; }
+      .entry-card > .text-center { margin-bottom: 26px; }
+      .chat-header { padding-top: env(safe-area-inset-top); height: calc(68px + env(safe-area-inset-top)); }
+      .join-requests-popover { top: calc(62px + env(safe-area-inset-top)) !important; right: 4px !important; }
+      #users-dropdown { top: calc(62px + env(safe-area-inset-top)) !important; }
+      .share-room-sheet { border-radius: 24px; }
+    }
+
     @media (prefers-reduced-motion: reduce) {
       *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; scroll-behavior: auto !important; transition-duration: 0.01ms !important; }
     }
@@ -931,7 +967,7 @@
         <h2 class="text-2xl font-bold text-[var(--text-main)]" id="entry-title">Join a Room</h2>
       </div>
 
-      <div class="space-y-4">
+      <div id="entry-form" class="space-y-4">
         <div>
           <label class="block text-sm font-medium text-[var(--text-muted)] mb-1">Your Name</label>
           <input type="text" id="username-input" class="w-full bg-[var(--bg-base)] border border-[var(--border-color)] rounded-xl px-4 py-3 text-[var(--text-main)] focus:outline-none focus:border-[var(--accent-color)] focus:ring-1 focus:ring-[var(--accent-color)] transition-all" placeholder="Enter a display name">
@@ -951,6 +987,15 @@
           Enter Room
         </button>
       </div>
+
+      <section id="join-pending-panel" class="hidden text-center" aria-live="polite">
+        <div class="pending-icon mx-auto mb-5"><i class="fa-solid fa-hourglass-half" aria-hidden="true"></i></div>
+        <p class="text-xs font-bold uppercase tracking-[0.16em] text-[var(--accent-color)]">Request sent</p>
+        <h3 class="mt-2 text-2xl font-bold text-[var(--text-main)]">Waiting for host approval</h3>
+        <p class="mt-3 text-sm leading-6 text-[var(--text-muted)]">Your request to join <strong id="pending-room-code" class="font-mono text-[var(--text-main)]">----</strong> is with the room host. You will enter automatically if they accept.</p>
+        <div class="pending-dots mt-6" aria-label="Waiting"><i></i><i></i><i></i></div>
+        <button type="button" onclick="cancelJoinRequest()" class="mt-7 text-sm font-bold text-[var(--text-muted)] transition-colors hover:text-[var(--text-main)]">Cancel request</button>
+      </section>
     </div>
   </div>
 
@@ -979,6 +1024,12 @@
       </div>
       
       <div class="flex items-center gap-2 lg:gap-4">
+        <button id="join-requests-button" onclick="toggleJoinRequests()" aria-label="Review join requests" class="header-action hidden h-10 min-w-10 rounded-full px-3 text-[var(--text-muted)] transition-colors relative">
+          <i class="fa-solid fa-user-clock"></i><span id="join-request-count" class="hidden request-count">0</span>
+        </button>
+        <button id="share-room-button" onclick="openShareRoomModal()" aria-label="Share this room" class="header-action hidden h-10 rounded-full px-3 text-xs font-bold text-[var(--text-muted)] transition-colors">
+          <i class="fa-solid fa-share-nodes mr-1.5"></i><span class="hidden sm:inline">Share</span>
+        </button>
         <!-- Users Dropdown Trigger (Mobile/Desktop) -->
         <button onclick="toggleUserList()" aria-label="Show people in this room" class="header-action w-10 h-10 rounded-full hover:bg-[var(--bg-surface)] text-[var(--text-muted)] transition-colors relative">
           <i class="fa-solid fa-users"></i>
@@ -995,6 +1046,14 @@
         <ul id="users-list-container" class="flex flex-col gap-2">
           <!-- Populated by JS -->
         </ul>
+      </div>
+
+      <div id="join-requests-popover" class="join-requests-popover absolute top-16 right-16 w-[min(22rem,calc(100vw-2rem))] glass rounded-2xl shadow-xl border border-[var(--border-color)] p-4 hidden flex-col gap-3 origin-top-right transition-all" aria-live="polite">
+        <div class="flex items-center justify-between gap-3">
+          <h3 class="text-xs font-bold uppercase tracking-wider text-[var(--text-muted)]">Join requests</h3>
+          <span id="join-requests-empty" class="text-xs text-[var(--text-muted)]">No requests</span>
+        </div>
+        <div id="join-requests-list" class="flex max-h-64 flex-col gap-2 overflow-y-auto pr-1"></div>
       </div>
     </header>
 
@@ -1047,6 +1106,33 @@
         </div>
       </div>
     </footer>
+  </div>
+
+  <!-- Host-only room sharing controls -->
+  <div id="share-room-modal" class="fixed inset-0 z-50 hidden items-end justify-center p-3 sm:items-center sm:p-4" role="dialog" aria-modal="true" aria-labelledby="share-room-title">
+    <button type="button" class="absolute inset-0 bg-black/60 backdrop-blur-sm" aria-label="Close share room" onclick="closeModal('share-room-modal')"></button>
+    <section class="share-room-sheet glass relative z-10 w-full max-w-md rounded-3xl p-5 shadow-2xl sm:p-6">
+      <div class="flex items-start justify-between gap-4">
+        <div>
+          <p class="text-xs font-bold uppercase tracking-[0.16em] text-[var(--accent-color)]">Private room</p>
+          <h2 id="share-room-title" class="mt-1 text-xl font-bold text-[var(--text-main)]">Share Room</h2>
+        </div>
+        <button type="button" onclick="closeModal('share-room-modal')" class="header-action grid h-9 w-9 place-items-center rounded-full text-[var(--text-muted)]" aria-label="Close"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      <p class="mt-3 text-sm leading-6 text-[var(--text-muted)]">Anyone with this link still needs your approval before they can join.</p>
+      <label class="mt-5 block text-xs font-bold uppercase tracking-wider text-[var(--text-muted)]" for="share-link-input">Room link</label>
+      <div class="mt-2 flex gap-2">
+        <input id="share-link-input" class="min-w-0 flex-1 rounded-xl border border-[var(--border-color)] bg-[var(--bg-base)] px-3 py-2.5 font-mono text-xs text-[var(--text-main)]" readonly>
+        <button type="button" onclick="copyRoomLink()" class="btn-primary rounded-xl px-3 text-sm font-bold" aria-label="Copy room link"><i class="fa-regular fa-copy"></i></button>
+      </div>
+      <div class="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3">
+        <button type="button" onclick="copyRoomLink()" class="share-action"><i class="fa-regular fa-copy"></i><span>Copy link</span></button>
+        <button type="button" onclick="shareRoomNatively()" class="share-action"><i class="fa-solid fa-arrow-up-from-bracket"></i><span>Share</span></button>
+        <button type="button" onclick="shareRoomToWhatsApp()" class="share-action"><i class="fa-brands fa-whatsapp"></i><span>WhatsApp</span></button>
+        <button type="button" onclick="shareRoomForInstagram()" class="share-action col-span-2 sm:col-span-1"><i class="fa-brands fa-instagram"></i><span>Instagram</span></button>
+      </div>
+      <p id="instagram-share-note" class="mt-3 text-xs leading-5 text-[var(--text-faint)]">Instagram does not offer a universal browser share link. On supported phones, this opens the device share sheet; otherwise, copy the link.</p>
+    </section>
   </div>
 
   <!-- ==========================================
@@ -1227,7 +1313,7 @@
     // --- STATE ---
     const AppState = {
       user: { id: null, username: '' },
-      room: { code: '', users: [] },
+      room: { code: '', users: [], token: '', isHost: false, pending: [] },
       theme: { mode: 'light', accent: '#5d5ce6', bg: 'plain' },
       isMock: false,
       currentGame: null,
@@ -1608,6 +1694,7 @@
     function showLandingView() {
       clearTimeout(entryTransitionTimer);
       cancelRoomEntryAttempt();
+      hidePendingJoinPanel();
       document.getElementById('landing-view').classList.remove('hidden', 'opacity-0');
       document.getElementById('entry-view').classList.add('hidden');
       document.getElementById('entry-view').classList.remove('flex');
@@ -1624,6 +1711,7 @@
       const codeInput = document.getElementById('room-code-container');
       const toggleBtn = document.getElementById('toggle-mode-btn');
       const entryButton = document.getElementById('enter-room-btn');
+      hidePendingJoinPanel();
 
       if (mode === 'create') {
         title.innerText = 'Create a Room';
@@ -1654,10 +1742,122 @@
       document.getElementById('entry-view').classList.remove('flex');
       document.getElementById('chat-view').classList.remove('hidden');
       document.getElementById('chat-view').classList.add('flex');
+      renderRoomControls();
     }
 
     function openModal(id) { document.getElementById(id).classList.remove('hidden'); }
     function closeModal(id) { document.getElementById(id).classList.add('hidden'); }
+
+    function getShareRoomLink() {
+      if (!AppState.room.code) return '';
+      const url = new URL(window.location.href);
+      url.search = '';
+      url.hash = '';
+      url.searchParams.set('room', AppState.room.code);
+      return url.toString();
+    }
+
+    function openShareRoomModal() {
+      if (!AppState.room.isHost || !AppState.room.code) return;
+      document.getElementById('share-link-input').value = getShareRoomLink();
+      openModal('share-room-modal');
+    }
+
+    async function copyRoomLink() {
+      const link = getShareRoomLink();
+      if (!link) return;
+      try {
+        await navigator.clipboard.writeText(link);
+      } catch (_) {
+        const input = document.getElementById('share-link-input');
+        input.focus();
+        input.select();
+        document.execCommand('copy');
+        input.setSelectionRange(0, 0);
+      }
+      showToast('Room link copied', 'success');
+    }
+
+    async function shareRoomNatively() {
+      const link = getShareRoomLink();
+      if (!link) return;
+      const shareData = { title: 'Join my private TempChat room', text: `Join my private chat room: ${link}`, url: link };
+      if (navigator.share) {
+        try {
+          await navigator.share(shareData);
+          return;
+        } catch (error) {
+          if (error?.name === 'AbortError') return;
+        }
+      }
+      await copyRoomLink();
+      showToast('Your browser does not support native sharing. The link was copied.', 'info');
+    }
+
+    function shareRoomToWhatsApp() {
+      const link = getShareRoomLink();
+      if (!link) return;
+      const message = `Join my private chat room: ${link}`;
+      window.open(`https://wa.me/?text=${encodeURIComponent(message)}`, '_blank', 'noopener,noreferrer');
+    }
+
+    async function shareRoomForInstagram() {
+      if (navigator.share) {
+        await shareRoomNatively();
+        return;
+      }
+      await copyRoomLink();
+      showToast('Instagram sharing is available through your phone share sheet. The room link was copied.', 'info');
+    }
+
+    function renderRoomControls() {
+      const showHostControls = AppState.room.isHost && Boolean(AppState.room.code);
+      document.getElementById('share-room-button').classList.toggle('hidden', !showHostControls);
+      document.getElementById('join-requests-button').classList.toggle('hidden', !showHostControls);
+      if (!showHostControls) document.getElementById('join-requests-popover').classList.add('hidden');
+      renderPendingRequests();
+    }
+
+    function toggleJoinRequests() {
+      if (!AppState.room.isHost) return;
+      document.getElementById('users-dropdown').classList.add('hidden');
+      document.getElementById('users-dropdown').classList.remove('flex');
+      const panel = document.getElementById('join-requests-popover');
+      panel.classList.toggle('hidden');
+      panel.classList.toggle('flex');
+    }
+
+    function renderPendingRequests() {
+      const requests = Array.isArray(AppState.room.pending) ? AppState.room.pending : [];
+      const count = document.getElementById('join-request-count');
+      const empty = document.getElementById('join-requests-empty');
+      const list = document.getElementById('join-requests-list');
+      count.textContent = requests.length > 9 ? '9+' : requests.length;
+      count.classList.toggle('hidden', requests.length === 0);
+      empty.classList.toggle('hidden', requests.length > 0);
+      list.innerHTML = '';
+      requests.forEach((request) => {
+        const item = document.createElement('article');
+        const safeName = escapeHTML(request.username || 'Guest');
+        item.className = 'join-request-item flex items-center gap-3 p-3';
+        item.innerHTML = `
+          <div class="request-avatar">${safeName.charAt(0).toUpperCase()}</div>
+          <div class="min-w-0 flex-1"><p class="truncate text-sm font-bold text-[var(--text-main)]">${safeName}</p><p class="mt-0.5 text-xs text-[var(--text-muted)]">Wants to join</p></div>
+          <div class="flex shrink-0 gap-1.5">
+            <button type="button" class="request-reject px-2.5" data-request-id="${escapeHTML(request.requestId)}" data-request-action="reject">Reject</button>
+            <button type="button" class="request-approve px-2.5" data-request-id="${escapeHTML(request.requestId)}" data-request-action="approve">Accept</button>
+          </div>`;
+        list.appendChild(item);
+      });
+      list.querySelectorAll('[data-request-action]').forEach((button) => {
+        button.addEventListener('click', () => resolveJoinRequest(button.dataset.requestId, button.dataset.requestAction === 'approve'));
+      });
+    }
+
+    function resolveJoinRequest(requestId, approve) {
+      if (!socket || !AppState.room.isHost || !requestId) return;
+      socket.emit(approve ? 'join-request-approve' : 'join-request-reject', { requestId });
+    }
 
     function showToast(message, type = 'info') {
       const container = document.getElementById('toast-container');
@@ -1682,6 +1882,58 @@
     let socket;
     let socketConnectionState = 'connecting';
     let socketConnectionMessage = 'Connecting to the chat server…';
+    const ROOM_SESSION_KEY = 'tempchat_active_room_v1';
+    let rejoinAttemptSocketId = '';
+    let pendingJoinRequest = null;
+
+    function persistRoomSession() {
+      if (!AppState.room.code || !AppState.room.token || !AppState.user.username) return;
+      try {
+        sessionStorage.setItem(ROOM_SESSION_KEY, JSON.stringify({
+          roomCode: AppState.room.code,
+          token: AppState.room.token,
+          username: AppState.user.username
+        }));
+      } catch (error) {
+        console.warn('Room reconnect state could not be stored.', error);
+      }
+    }
+
+    function clearRoomSession() {
+      try { sessionStorage.removeItem(ROOM_SESSION_KEY); } catch (_) { /* Storage may be disabled. */ }
+      rejoinAttemptSocketId = '';
+    }
+
+    function readRoomSession() {
+      try {
+        const saved = JSON.parse(sessionStorage.getItem(ROOM_SESSION_KEY) || 'null');
+        if (!saved?.roomCode || !saved?.token || !saved?.username) return null;
+        return saved;
+      } catch (_) {
+        clearRoomSession();
+        return null;
+      }
+    }
+
+    function tryRejoinSavedRoom() {
+      if (!socket?.connected || rejoinAttemptSocketId === socket.id) return;
+      const saved = readRoomSession();
+      if (!saved) return;
+      rejoinAttemptSocketId = socket.id;
+      socket.emit('rejoin-room', saved, (result) => {
+        if (!result?.success) {
+          clearRoomSession();
+          if (AppState.room.code) showToast(result?.message || 'Your previous room is no longer available.', 'error');
+          return;
+        }
+        completeRoomEntry(result.username || saved.username, result.roomCode, {
+          token: result.token || saved.token,
+          isHost: Boolean(result.isHost),
+          pending: result.pending || [],
+          reconnect: true
+        });
+      });
+    }
 
     function updateConnectionStatus() {
       const status = document.getElementById('connection-status');
@@ -1717,6 +1969,8 @@
 
       socket.on('connect', () => {
         setSocketConnectionState('connected', 'Connected securely. You can enter a room.');
+        AppState.user.id = socket.id;
+        tryRejoinSavedRoom();
         console.info('Connected to the Socket.IO server.');
       });
 
@@ -1726,6 +1980,14 @@
 
       socket.on('disconnect', () => {
         setSocketConnectionState('disconnected', 'Connection lost. Reconnecting…');
+        // Pending requests are tied to a socket ID and are deliberately removed
+        // by the server on disconnect. Do not leave a joiner in a stale wait UI.
+        if (pendingJoinRequest) {
+          const roomCode = pendingJoinRequest.roomCode;
+          hidePendingJoinPanel();
+          document.getElementById('room-input').value = roomCode;
+          showToast('Your connection changed. Request to join again after reconnecting.', 'error');
+        }
       });
 
       // Generate identity key pair on connection
@@ -1742,6 +2004,64 @@
       socket.on('update-users', (users) => {
         AppState.room.users = users;
         updatePresenceUI();
+        document.getElementById('send-btn').disabled = !AppState.room.code;
+      });
+
+      // Host approval flow. The server is the source of truth for every request;
+      // this UI only renders requests that the server sent to the actual host.
+      socket.on('join-request-received', (request) => {
+        if (!AppState.room.isHost || !request?.requestId) return;
+        const existing = AppState.room.pending.find((item) => item.requestId === request.requestId);
+        AppState.room.pending = Array.isArray(request.pending)
+          ? request.pending
+          : existing ? AppState.room.pending : [...AppState.room.pending, request];
+        renderRoomControls();
+        const panel = document.getElementById('join-requests-popover');
+        panel.classList.remove('hidden');
+        panel.classList.add('flex');
+        showToast(`${request.username || 'A guest'} wants to join`, 'info');
+      });
+
+      socket.on('join-requests-sync', (requests) => {
+        if (!AppState.room.isHost) return;
+        AppState.room.pending = Array.isArray(requests) ? requests : [];
+        renderRoomControls();
+      });
+
+      socket.on('join-request-cancelled', (data) => {
+        if (!AppState.room.isHost) return;
+        AppState.room.pending = Array.isArray(data?.pending)
+          ? data.pending
+          : AppState.room.pending.filter((item) => item.requestId !== data?.requestId);
+        renderRoomControls();
+      });
+
+      socket.on('join-request-approved', (data) => {
+        if (!pendingJoinRequest || data?.roomCode !== pendingJoinRequest.roomCode) return;
+        const username = pendingJoinRequest.username;
+        hidePendingJoinPanel();
+        completeRoomEntry(username, data.roomCode, { token: data.token, isHost: false });
+      });
+
+      socket.on('join-request-rejected', (data) => {
+        if (!pendingJoinRequest || data?.roomCode !== pendingJoinRequest.roomCode) return;
+        const roomCode = pendingJoinRequest.roomCode;
+        hidePendingJoinPanel();
+        showEntryView('join');
+        document.getElementById('room-input').value = data.roomCode || roomCode;
+        showToast(data.message || 'The host rejected your request.', 'error');
+      });
+
+      socket.on('join-request-error', (data) => showToast(data?.message || 'Unable to update that join request.', 'error'));
+
+      socket.on('host-changed', (data) => {
+        if (!AppState.room.code || !data?.token) return;
+        AppState.room.isHost = true;
+        AppState.room.token = data.token;
+        AppState.room.pending = Array.isArray(data.pending) ? data.pending : [];
+        persistRoomSession();
+        renderRoomControls();
+        showToast('You are now the room host.', 'info');
       });
 
       socket.on('system-message', (msg) => {
@@ -1894,10 +2214,14 @@
       });
       
       socket.on('left-room', () => {
+        const users = AppState.room.users;
+        clearRoomSession();
+        AppState.room = { code: '', users: [], token: '', isHost: false, pending: [] };
         showLandingView();
         document.getElementById('messages-list').innerHTML = '';
+        document.getElementById('send-btn').disabled = true;
         // Clear all peer keys on leave
-        AppState.room.users.forEach(u => {
+        users.forEach(u => {
           if (u.id !== socket.id) Crypto.removePeer(u.id);
         });
       });
@@ -1912,15 +2236,25 @@
       return btoa(binary);
     }
 
-    function completeRoomEntry(username, roomCode) {
+    function completeRoomEntry(username, roomCode, options = {}) {
+      const wasInRoom = AppState.room.code === roomCode;
       AppState.user.username = username;
       // Use socket.id for real socket, or mock ID for MockSocket
       AppState.user.id = socket.id || (AppState.isMock ? '1' : null);
       AppState.room.code = roomCode;
+      AppState.room.token = options.token || AppState.room.token;
+      AppState.room.isHost = Boolean(options.isHost);
+      AppState.room.pending = Array.isArray(options.pending) ? options.pending : (AppState.room.pending || []);
+      persistRoomSession();
       document.getElementById('header-room-code').innerText = roomCode;
       showChatView();
-      showToast(`Joined Room ${roomCode}`, 'success');
-      renderSystemMessage('You joined the room');
+      document.getElementById('send-btn').disabled = false;
+      if (!options.reconnect) {
+        showToast(`Joined Room ${roomCode}`, 'success');
+        if (!wasInRoom) renderSystemMessage('You joined the room');
+      } else {
+        showToast(`Reconnected to Room ${roomCode}`, 'success');
+      }
       document.getElementById('message-input').focus();
 
       // Publish our public key to the room for E2EE
@@ -1949,8 +2283,29 @@
       button.classList.toggle('opacity-70', isBusy);
       button.classList.toggle('cursor-wait', isBusy);
       button.innerText = isBusy
-        ? (entryMode === 'create' ? 'Creating room…' : 'Joining room…')
+        ? (entryMode === 'create' ? 'Creating room…' : 'Requesting access…')
         : (entryMode === 'create' ? 'Create Room' : 'Join Room');
+    }
+
+    function showPendingJoinPanel(username, roomCode) {
+      pendingJoinRequest = { username, roomCode };
+      document.getElementById('entry-form').classList.add('hidden');
+      document.getElementById('join-pending-panel').classList.remove('hidden');
+      document.getElementById('pending-room-code').textContent = roomCode;
+    }
+
+    function hidePendingJoinPanel() {
+      pendingJoinRequest = null;
+      document.getElementById('join-pending-panel')?.classList.add('hidden');
+      document.getElementById('entry-form')?.classList.remove('hidden');
+    }
+
+    function cancelJoinRequest() {
+      const request = pendingJoinRequest;
+      if (socket?.connected && request) socket.emit('cancel-join-request');
+      hidePendingJoinPanel();
+      showEntryView('join');
+      if (request) document.getElementById('room-input').value = request.roomCode;
     }
 
     function handleEnterRoom() {
@@ -1980,7 +2335,12 @@
         isEnteringRoom = false;
         setEntryBusy(false);
         if (!result?.success) return showToast(result?.message || 'Unable to enter that room', 'error');
-        completeRoomEntry(username, result.roomCode);
+        if (entryMode === 'create') {
+          completeRoomEntry(username, result.roomCode, { token: result.token, isHost: true, pending: [] });
+          return;
+        }
+        if (!result.pending) return showToast('Unable to request access to that room.', 'error');
+        showPendingJoinPanel(username, result.roomCode);
       };
 
       roomEntryTimeout = window.setTimeout(() => {
@@ -1988,7 +2348,7 @@
       }, 10000);
 
       if (entryMode === 'create') socket.emit('create-room', { username }, acknowledgeRoom);
-      else socket.emit('join-room', { username, roomCode }, acknowledgeRoom);
+      else socket.emit('join-request', { username, roomCode }, acknowledgeRoom);
     }
 
     ['username-input', 'room-input'].forEach((id) => {
@@ -2001,8 +2361,8 @@
 
     function leaveRoom() {
       stopTyping();
-      socket.emit('leave-room');
-      AppState.room = { code: '', users: [] };
+      clearRoomSession();
+      if (socket?.connected) socket.emit('leave-room');
     }
 
     // --- CHAT LOGIC ---
@@ -2687,9 +3047,13 @@
 
         if (event === 'create-room') {
           const roomCode = Math.random().toString(36).substring(2, 7).toUpperCase();
-          return this.simulateRoomEntry(data.username, roomCode, callback || (() => {}));
+          (callback || (() => {}))({ success: true, roomCode, token: 'mock-host-token', isHost: true });
+          return this.simulateRoomEntry(data.username, roomCode, () => {});
         }
-        if (event === 'join-room') return this.simulateRoomEntry(data.username, data.roomCode, callback || (() => {}));
+        if (event === 'join-request') {
+          (callback || (() => {}))({ success: true, pending: true, roomCode: data.roomCode });
+          return setTimeout(() => this.trigger('join-request-approved', { roomCode: data.roomCode, token: 'mock-member-token' }), 900);
+        }
         if (event === 'leave-room') return this.trigger('left-room');
         
         // E2EE: Handle public key publishing
@@ -2787,6 +3151,14 @@
           });
         });
       });
+
+      // A shared room link only pre-fills the join form. It never admits a
+      // visitor; the normal host-approval request still happens on submit.
+      const sharedRoom = new URLSearchParams(window.location.search).get('room');
+      if (sharedRoom && /^[A-Za-z0-9]{3,12}$/.test(sharedRoom)) {
+        showEntryView('join');
+        document.getElementById('room-input').value = sharedRoom.toUpperCase();
+      }
       
       // File attachment handler
       const attachmentInput = document.getElementById('attachment-input');
