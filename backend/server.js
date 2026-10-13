@@ -1,6 +1,7 @@
 const express = require('express');
 const http = require('http');
 const path = require('path');
+const crypto = require('crypto');
 const { Server } = require('socket.io');
 
 const app = express();
@@ -41,89 +42,223 @@ function cleanRateLimit(socketId) {
   rateLimits.delete(socketId);
 }
 
+// ---------------------------------------------------------------------------
+// Host approval helpers
+// ---------------------------------------------------------------------------
+const MAX_PENDING_PER_ROOM = 20;
+const ROOM_EMPTY_GRACE_MS = 60 * 1000;   // keep an empty room briefly so a host refresh can rejoin
+const HOST_HANDOFF_GRACE_MS = 45 * 1000; // wait for the host to come back before promoting someone
+
+function newToken() {
+  return crypto.randomBytes(24).toString('hex');
+}
+
+function cleanName(value) {
+  return String(value || '').replace(/\s+/g, ' ').trim().slice(0, 30);
+}
+
+function pendingList(room) {
+  return Array.from(room.pending.values()).map((p) => ({ requestId: p.requestId, username: p.username }));
+}
+
+function isHost(room, socket) {
+  return Boolean(room && room.hostId && room.hostId === socket.id && room.users.has(socket.id));
+}
+
 io.on('connection', (socket) => {
   
+  // -------------------------------------------------------------------------
+  // Room lifecycle: create / request to join / host approval / rejoin
+  // -------------------------------------------------------------------------
+
   socket.on('create-room', (data, callback) => {
+    if (typeof callback !== 'function') return;
     try {
-      if (!data || !data.username) {
+      const username = cleanName(data && data.username);
+      if (!username) {
         return callback({ success: false, message: 'Invalid data' });
       }
+      if (socket.roomId) handleLeave(true);
+      if (socket.pendingRoomId) cancelPending(socket);
+
       let roomId = generateRoomCode();
       while (rooms.has(roomId)) {
         roomId = generateRoomCode();
       }
 
-      rooms.set(roomId, {
+      const hostToken = newToken();
+      const room = {
         code: roomId,
         users: new Map(),
-        game: null
-      });
+        game: null,
+        hostId: socket.id,
+        hostToken,
+        members: new Map(),   // token -> { username } for every admitted participant
+        pending: new Map(),   // requesterSocketId -> { requestId, username }
+        emptyTimer: null,
+        handoffTimer: null
+      };
+      rooms.set(roomId, room);
 
-      const userState = { id: socket.id, username: data.username };
-      rooms.get(roomId).users.set(socket.id, userState);
+      room.users.set(socket.id, { id: socket.id, username, token: hostToken });
 
       socket.join(roomId);
       socket.roomId = roomId;
 
-      callback({ success: true, roomCode: roomId });
-      
+      callback({ success: true, roomCode: roomId, isHost: true, token: hostToken });
+
       broadcastUserList(roomId);
     } catch (err) {
       callback({ success: false, message: 'Server error creating room.' });
     }
   });
 
-  socket.on('join-room', (data, callback) => {
+  // A person asks to join. They are NOT placed in the room until the host approves.
+  socket.on('join-request', (data, callback) => {
+    if (typeof callback !== 'function') callback = () => {};
     try {
       if (!data || !data.roomCode || !data.username) {
         return callback({ success: false, message: 'Invalid data' });
       }
-
-      const normalizedRoomId = data.roomCode.trim().toUpperCase();
-
-      if (!rooms.has(normalizedRoomId)) {
-        return callback({ success: false, message: 'Room not found' });
+      if (!checkRateLimit(socket)) {
+        return callback({ success: false, message: 'Too many attempts. Please wait a moment.' });
       }
 
-      const userState = { id: socket.id, username: data.username };
-      rooms.get(normalizedRoomId).users.set(socket.id, userState);
+      const username = cleanName(data.username);
+      const roomId = String(data.roomCode).trim().toUpperCase();
+      if (!username) return callback({ success: false, message: 'Invalid data' });
 
-      socket.join(normalizedRoomId);
-      socket.roomId = normalizedRoomId;
+      const room = rooms.get(roomId);
+      if (!room) return callback({ success: false, message: 'Room not found' });
+      if (room.users.has(socket.id)) return callback({ success: false, message: 'You are already in this room' });
 
-      callback({ success: true, roomCode: normalizedRoomId });
+      if (socket.roomId) handleLeave(true);
+      if (socket.pendingRoomId) cancelPending(socket);
 
-      socket.to(normalizedRoomId).emit('user-connected', { username: data.username, socketId: socket.id });
-      
-      broadcastUserList(normalizedRoomId);
+      if (room.pending.size >= MAX_PENDING_PER_ROOM) {
+        return callback({ success: false, message: 'Too many pending requests for this room. Try again shortly.' });
+      }
+
+      const request = { requestId: socket.id, username };
+      room.pending.set(socket.id, request);
+      socket.pendingRoomId = roomId;
+
+      callback({ success: true, pending: true, roomCode: roomId });
+
+      if (room.hostId) {
+        io.to(room.hostId).emit('join-request-received', {
+          requestId: request.requestId,
+          username: request.username,
+          pending: pendingList(room)
+        });
+      }
     } catch (err) {
-      callback({ success: false, message: 'Server error joining room.' });
+      callback({ success: false, message: 'Server error requesting to join.' });
     }
   });
 
+  // The old direct-join event is intentionally closed: nobody can skip host approval.
+  socket.on('join-room', (data, callback) => {
+    if (typeof callback === 'function') {
+      callback({ success: false, message: 'Joining now needs host approval. Please refresh the page and try again.' });
+    }
+  });
+
+  socket.on('cancel-join-request', () => {
+    cancelPending(socket);
+  });
+
+  // Host-only: accept or reject a pending request. The server decides, never the client.
+  const resolveJoinRequest = (data, approve) => {
+    const room = socket.roomId ? rooms.get(socket.roomId) : null;
+    if (!isHost(room, socket)) {
+      socket.emit('join-request-error', { message: 'Only the host can approve or reject requests.' });
+      return;
+    }
+    const requestId = data && typeof data.requestId === 'string' ? data.requestId : '';
+    const request = room.pending.get(requestId);
+    if (!request) {
+      socket.emit('join-requests-sync', pendingList(room));
+      return;
+    }
+    room.pending.delete(requestId);
+
+    const target = io.sockets.sockets.get(requestId);
+    if (target) {
+      target.pendingRoomId = null;
+      if (approve) {
+        admitUser(room, target, request.username);
+      } else {
+        target.emit('join-request-rejected', { roomCode: room.code, message: 'The host declined your request.' });
+      }
+    }
+    socket.emit('join-requests-sync', pendingList(room));
+  };
+
+  socket.on('join-request-approve', (data) => resolveJoinRequest(data, true));
+  socket.on('join-request-reject', (data) => resolveJoinRequest(data, false));
+
+  // Reconnect after a refresh. Requires the secret token issued at create/approval time.
   socket.on('rejoin-room', (data, callback) => {
+    if (typeof callback !== 'function') return;
     try {
-      if (!data || !data.roomCode || !data.username) {
+      if (!data || !data.roomCode || !data.token) {
         return callback({ success: false, message: 'Invalid data' });
       }
 
-      const normalizedRoomId = data.roomCode.trim().toUpperCase();
+      const roomId = String(data.roomCode).trim().toUpperCase();
+      const room = rooms.get(roomId);
+      if (!room) return callback({ success: false, message: 'Room not found' });
 
-      if (!rooms.has(normalizedRoomId)) {
-        return callback({ success: false, message: 'Room not found' });
+      const token = String(data.token);
+      let username;
+      let host = false;
+      if (token === room.hostToken) {
+        host = true;
+        username = cleanName(data.username) || 'Host';
+      } else if (room.members.has(token)) {
+        username = room.members.get(token).username;
+      } else {
+        return callback({ success: false, message: 'Please request to join again.' });
       }
 
-      const userState = { id: socket.id, username: data.username };
-      rooms.get(normalizedRoomId).users.set(socket.id, userState);
+      if (socket.roomId && socket.roomId !== roomId) handleLeave(true);
+      if (socket.pendingRoomId) cancelPending(socket);
 
-      socket.join(normalizedRoomId);
-      socket.roomId = normalizedRoomId;
+      // Drop any stale entry for the same person (their old socket id).
+      for (const [oldId, user] of Array.from(room.users.entries())) {
+        if (user.token === token && oldId !== socket.id) {
+          room.users.delete(oldId);
+          io.to(roomId).emit('user-disconnected', { username: user.username, socketId: oldId });
+          const oldSocket = io.sockets.sockets.get(oldId);
+          if (oldSocket) { oldSocket.leave(roomId); oldSocket.roomId = null; }
+        }
+      }
 
-      callback({ success: true, roomCode: normalizedRoomId });
+      clearTimeout(room.emptyTimer);
+      room.emptyTimer = null;
 
-      socket.to(normalizedRoomId).emit('user-connected', { username: data.username, socketId: socket.id });
-      
-      broadcastUserList(normalizedRoomId);
+      room.users.set(socket.id, { id: socket.id, username, token });
+      socket.join(roomId);
+      socket.roomId = roomId;
+
+      if (host) {
+        room.hostId = socket.id;
+        clearTimeout(room.handoffTimer);
+        room.handoffTimer = null;
+      }
+
+      callback({
+        success: true,
+        roomCode: roomId,
+        isHost: host,
+        username,
+        token,
+        pending: host ? pendingList(room) : undefined
+      });
+
+      socket.to(roomId).emit('user-connected', { username, socketId: socket.id });
+      broadcastUserList(roomId);
     } catch (err) {
       callback({ success: false, message: 'Server error rejoining room.' });
     }
@@ -311,51 +446,132 @@ io.on('connection', (socket) => {
     socket.to(socket.roomId).emit('game:quit');
   });
 
-  const handleLeave = () => {
+  function handleLeave(explicit) {
     const roomId = socket.roomId;
-    if (!roomId || !rooms.has(roomId)) return;
+    if (!roomId || !rooms.has(roomId)) { socket.roomId = null; return; }
 
     const room = rooms.get(roomId);
     const user = room.users.get(socket.id);
-    
+
     if (user) {
       io.to(roomId).emit('user-disconnected', { username: user.username, socketId: socket.id });
-      
+
       room.users.delete(socket.id);
       socket.leave(roomId);
-      
+
+      const wasHost = room.hostId === socket.id;
+      if (wasHost) room.hostId = null;
+
       if (room.users.size === 0) {
-        rooms.delete(roomId);
+        if (explicit) {
+          closeRoom(room, 'This room was closed.');
+        } else {
+          // Keep it briefly so a refresh / reconnect can get back in.
+          clearTimeout(room.emptyTimer);
+          room.emptyTimer = setTimeout(() => closeRoom(room, 'This room is no longer available.'), ROOM_EMPTY_GRACE_MS);
+        }
       } else {
+        if (wasHost) {
+          if (explicit) promoteNewHost(room);
+          else {
+            clearTimeout(room.handoffTimer);
+            room.handoffTimer = setTimeout(() => promoteNewHost(room), HOST_HANDOFF_GRACE_MS);
+          }
+        }
         broadcastUserList(roomId);
       }
     }
     socket.roomId = null;
-  };
+  }
 
   socket.on('leave-room', () => {
-    handleLeave();
+    handleLeave(true);
+    cancelPending(socket);
     cleanRateLimit(socket.id);
     socket.emit('left-room');
   });
 
   socket.on('disconnect', () => {
-    handleLeave();
+    handleLeave(false);
+    cancelPending(socket);
     cleanRateLimit(socket.id);
   });
-
-  function broadcastUserList(roomId) {
-    if (!rooms.has(roomId)) return;
-    const room = rooms.get(roomId);
-    
-    const userList = Array.from(room.users.values()).map(user => ({
-      id: user.id,
-      username: user.username
-    }));
-
-    io.to(roomId).emit('update-users', userList);
-  }
 });
+
+// ---------------------------------------------------------------------------
+// Room-level helpers (module scope)
+// ---------------------------------------------------------------------------
+
+function broadcastUserList(roomId) {
+  if (!rooms.has(roomId)) return;
+  const room = rooms.get(roomId);
+
+  const userList = Array.from(room.users.values()).map((user) => ({
+    id: user.id,
+    username: user.username,
+    isHost: user.id === room.hostId
+  }));
+
+  io.to(roomId).emit('update-users', userList);
+}
+
+// Put an approved requester into the room. Only ever called from the host-checked path.
+function admitUser(room, target, username) {
+  const token = newToken();
+  room.members.set(token, { username });
+  room.users.set(target.id, { id: target.id, username, token });
+
+  target.join(room.code);
+  target.roomId = room.code;
+
+  target.emit('join-request-approved', { roomCode: room.code, token });
+  target.to(room.code).emit('user-connected', { username, socketId: target.id });
+  broadcastUserList(room.code);
+}
+
+// Withdraw a socket's pending request (user cancelled, disconnected, or re-requested).
+function cancelPending(socket) {
+  const roomId = socket.pendingRoomId;
+  socket.pendingRoomId = null;
+  if (!roomId) return;
+  const room = rooms.get(roomId);
+  if (!room || !room.pending.delete(socket.id)) return;
+  if (room.hostId) {
+    io.to(room.hostId).emit('join-request-cancelled', { requestId: socket.id, pending: pendingList(room) });
+  }
+}
+
+// Give host rights to the longest-present participant when the host is gone.
+function promoteNewHost(room) {
+  clearTimeout(room.handoffTimer);
+  room.handoffTimer = null;
+  if (!rooms.has(room.code)) return;
+  if (room.hostId && room.users.has(room.hostId)) return; // host is back
+  const next = room.users.values().next().value;
+  if (!next) return;
+
+  room.hostToken = newToken();
+  room.hostId = next.id;
+  next.token = room.hostToken;
+  io.to(next.id).emit('host-changed', { token: room.hostToken, pending: pendingList(room) });
+  io.to(room.code).emit('system-message', `${next.username} is now the host`);
+  broadcastUserList(room.code);
+}
+
+// Remove a room and tell anyone still waiting at the door.
+function closeRoom(room, message) {
+  clearTimeout(room.emptyTimer);
+  clearTimeout(room.handoffTimer);
+  for (const requestId of room.pending.keys()) {
+    const waiting = io.sockets.sockets.get(requestId);
+    if (waiting) {
+      waiting.pendingRoomId = null;
+      waiting.emit('join-request-rejected', { roomCode: room.code, message });
+    }
+  }
+  room.pending.clear();
+  rooms.delete(room.code);
+}
 
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
