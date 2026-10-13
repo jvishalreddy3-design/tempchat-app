@@ -105,6 +105,8 @@ io.on('connection', (socket) => {
       socket.join(roomId);
       socket.roomId = roomId;
 
+      console.log(`[ROOM CREATED] room=${roomId} hostSocket=${socket.id} hostName="${username}"`);
+
       callback({ success: true, roomCode: roomId, isHost: true, token: hostToken });
 
       broadcastUserList(roomId);
@@ -143,14 +145,24 @@ io.on('connection', (socket) => {
       room.pending.set(socket.id, request);
       socket.pendingRoomId = roomId;
 
+      console.log(`[JOIN REQUEST] room=${roomId} requesterSocket=${socket.id} name="${username}" pendingNow=${room.pending.size}`);
+
       callback({ success: true, pending: true, roomCode: roomId });
 
-      if (room.hostId) {
-        io.to(room.hostId).emit('join-request-received', {
+      // Send ONLY to the host's socket (never to the room, the joiner is not in it yet).
+      const hostSocket = room.hostId ? io.sockets.sockets.get(room.hostId) : null;
+      if (hostSocket) {
+        console.log(`[HOST FOUND] room=${roomId} hostSocket=${room.hostId}`);
+        hostSocket.emit('join-request-received', {
           requestId: request.requestId,
           username: request.username,
           pending: pendingList(room)
         });
+        console.log(`[REQUEST SENT TO HOST] room=${roomId} hostSocket=${room.hostId} requestId=${request.requestId} name="${username}"`);
+      } else {
+        // Host is briefly offline (refresh/reconnect). The request stays queued and is
+        // delivered when the host rejoins (rejoin-room callback) or a new host is promoted.
+        console.log(`[HOST FOUND] room=${roomId} NO LIVE HOST SOCKET - request queued (hostId=${room.hostId})`);
       }
     } catch (err) {
       callback({ success: false, message: 'Server error requesting to join.' });
@@ -172,6 +184,7 @@ io.on('connection', (socket) => {
   const resolveJoinRequest = (data, approve) => {
     const room = socket.roomId ? rooms.get(socket.roomId) : null;
     if (!isHost(room, socket)) {
+      console.log(`[JOIN REQUEST] DENIED: socket ${socket.id} is not the host of room ${socket.roomId || '(none)'}`);
       socket.emit('join-request-error', { message: 'Only the host can approve or reject requests.' });
       return;
     }
@@ -184,13 +197,17 @@ io.on('connection', (socket) => {
     room.pending.delete(requestId);
 
     const target = io.sockets.sockets.get(requestId);
+    if (approve) console.log(`[HOST ACCEPTED] room=${room.code} host=${socket.id} requestId=${requestId} name="${request.username}"`);
+    else console.log(`[HOST REJECTED] room=${room.code} host=${socket.id} requestId=${requestId} name="${request.username}"`);
     if (target) {
       target.pendingRoomId = null;
       if (approve) {
         admitUser(room, target, request.username);
       } else {
-        target.emit('join-request-rejected', { roomCode: room.code, message: 'The host declined your request.' });
+        target.emit('join-request-rejected', { roomCode: room.code, message: 'Host rejected your request' });
       }
+    } else {
+      console.log(`[JOIN REQUEST] requester ${requestId} is no longer connected`);
     }
     socket.emit('join-requests-sync', pendingList(room));
   };
@@ -259,6 +276,7 @@ io.on('connection', (socket) => {
 
       socket.to(roomId).emit('user-connected', { username, socketId: socket.id });
       broadcastUserList(roomId);
+      if (host) console.log(`[HOST FOUND] room=${roomId} host rejoined as socket=${socket.id}, queued requests=${room.pending.size}`);
     } catch (err) {
       callback({ success: false, message: 'Server error rejoining room.' });
     }
@@ -525,6 +543,7 @@ function admitUser(room, target, username) {
   target.roomId = room.code;
 
   target.emit('join-request-approved', { roomCode: room.code, token });
+  console.log(`[JOINER ADMITTED] room=${room.code} socket=${target.id} name="${username}"`);
   target.to(room.code).emit('user-connected', { username, socketId: target.id });
   broadcastUserList(room.code);
 }
