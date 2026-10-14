@@ -995,6 +995,76 @@
       transform: translateX(-50%) !important;
     }
 
+    /* ===== Landing navbar: sits at the top of the page ===== 
+       The navbar is placed at the top of the landing page and scrolls away with
+       the content (it no longer floats over the hero while scrolling). Its row
+       and link group have their own layout instead of relying on Tailwind
+       utility classes (flex / hidden / md:flex), which the CDN generates at
+       runtime; when those were late or blocked the links stacked down into the
+       hero. Sizes that the mobile rules above already set are left to those
+       rules (desktop sizes are scoped to min-width: 641px). */
+    #landing-view.liquid-landing .liquid-nav {
+      position: absolute !important;
+      top: max(12px, env(safe-area-inset-top)) !important;
+      right: auto !important;
+      bottom: auto !important;
+      left: 50% !important;
+      z-index: 100 !important;
+      display: block;
+      margin: 0 !important;
+      transform: translateX(-50%) !important;
+    }
+    #landing-view.liquid-landing .liquid-nav > div { display: flex; align-items: center; justify-content: space-between; gap: 16px; width: 100%; margin: 0; }
+    #landing-view.liquid-landing .brand-lockup { display: inline-flex; align-items: center; gap: 8px; flex: 0 0 auto; font-weight: 800; text-decoration: none; }
+    #landing-view.liquid-landing .liquid-nav-links { display: none; align-items: center; gap: 2rem; font-size: 0.875rem; font-weight: 600; line-height: 1.25rem; }
+    #landing-view.liquid-landing .liquid-nav-link { text-decoration: none; }
+    #landing-view.liquid-landing .nav-start { flex: 0 0 auto; font-weight: 700; line-height: 1.25rem; border-radius: 0.75rem; cursor: pointer; }
+    @media (min-width: 641px) {
+      #landing-view.liquid-landing .brand-lockup { font-size: 1.25rem; line-height: 1.75rem; }
+      #landing-view.liquid-landing .nav-start { padding: 0.5rem 1rem; font-size: 0.875rem; }
+    }
+    @media (min-width: 768px) {
+      #landing-view.liquid-landing .liquid-nav-links { display: flex; }
+    }
+
+    /* ===== Create / Join Room: readable link text =====
+       Beats the earlier midnight-theme rule (.entry-card #toggle-mode-btn).
+       The connection-status colors are set from updateConnectionStatus(). */
+    #entry-view.entry-stage .entry-card #toggle-mode-btn { color: #334155 !important; }
+    #entry-view.entry-stage .entry-card #toggle-mode-btn:hover { color: #0f172a !important; }
+
+    /* ===== Chat background color (conversation area only) =====
+       Driven by data-chat-bg / --chat-bg-color on #message-container (see
+       applyChatBgColor). Selectors out-rank the theme's !important gradient
+       rules so the chosen color shows true; nothing outside the conversation
+       area is touched. Message text, bubbles and timestamps keep their own
+       colors, so they stay readable on every swatch. */
+    #chat-view.chat-shell .message-stage[data-chat-bg] { background: var(--chat-bg-color) !important; }
+    #chat-view.chat-shell .message-stage[data-chat-bg] #chat-bg-layer { background: none !important; }
+    #chat-view.chat-shell .message-stage[data-chat-bg] #chat-bg-layer::after { background-image: radial-gradient(rgba(51, 65, 85, 0.16) 0.65px, transparent 0.65px) !important; }
+    #chat-view.chat-shell .message-stage[data-chat-bg] .bubble-them { background: #ffffff !important; border-color: rgba(15, 23, 42, 0.08) !important; box-shadow: 0 6px 18px rgba(15, 23, 42, 0.08), inset 0 1px 0 #ffffff !important; }
+    /* The typing indicator inherited a pale lavender (#c3c9e2) that was
+       unreadable on light backgrounds. */
+    #chat-view.chat-shell .typing-surface { color: var(--text-muted) !important; }
+
+    /* ===== Appearance modal: background color swatches ===== */
+    .bg-color-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+    @media (max-width: 420px) { .bg-color-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+    .bg-color-swatch { position: relative; display: flex; flex-direction: column; gap: 8px; padding: 8px; text-align: left; cursor: pointer; border: 1px solid var(--border-color); border-radius: 16px; background: var(--bg-surface); transition: transform 160ms var(--ease-out), box-shadow 160ms ease, border-color 160ms ease, background-color 160ms ease; }
+    .bg-color-swatch:hover { transform: translateY(-1px); border-color: var(--border-strong); box-shadow: var(--shadow-sm); }
+    .bg-color-swatch:focus-visible { outline: 3px solid var(--accent-wash); outline-offset: 2px; border-color: var(--accent-color); }
+    .bg-color-chip { position: relative; display: block; height: 46px; border: 1px solid rgba(15, 23, 42, 0.16); border-radius: 11px; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7); }
+    .bg-color-chip::before { content: ''; position: absolute; top: 5px; right: 5px; width: 20px; height: 20px; border-radius: 50%; background: var(--accent-color); box-shadow: 0 2px 6px rgba(15, 23, 42, 0.22); opacity: 0; transform: scale(0.6); transition: opacity 140ms ease, transform 160ms var(--ease-out); }
+    .bg-color-chip::after { content: ''; position: absolute; top: 9px; right: 12px; width: 5px; height: 9px; border: solid #ffffff; border-width: 0 2px 2px 0; opacity: 0; transform: rotate(45deg) scale(0.6); transition: opacity 140ms ease, transform 160ms var(--ease-out); }
+    .bg-color-name { color: var(--text-main); font-size: 0.78rem; font-weight: 600; line-height: 1.2; }
+    .bg-color-swatch[aria-pressed="true"] { background: #ffffff; border-color: var(--accent-color); box-shadow: 0 0 0 2px var(--accent-color), var(--shadow-sm); }
+    .bg-color-swatch[aria-pressed="true"] .bg-color-name { font-weight: 800; }
+    .bg-color-swatch[aria-pressed="true"] .bg-color-chip::before { opacity: 1; transform: scale(1); }
+    .bg-color-swatch[aria-pressed="true"] .bg-color-chip::after { opacity: 1; transform: rotate(45deg) scale(1); }
+    .bg-color-reset { padding: 4px 11px; color: var(--text-main); font-size: 0.72rem; font-weight: 700; cursor: pointer; border: 1px solid var(--border-color); border-radius: 999px; background: var(--bg-surface); transition: border-color 160ms ease, transform 160ms var(--ease-out); }
+    .bg-color-reset:hover { border-color: var(--border-strong); transform: translateY(-1px); }
+    .bg-color-reset[hidden] { display: none; }
+
     @media (prefers-reduced-motion: reduce) {
       *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; scroll-behavior: auto !important; transition-duration: 0.01ms !important; }
     }
@@ -1016,7 +1086,7 @@
         <a class="brand-lockup flex items-center gap-2 font-extrabold text-xl" href="#home" data-scroll-target="home" aria-label="TempChat home">
           <i class="fa-solid fa-paper-plane brand-mark" aria-hidden="true"></i><span>TempChat</span>
         </a>
-        <div class="hidden items-center gap-8 text-sm font-semibold md:flex">
+        <div class="liquid-nav-links hidden items-center gap-8 text-sm font-semibold md:flex">
           <a class="liquid-nav-link" href="#home" data-scroll-target="home">Home</a>
           <a class="liquid-nav-link" href="#features" data-scroll-target="features">Features</a>
           <a class="liquid-nav-link" href="#about" data-scroll-target="about">About</a>
@@ -1270,7 +1340,7 @@
         <!-- Live Preview -->
         <div>
           <label class="block text-xs font-bold uppercase tracking-wider text-[var(--text-muted)] mb-3">Live Preview</label>
-          <div class="bg-[var(--bg-base)] border border-[var(--border-color)] rounded-2xl p-4 flex flex-col gap-2 relative overflow-hidden transition-colors">
+          <div id="preview-surface" class="bg-[var(--bg-base)] border border-[var(--border-color)] rounded-2xl p-4 flex flex-col gap-2 relative overflow-hidden transition-colors">
             <div id="preview-bg" class="absolute inset-0 opacity-10 pointer-events-none"></div>
             <div class="bg-[var(--bubble-them)] text-[var(--text-bubble-them)] py-2 px-3 rounded-2xl rounded-tl-sm self-start max-w-[80%] text-sm z-10 shadow-sm border border-black/5 dark:border-white/5">
               Hey! 👋
@@ -1324,6 +1394,16 @@
               Dots
             </button>
           </div>
+        </div>
+
+        <!-- Background Color -->
+        <div>
+          <div class="flex items-center justify-between gap-3 mb-3">
+            <label id="bg-color-label" class="block text-xs font-bold uppercase tracking-wider text-[var(--text-muted)]">Background Color</label>
+            <button type="button" id="bg-color-reset" onclick="setChatBgColor('none')" class="bg-color-reset" hidden>Use default</button>
+          </div>
+          <!-- Swatches are generated from CHAT_BG_COLORS in the script below. -->
+          <div id="bg-color-grid" class="bg-color-grid" role="group" aria-labelledby="bg-color-label"></div>
         </div>
 
       </div>
@@ -1431,7 +1511,7 @@
     const AppState = {
       user: { id: null, username: '' },
       room: { code: '', users: [], token: '', isHost: false, pending: [] },
-      theme: { mode: 'light', accent: '#ec4899', bg: 'plain' },
+      theme: { mode: 'light', accent: '#ec4899', bg: 'plain', bgColor: 'none' },
       isMock: false,
       currentGame: null,
       gameSession: null
@@ -1740,11 +1820,75 @@
     })();
 
     // --- THEME ENGINE ---
-    function initTheme() {
-      const saved = localStorage.getItem('tempchat_theme');
-      if (saved) {
-        AppState.theme = { ...AppState.theme, ...JSON.parse(saved) };
+    // Conversation background colors. Visual preference only: the chosen id is
+    // saved with the other appearance settings under 'tempchat_theme'. No
+    // messages, keys, room codes or tokens are ever written to localStorage.
+    const CHAT_BG_COLORS = [
+      { id: 'mint',     name: 'Soft Mint',     hex: '#EAF7F0' },
+      { id: 'cream',    name: 'Warm Cream',    hex: '#FFF6E8' },
+      { id: 'sky',      name: 'Sky Mist',      hex: '#EAF4FF' },
+      { id: 'lavender', name: 'Lavender Haze', hex: '#F1EDFF' },
+      { id: 'rose',     name: 'Rose Blush',    hex: '#FFF0F3' },
+      { id: 'sand',     name: 'Neutral Sand',  hex: '#F3F0E8' }
+    ];
+
+    function renderBgColorSwatches() {
+      const grid = document.getElementById('bg-color-grid');
+      if (!grid || grid.childElementCount) return;
+      CHAT_BG_COLORS.forEach(({ id, name, hex }) => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'bg-color-swatch';
+        btn.dataset.bgColor = id;
+        btn.title = `${name} (${hex})`;
+        btn.setAttribute('aria-pressed', 'false');
+        btn.addEventListener('click', () => setChatBgColor(id));
+        const chip = document.createElement('span');
+        chip.className = 'bg-color-chip';
+        chip.style.backgroundColor = hex;
+        const label = document.createElement('span');
+        label.className = 'bg-color-name';
+        label.textContent = name;
+        btn.append(chip, label);
+        grid.appendChild(btn);
+      });
+    }
+
+    // Paints the conversation area (#message-container) and syncs the swatch UI.
+    // Unknown or missing saved values fall back to the default look.
+    function applyChatBgColor() {
+      const chosen = CHAT_BG_COLORS.find(c => c.id === AppState.theme.bgColor) || null;
+      AppState.theme.bgColor = chosen ? chosen.id : 'none';
+
+      const stage = document.getElementById('message-container');
+      if (stage) {
+        if (chosen) {
+          stage.dataset.chatBg = chosen.id;
+          stage.style.setProperty('--chat-bg-color', chosen.hex);
+        } else {
+          delete stage.dataset.chatBg;
+          stage.style.removeProperty('--chat-bg-color');
+        }
       }
+
+      const previewSurface = document.getElementById('preview-surface');
+      if (previewSurface) previewSurface.style.backgroundColor = chosen ? chosen.hex : '';
+
+      document.querySelectorAll('.bg-color-swatch').forEach((btn) => {
+        btn.setAttribute('aria-pressed', String(!!chosen && btn.dataset.bgColor === chosen.id));
+      });
+      const reset = document.getElementById('bg-color-reset');
+      if (reset) reset.hidden = !chosen;
+    }
+
+    function initTheme() {
+      renderBgColorSwatches();
+      try {
+        const saved = JSON.parse(localStorage.getItem('tempchat_theme') || 'null');
+        if (saved && typeof saved === 'object') {
+          AppState.theme = { ...AppState.theme, ...saved };
+        }
+      } catch (_) { /* Preferences unreadable or storage unavailable: keep defaults. */ }
       applyTheme();
     }
 
@@ -1782,6 +1926,8 @@
         if (bg === 'plain') previewBg.className = 'hidden';
       }
 
+      applyChatBgColor();
+
       // Update UI Toggles
       document.querySelectorAll('[id^="theme-btn-"]').forEach(el => el.classList.remove('ring-2', 'ring-[var(--accent-color)]'));
       document.getElementById(`theme-btn-${mode}`)?.classList.add('ring-2', 'ring-[var(--accent-color)]');
@@ -1793,12 +1939,13 @@
       document.querySelectorAll('[id^="bg-btn-"]').forEach(el => el.classList.remove('ring-2', 'ring-[var(--accent-color)]'));
       document.getElementById(`bg-btn-${bg}`)?.classList.add('ring-2', 'ring-[var(--accent-color)]');
 
-      localStorage.setItem('tempchat_theme', JSON.stringify(AppState.theme));
+      try { localStorage.setItem('tempchat_theme', JSON.stringify(AppState.theme)); } catch (_) { /* Storage unavailable: preference lasts for this session only. */ }
     }
 
     function setThemeMode(m) { AppState.theme.mode = m; applyTheme(); }
     function setAccent(c) { AppState.theme.accent = c; applyTheme(); }
     function setChatBg(b) { AppState.theme.bg = b; applyTheme(); }
+    function setChatBgColor(id) { AppState.theme.bgColor = id; applyTheme(); }
 
     const reducedMotionQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
     function syncMotionPreference() { document.documentElement.dataset.reducedMotion = reducedMotionQuery.matches ? 'true' : 'false'; }
@@ -2072,10 +2219,10 @@
       status.classList.remove('hidden');
       status.textContent = socketConnectionMessage;
       status.style.color = socketConnectionState === 'connected'
-        ? '#9af0cf'
+        ? '#15803D'
         : socketConnectionState === 'connecting'
-          ? '#c9c4ff'
-          : '#ffadbd';
+          ? '#1D4ED8'
+          : '#DC2626';
     }
 
     function setSocketConnectionState(state, message) {
