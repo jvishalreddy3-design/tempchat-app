@@ -6,17 +6,45 @@ const { Server } = require('socket.io');
 
 const app = express();
 const server = http.createServer(app);
+const MAX_FILE_BYTES = 50 * 1024 * 1024;
+const MAX_FILE_CHUNK_BYTES = 1024 * 1024;
+const MAX_SOCKET_PAYLOAD_BYTES = 75 * 1024 * 1024;
+const allowedOrigins = new Set(
+  (process.env.CORS_ORIGINS || [
+    'https://tempchat-app-backend.onrender.com',
+    'http://localhost:3000',
+    'http://127.0.0.1:3000',
+    'https://localhost',
+    'capacitor://localhost'
+  ].join(','))
+    .split(',')
+    .map((origin) => origin.trim())
+    .filter(Boolean)
+);
+
 const io = new Server(server, {
-  cors: { origin: '*' }
+  maxHttpBufferSize: MAX_SOCKET_PAYLOAD_BYTES,
+  cors: {
+    origin(origin, callback) {
+      // Native Capacitor WebViews and non-browser Socket.IO clients may omit
+      // Origin. Browser callers must be explicitly allowed.
+      if (!origin || allowedOrigins.has(origin)) return callback(null, true);
+      return callback(new Error('Origin is not allowed by CORS'));
+    },
+    methods: ['GET', 'POST'],
+    credentials: false
+  }
 });
 
+app.disable('x-powered-by');
 app.use(express.static(path.join(__dirname, '..', 'frontend')));
+app.get('/health', (_request, response) => response.json({ ok: true }));
 
 const rooms = new Map();
 const rateLimits = new Map();
 
 function generateRoomCode() {
-  return Math.random().toString(36).substring(2, 7).toUpperCase();
+  return crypto.randomInt(100000, 1000000).toString();
 }
 
 function checkRateLimit(socket) {
@@ -55,6 +83,53 @@ function newToken() {
 
 function cleanName(value) {
   return String(value || '').replace(/\s+/g, ' ').trim().slice(0, 30);
+}
+
+function isValidRoomCode(value) {
+  return typeof value === 'string' && /^\d{6}$/.test(value);
+}
+
+function isValidId(value) {
+  return typeof value === 'string' && value.length >= 8 && value.length <= 160;
+}
+
+function isBase64(value, maxLength = 65536) {
+  return typeof value === 'string'
+    && value.length > 0
+    && value.length <= maxLength
+    && /^[A-Za-z0-9+/=_-]+$/.test(value);
+}
+
+function isValidFilePayload(file) {
+  if (!file || typeof file !== 'object') return false;
+  if (typeof file.fid !== 'string' || file.fid.length > 128) return false;
+  if (typeof file.name !== 'string' || file.name.length > 255) return false;
+  if (typeof file.type !== 'string' || file.type.length > 128) return false;
+  if (!Number.isSafeInteger(file.size) || file.size <= 0 || file.size > MAX_FILE_BYTES) return false;
+  if (!isBase64(file.salt, 256) || !Array.isArray(file.chunks) || file.chunks.length < 1 || file.chunks.length > 1024) return false;
+
+  let decryptedSize = 0;
+  for (let index = 0; index < file.chunks.length; index++) {
+    const chunk = file.chunks[index];
+    if (!chunk || chunk.idx !== index || !isBase64(chunk.iv, 256)) return false;
+    const maxEncodedChunkLength = Math.ceil((MAX_FILE_CHUNK_BYTES + 16) * 4 / 3) + 4;
+    if (!isBase64(chunk.ct, maxEncodedChunkLength)) return false;
+    const normalized = chunk.ct.replace(/-/g, '+').replace(/_/g, '/');
+    const ciphertextBytes = Math.floor(normalized.length * 3 / 4) - (normalized.endsWith('==') ? 2 : normalized.endsWith('=') ? 1 : 0);
+    const plaintextBytes = ciphertextBytes - 16; // AES-GCM authentication tag
+    if (plaintextBytes < 0 || plaintextBytes > MAX_FILE_CHUNK_BYTES) return false;
+    decryptedSize += plaintextBytes;
+  }
+
+  return decryptedSize === file.size;
+}
+
+function isValidEncryptedPayload(payload, socket, room) {
+  if (!payload || typeof payload !== 'object' || payload.v !== 1) return false;
+  if (!isValidId(payload.id) || payload.from !== socket.id || typeof payload.to !== 'string') return false;
+  if (!room.users.has(payload.to) || payload.to === socket.id) return false;
+  if (payload.file) return isValidFilePayload(payload.file);
+  return isBase64(payload.ct) && isBase64(payload.iv, 256) && isBase64(payload.salt, 256);
 }
 
 function pendingList(room) {
@@ -127,8 +202,9 @@ io.on('connection', (socket) => {
       }
 
       const username = cleanName(data.username);
-      const roomId = String(data.roomCode).trim().toUpperCase();
+      const roomId = String(data.roomCode).trim();
       if (!username) return callback({ success: false, message: 'Invalid data' });
+      if (!isValidRoomCode(roomId)) return callback({ success: false, message: 'Enter a valid six-digit room code' });
 
       const room = rooms.get(roomId);
       if (!room) return callback({ success: false, message: 'Room not found' });
@@ -223,7 +299,8 @@ io.on('connection', (socket) => {
         return callback({ success: false, message: 'Invalid data' });
       }
 
-      const roomId = String(data.roomCode).trim().toUpperCase();
+      const roomId = String(data.roomCode).trim();
+      if (!isValidRoomCode(roomId)) return callback({ success: false, message: 'Enter a valid six-digit room code' });
       const room = rooms.get(roomId);
       if (!room) return callback({ success: false, message: 'Room not found' });
 
@@ -283,28 +360,28 @@ io.on('connection', (socket) => {
   });
 
   socket.on('chat-message', (payload) => {
-    if (!socket.roomId || !payload) return;
-    
-    if (JSON.stringify(payload).length > 65536) return;
+    const room = socket.roomId ? rooms.get(socket.roomId) : null;
+    if (!room) return;
 
     if (!checkRateLimit(socket)) {
       socket.emit('rate-limited');
       return;
     }
 
-    if (payload.id) {
-      socket.to(socket.roomId).emit('chat-message', payload);
-      socket.emit('message:delivered', { id: payload.id });
-    }
+    if (!isValidEncryptedPayload(payload, socket, room)) return;
+    if (JSON.stringify(payload).length > MAX_SOCKET_PAYLOAD_BYTES) return;
+
+    io.to(payload.to).emit('chat-message', payload);
+    socket.emit('message:delivered', { id: payload.id });
   });
 
   socket.on('message:seen', (payload) => {
-    if (!socket.roomId || !payload || !payload.id) return;
+    if (!socket.roomId || !payload || !isValidId(payload.id)) return;
     socket.to(socket.roomId).emit('message:seen', { id: payload.id });
   });
 
   socket.on('e2ee:public-key', (payload) => {
-    if (!socket.roomId || !payload || !payload.publicKey) return;
+    if (!socket.roomId || !payload || !isBase64(payload.publicKey, 256)) return;
     socket.to(socket.roomId).emit('e2ee:public-key', {
       sender: socket.id,
       publicKey: payload.publicKey
@@ -336,9 +413,11 @@ io.on('connection', (socket) => {
   });
 
   socket.on('typing', (payload) => {
-    if (!socket.roomId) return;
+    const room = socket.roomId ? rooms.get(socket.roomId) : null;
+    const user = room?.users.get(socket.id);
+    if (!user) return;
     socket.to(socket.roomId).emit('typing', {
-      sender: String(payload?.sender || ''),
+      sender: user.username,
       isTyping: Boolean(payload?.isTyping)
     });
   });

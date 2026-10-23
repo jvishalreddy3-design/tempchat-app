@@ -1,7 +1,7 @@
 {
   "name": "tempchat",
   "version": "1.0.0",
-  "description": "Temporary chat rooms with end-to-end encrypted messages (E2EE via Web Crypto: ECDH + AES-256-GCM).",
+  "description": "Temporary chat rooms with Socket.IO message routing and Web Crypto client features.",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
