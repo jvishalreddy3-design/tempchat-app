@@ -3,17 +3,24 @@ const http = require('http');
 const path = require('path');
 const crypto = require('crypto');
 const { Server } = require('socket.io');
+const { readConfig } = require('./config');
+const { PgStore } = require('./pg-store');
+const { createAccountService, errorHandler: accountErrorHandler } = require('./accounts');
+const { installSocialSockets } = require('./social-sockets');
 
 const app = express();
 const server = http.createServer(app);
 const MAX_FILE_BYTES = 50 * 1024 * 1024;
 const MAX_FILE_CHUNK_BYTES = 1024 * 1024;
 const MAX_SOCKET_PAYLOAD_BYTES = 75 * 1024 * 1024;
+const MESSAGE_DELIVERY_TIMEOUT_MS = 5000;
 const allowedOrigins = new Set(
   (process.env.CORS_ORIGINS || [
     'https://tempchat-app-backend.onrender.com',
     'http://localhost:3000',
+    'http://localhost:3011',
     'http://127.0.0.1:3000',
+    'http://127.0.0.1:3011',
     'https://localhost',
     'capacitor://localhost'
   ].join(','))
@@ -21,24 +28,87 @@ const allowedOrigins = new Set(
     .map((origin) => origin.trim())
     .filter(Boolean)
 );
+if (process.env.APP_ORIGIN) allowedOrigins.add(process.env.APP_ORIGIN.trim());
 
 const io = new Server(server, {
   maxHttpBufferSize: MAX_SOCKET_PAYLOAD_BYTES,
   cors: {
     origin(origin, callback) {
-      // Native Capacitor WebViews and non-browser Socket.IO clients may omit
-      // Origin. Browser callers must be explicitly allowed.
       if (!origin || allowedOrigins.has(origin)) return callback(null, true);
       return callback(new Error('Origin is not allowed by CORS'));
     },
     methods: ['GET', 'POST'],
-    credentials: false
+    credentials: true
   }
 });
 
 app.disable('x-powered-by');
+app.set('trust proxy', 1);
+app.use((req, res, next) => {
+  const origin = req.get('origin');
+  if (!origin) return next();
+  if (!allowedOrigins.has(origin)) {
+    return res.status(403).json({ error: { code: 'origin_not_allowed', message: 'This application origin is not allowed.' } });
+  }
+  res.vary('Origin');
+  res.set({
+    'Access-Control-Allow-Origin': origin,
+    'Access-Control-Allow-Credentials': 'true',
+    'Access-Control-Allow-Headers': 'Authorization, Content-Type, X-TempChat-Client',
+    'Access-Control-Allow-Methods': 'GET, HEAD, OPTIONS, POST, PATCH, DELETE'
+  });
+  if (req.method === 'OPTIONS') return res.status(204).end();
+  return next();
+});
+app.use(require('express').json({ limit: '32kb', strict: true }));
+app.use((req, _res, next) => {
+  req.cookies = Object.create(null);
+  for (const part of String(req.headers.cookie || '').split(';')) {
+    const index = part.indexOf('=');
+    if (index > 0) {
+      const key = part.slice(0, index).trim();
+      try { req.cookies[key] = decodeURIComponent(part.slice(index + 1).trim()); } catch (_) { /* ignore malformed cookie */ }
+    }
+  }
+  next();
+});
 app.use(express.static(path.join(__dirname, '..', 'frontend')));
 app.get('/health', (_request, response) => response.json({ ok: true }));
+app.get('/ready', (_request, response) => response.json({ ok: Boolean(accountService), accounts: Boolean(accountService) }));
+let accountService = null;
+let pgStore = null;
+const accountRequestBuckets = new Map();
+app.use('/api/auth', (req, res, next) => {
+  const now = Date.now();
+  const key = `${req.ip || 'unknown'}:${req.path.split('/')[1] || 'auth'}`;
+  let bucket = accountRequestBuckets.get(key);
+  if (!bucket || now - bucket.startedAt > 15 * 60 * 1000) {
+    bucket = { startedAt: now, count: 0 };
+    accountRequestBuckets.set(key, bucket);
+  }
+  bucket.count++;
+  if (accountRequestBuckets.size > 10000) {
+    for (const [bucketKey, value] of accountRequestBuckets) if (now - value.startedAt > 15 * 60 * 1000) accountRequestBuckets.delete(bucketKey);
+  }
+  if (bucket.count > 30) {
+    res.set('Retry-After', '900');
+    return res.status(429).json({ error: { code: 'rate_limited', message: 'Too many account requests. Try again later.' } });
+  }
+  next();
+});
+
+io.use(async (socket, next) => {
+  const token = socket.handshake.auth?.accessToken;
+  if (!token) return next(); // Guest sockets retain the existing room-only capability.
+  if (!accountService) return next(new Error('Account services are temporarily unavailable.'));
+  try {
+    const user = await accountService.authenticateAccessToken(String(token));
+    socket.accountUser = { id: user._id, username: user.username, displayName: user.displayName, avatarUrl: user.avatarUrl || null, emailVerified: Boolean(user.emailVerified) };
+    const claims = require('jsonwebtoken').decode(String(token));
+    socket.accountAuthExpiresAt = Number(claims?.exp || 0) * 1000;
+    next();
+  } catch (_) { next(new Error('Your account session expired.')); }
+});
 
 const rooms = new Map();
 const rateLimits = new Map();
@@ -175,7 +245,7 @@ io.on('connection', (socket) => {
       };
       rooms.set(roomId, room);
 
-      room.users.set(socket.id, { id: socket.id, username, token: hostToken });
+      room.users.set(socket.id, { id: socket.id, username, token: hostToken, accountId: socket.accountUser?.id || null });
 
       socket.join(roomId);
       socket.roomId = roomId;
@@ -332,7 +402,7 @@ io.on('connection', (socket) => {
       clearTimeout(room.emptyTimer);
       room.emptyTimer = null;
 
-      room.users.set(socket.id, { id: socket.id, username, token });
+      room.users.set(socket.id, { id: socket.id, username, token, accountId: socket.accountUser?.id || null });
       socket.join(roomId);
       socket.roomId = roomId;
 
@@ -371,8 +441,23 @@ io.on('connection', (socket) => {
     if (!isValidEncryptedPayload(payload, socket, room)) return;
     if (JSON.stringify(payload).length > MAX_SOCKET_PAYLOAD_BYTES) return;
 
-    io.to(payload.to).emit('chat-message', payload);
-    socket.emit('message:delivered', { id: payload.id });
+    const recipient = io.sockets.sockets.get(payload.to);
+    if (!recipient || recipient.roomId !== socket.roomId || !room.users.has(recipient.id)) {
+      socket.emit('message:delivery-failed', { id: payload.id, to: payload.to });
+      return;
+    }
+
+    // A Socket.IO emit only proves that the server tried to route the payload.
+    // Mark it delivered only after the recipient client confirms handling it.
+    io.to(recipient.id).timeout(MESSAGE_DELIVERY_TIMEOUT_MS).emit('chat-message', payload, (error, acknowledgements) => {
+      if (error || !acknowledgements?.some((ack) => ack?.received === true)) {
+        socket.emit('message:delivery-failed', { id: payload.id, to: recipient.id });
+        return;
+      }
+      if (socket.connected && socket.roomId === room.code && room.users.has(socket.id)) {
+        socket.emit('message:delivered', { id: payload.id, to: recipient.id });
+      }
+    });
   });
 
   socket.on('message:seen', (payload) => {
@@ -606,7 +691,8 @@ function broadcastUserList(roomId) {
   const userList = Array.from(room.users.values()).map((user) => ({
     id: user.id,
     username: user.username,
-    isHost: user.id === room.hostId
+    isHost: user.id === room.hostId,
+    accountId: user.accountId || null
   }));
 
   io.to(roomId).emit('update-users', userList);
@@ -616,7 +702,7 @@ function broadcastUserList(roomId) {
 function admitUser(room, target, username) {
   const token = newToken();
   room.members.set(token, { username });
-  room.users.set(target.id, { id: target.id, username, token });
+  room.users.set(target.id, { id: target.id, username, token, accountId: target.accountUser?.id || null });
 
   target.join(room.code);
   target.roomId = room.code;
@@ -671,12 +757,51 @@ function closeRoom(room, message) {
   rooms.delete(room.code);
 }
 
-const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => {
-  console.log(`✅ Chatting app server running on http://localhost:${PORT}`);
-  console.log(`🔌 Socket.IO server ready`);
-});
+async function start() {
+  const config = readConfig({ allowTestMode: true });
+  if (!config.testMode) {
+    pgStore = await PgStore.connect(config);
+    accountService = createAccountService({ store: pgStore, config, io });
+    app.use('/api/auth', accountService.router);
+    app.use(accountErrorHandler);
+    installSocialSockets(io, pgStore, accountService);
+    console.log('✅ PostgreSQL connected; account and social features ready.');
+  } else {
+    console.warn('⚠️ TEMPCHAT_TEST_MODE enabled: account features are disabled; only isolated room tests are available.');
+  }
 
-server.on("error", (error) => {
-  console.error("❌ Server error:", error);
-});
+  await new Promise((resolve, reject) => {
+    server.once('error', reject);
+    server.listen(config.port, () => {
+      server.removeListener('error', reject);
+      console.log(`✅ Chatting app server running on port ${config.port}`);
+      console.log('🔌 Socket.IO server ready');
+      resolve();
+    });
+  });
+}
+
+async function shutdown(signal) {
+  console.log(`Received ${signal}; closing TempChat cleanly.`);
+  io.close();
+  if (pgStore) await pgStore.close();
+  if (server.listening) server.close(() => process.exit(0));
+  else process.exit(0);
+}
+
+if (require.main === module) {
+  start().catch((error) => {
+    const safeMessage = /^Missing required environment variable: [A-Z0-9_]+$/.test(error.message)
+      || /^(JWT_SECRET must|Invalid .* configuration)/.test(error.message)
+      ? error.message
+      : `Database or service initialization failed (${error.code || error.name || 'unknown_error'}). Check deployment configuration without printing secret values.`;
+    console.error(`TempChat startup failed: ${safeMessage}`);
+    process.exitCode = 1;
+  });
+  process.once('SIGTERM', () => shutdown('SIGTERM'));
+  process.once('SIGINT', () => shutdown('SIGINT'));
+}
+
+server.on('error', (error) => console.error('❌ Server error:', error));
+
+module.exports = { app, server, io, start, rooms, readConfig };

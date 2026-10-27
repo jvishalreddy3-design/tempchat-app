@@ -36,7 +36,7 @@ function connect() {
 async function run() {
   server = spawn(process.execPath, ['server.js'], {
     cwd: __dirname.replace(/[\\/]test$/, ''),
-    env: { ...process.env, PORT: String(port) },
+    env: { ...process.env, PORT: String(port), TEMPCHAT_TEST_MODE: 'true' },
     stdio: ['ignore', 'pipe', 'pipe']
   });
   const serverReady = new Promise((resolve, reject) => {
