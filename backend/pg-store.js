@@ -11,6 +11,35 @@ function safePgErrorMessage(error) {
   return String(error?.message || 'Unknown PostgreSQL error');
 }
 
+function isValidPemCertificate(cert) {
+  if (!cert || typeof cert !== 'string') return false;
+  const trimmed = cert.trim();
+  return trimmed.startsWith('-----BEGIN CERTIFICATE-----') && trimmed.endsWith('-----END CERTIFICATE-----');
+}
+
+function buildSslConfig(config) {
+  if (config.pgSsl === 'false') {
+    return false;
+  }
+
+  const caCert = config.pgCaCert || '';
+
+  if (caCert) {
+    if (!isValidPemCertificate(caCert)) {
+      throw new Error(
+        'Invalid SUPABASE_CA_CERT: expected a PEM-formatted certificate starting with "-----BEGIN CERTIFICATE-----" and ending with "-----END CERTIFICATE-----".'
+      );
+    }
+    return { ca: caCert, rejectUnauthorized: true };
+  }
+
+  throw new Error(
+    'Missing required environment variable: SUPABASE_CA_CERT. ' +
+    'Provide the Supabase CA certificate to verify server TLS certificates. ' +
+    'Set PG_SSL=false only if you intentionally want to disable SSL (not recommended for production).'
+  );
+}
+
 // Pair key: sorted "smallerId:largerId" for friendships and friend requests.
 function pairKey(a, b) {
   return [a, b].sort().join(':');
@@ -27,9 +56,11 @@ class PgStore {
       throw new Error('Missing required environment variable: DATABASE_URL');
     }
 
+    const sslConfig = buildSslConfig(config);
+
     const pool = new Pool({
       connectionString,
-      ssl: config.pgSsl !== 'false', // Supabase requires SSL by default
+      ssl: sslConfig,
       max: 20,
       min: 0,
       idleTimeoutMillis: 30000,
@@ -699,4 +730,4 @@ class PgStore {
   }
 }
 
-module.exports = { PgStore, pairKey };
+module.exports = { PgStore, pairKey, buildSslConfig, isValidPemCertificate };

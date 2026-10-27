@@ -26,6 +26,7 @@ function readConfig({ allowTestMode = false } = {}) {
     mongoDbName: process.env.MONGODB_DB_NAME || 'tempchat',
     databaseUrl: process.env.DATABASE_URL || '',
     pgSsl: process.env.PG_SSL !== 'false' ? 'true' : 'false',
+    pgCaCert: process.env.SUPABASE_CA_CERT || '',
     jwtSecret: process.env.JWT_SECRET || '',
     webOrigin: process.env.APP_ORIGIN || 'https://tempchat-app-backend.onrender.com'
   };
