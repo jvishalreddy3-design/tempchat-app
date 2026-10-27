@@ -18,6 +18,9 @@
   <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
   <script>if (typeof window.io !== 'function') { document.write('<script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.5/socket.io.min.js"><\/script>'); }</script>
   <script>if (typeof window.io !== 'function') { document.write('<script src="https://cdn.jsdelivr.net/npm/socket.io-client@4.7.5/dist/socket.io.min.js"><\/script>'); }</script>
+  <!-- Three.js & GSAP for Cinematic Intro -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
 
   <script>
     tailwind.config = {
@@ -1079,6 +1082,18 @@
        VIEW 1: LANDING PAGE
        ========================================== -->
   <div id="landing-view" class="landing-experience liquid-landing flex-1 overflow-y-auto w-full h-full absolute inset-0 z-40 transition-opacity duration-500">
+    <!-- Cinematic Intro Overlay -->
+    <div id="cinematic-intro" class="fixed inset-0 z-[2000] bg-[#fff0f5] flex items-center justify-center overflow-hidden">
+      <canvas id="pigeon-canvas" class="absolute inset-0 w-full h-full block"></canvas>
+      <div class="absolute bottom-16 left-1/2 transform -translate-x-1/2 z-30 flex flex-col items-center gap-4 pointer-events-none text-center">
+        <h1 id="cinematic-title" class="text-5xl font-extrabold text-[#5b183d] tracking-tighter leading-tight opacity-0 transition-opacity duration-1000 sm:text-6xl">TEMPCHAT</h1>
+        <p id="cinematic-subtitle" class="text-lg text-[#6b2137] opacity-0 transition-opacity duration-1000 sm:text-xl max-w-md px-4">From Ancient Messages to Instant Connections</p>
+        <p id="cinematic-storyline" class="text-sm text-[#8b4a62] opacity-0 transition-opacity duration-1000 mt-2 max-w-xs px-4 sm:text-base">A message travels on wings...</p>
+      </div>
+      <button id="skip-intro" class="absolute top-6 right-6 z-40 px-5 py-2.5 rounded-full bg-white/90 text-[#5b183d] font-bold shadow-md hover:bg-white transition-all backdrop-blur-sm">Skip Intro</button>
+      <button id="replay-intro" class="absolute bottom-8 left-1/2 transform -translate-x-1/2 z-40 hidden px-5 py-2.5 rounded-full bg-white/90 text-[#5b183d] font-bold shadow-md hover:bg-white transition-all backdrop-blur-sm">Replay</button>
+      <button id="enter-app-btn" class="absolute bottom-8 right-6 z-40 hidden px-7 py-3 rounded-full bg-[#d478a8] text-white font-bold shadow-xl hover:bg-[#c06894] transition-all backdrop-blur-sm">Start Chatting</button>
+    </div>
     <div class="liquid-field" aria-hidden="true"><span class="liquid-orb liquid-orb--one"></span><span class="liquid-orb liquid-orb--two"></span><span class="liquid-orb liquid-orb--three"></span></div>
     <div class="petal-field" aria-hidden="true"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></div>
     <nav class="product-nav liquid-nav z-50">
@@ -3417,11 +3432,592 @@
       }
     }
 
+    // ========================================================================
+    // CINEMATIC INTRO — Pigeon Messenger Story
+    // ========================================================================
+    let cinematicIntro = null;
+
+    function initCinematicIntro() {
+      const reduced = document.documentElement.dataset.reducedMotion === 'true';
+      const canvas = document.getElementById('pigeon-canvas');
+      const overlay = document.getElementById('cinematic-intro');
+      const skipBtn = document.getElementById('skip-intro');
+      const replayBtn = document.getElementById('replay-intro');
+      const enterBtn = document.getElementById('enter-app-btn');
+      const titleEl = document.getElementById('cinematic-title');
+      const subtitleEl = document.getElementById('cinematic-subtitle');
+      const storylineEl = document.getElementById('cinematic-storyline');
+
+      if (!canvas || !overlay) return;
+
+      // Reduced motion fallback: skip 3D, go straight to UI
+      if (reduced) {
+        overlay.style.display = 'none';
+        enterBtn.classList.remove('hidden');
+        enterBtn.addEventListener('click', () => showEntryView('create'));
+        return;
+      }
+
+      // Three.js setup (with WebGL fallback)
+      let threeReady = false;
+      let scene, camera, renderer;
+      try {
+        scene = new THREE.Scene();
+        scene.fog = new THREE.FogExp2(0xfff0f5, 0.0015);
+
+        camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 0.1, 2000);
+        camera.position.set(0, 12, 25);
+
+        renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        renderer.setClearColor(0xfff0f5, 1);
+
+        // Lights
+        const ambientLight = new THREE.AmbientLight(0xffeef5, 0.6);
+        scene.add(ambientLight);
+
+        const sunLight = new THREE.DirectionalLight(0xfff0f5, 1.2);
+        sunLight.position.set(30, 50, 30);
+        sunLight.castShadow = true;
+        sunLight.shadow.camera.left = -60;
+        sunLight.shadow.camera.right = 60;
+        sunLight.shadow.camera.top = 60;
+        sunLight.shadow.camera.bottom = -60;
+        sunLight.shadow.mapSize.width = 2048;
+        sunLight.shadow.mapSize.height = 2048;
+        scene.add(sunLight);
+
+        const fillLight = new THREE.DirectionalLight(0xe1bee7, 0.4);
+        fillLight.position.set(-30, 20, -10);
+        scene.add(fillLight);
+
+        threeReady = true;
+      } catch (e) {
+        console.warn('Three.js initialization failed:', e.message);
+        // Fallback: skip 3D, show UI directly
+        overlay.style.display = 'none';
+        enterBtn.classList.remove('hidden');
+        replayBtn.classList.remove('hidden');
+        enterBtn.addEventListener('click', () => showEntryView('create'));
+        return;
+      }
+
+      // ===== HELPERS =====
+      function createPigeon() {
+        const group = new THREE.Group();
+
+        // Body
+        const bodyGeo = new THREE.SphereGeometry(1.2, 12, 10);
+        bodyGeo.scale(1, 0.8, 1.4);
+        const bodyMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.4, metalness: 0.1 });
+        const body = new THREE.Mesh(bodyGeo, bodyMat);
+        body.position.y = 0.6;
+        body.castShadow = true;
+        group.add(body);
+
+        // Head
+        const headGeo = new THREE.SphereGeometry(0.55, 10, 8);
+        const head = new THREE.Mesh(headGeo, bodyMat);
+        head.position.set(0, 1.25, 0.6);
+        head.castShadow = true;
+        group.add(head);
+
+        // Beak
+        const beakGeo = new THREE.ConeGeometry(0.15, 0.6, 6);
+        beakGeo.rotateX(Math.PI / 2);
+        const beakMat = new THREE.MeshStandardMaterial({ color: 0xffe9a6 });
+        const beak = new THREE.Mesh(beakGeo, beakMat);
+        beak.position.set(0, 1.15, 1.1);
+        beak.castShadow = true;
+        group.add(beak);
+
+        // Eyes
+        const eyeGeo = new THREE.SphereGeometry(0.08, 6, 4);
+        const eyeMat = new THREE.MeshStandardMaterial({ color: 0x222222 });
+        const eyeL = new THREE.Mesh(eyeGeo, eyeMat);
+        eyeL.position.set(-0.18, 1.35, 0.85);
+        const eyeR = new THREE.Mesh(eyeGeo, eyeMat);
+        eyeR.position.set(0.18, 1.35, 0.85);
+        group.add(eyeL, eyeR);
+
+        // Wings (left & right)
+        const wingGeo = new THREE.CylinderGeometry(0, 1.8, 1.2, 8, 1, true);
+        wingGeo.rotateZ(Math.PI / 2);
+        wingGeo.translate(0, 0, -0.3);
+        const wingMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.5, side: THREE.DoubleSide });
+
+        const wingL = new THREE.Mesh(wingGeo, wingMat);
+        wingL.position.set(-1.0, 1.0, 0);
+        wingL.rotation.z = -0.4;
+        wingL.castShadow = true;
+        group.add(wingL);
+
+        const wingR = new THREE.Mesh(wingGeo, wingMat);
+        wingR.position.set(1.0, 1.0, 0);
+        wingR.rotation.z = 0.4;
+        wingR.castShadow = true;
+        group.add(wingR);
+
+        // Tail
+        const tailGeo = new THREE.CylinderGeometry(0, 0.9, 0.8, 6, 1, true);
+        const tail = new THREE.Mesh(tailGeo, bodyMat);
+        tail.position.set(0, 0.7, -0.9);
+        tail.rotation.x = -0.6;
+        tail.castShadow = true;
+        group.add(tail);
+
+        // Legs
+        const legGeo = new THREE.CylinderGeometry(0.05, 0.05, 0.4, 4);
+        const legMat = new THREE.MeshStandardMaterial({ color: 0xffd6ba });
+        const legL = new THREE.Mesh(legGeo, legMat);
+        legL.position.set(-0.2, 0.2, 0.3);
+        legL.rotation.x = -0.4;
+        legL.castShadow = true;
+        group.add(legL);
+        const legR = new THREE.Mesh(legGeo, legMat);
+        legR.position.set(0.2, 0.2, 0.3);
+        legR.rotation.x = -0.4;
+        legR.castShadow = true;
+        group.add(legR);
+
+        // Message scroll attached to leg
+        const scrollGeo = new THREE.BoxGeometry(0.15, 0.03, 0.5);
+        const scrollMat = new THREE.MeshStandardMaterial({ color: 0xffe9a6 });
+        const scroll = new THREE.Mesh(scrollGeo, scrollMat);
+        scroll.position.set(-0.05, 0.15, 0.55);
+        scroll.rotation.z = -0.2;
+        scroll.castShadow = true;
+        group.add(scroll);
+
+        // Animation state
+        group.userData = {
+          wingL, wingR, body, scroll,
+          flapTime: 0,
+          isFlying: false,
+          flapSpeed: 12
+        };
+
+        scene.add(group);
+        return group;
+      }
+
+      function createMountain(x, z, size, color = 0xffeef5) {
+        const group = new THREE.Group();
+        const peaks = Math.floor(Math.random() * 3) + 2;
+        for (let i = 0; i < peaks; i++) {
+          const h = size * (0.5 + Math.random() * 0.8);
+          const geo = new THREE.ConeGeometry(size * (0.6 + Math.random() * 0.6), h, 6);
+          geo.rotateY(Math.random() * Math.PI * 2);
+          const mat = new THREE.MeshStandardMaterial({ color, roughness: 1, flatShading: true });
+          const mesh = new THREE.Mesh(geo, mat);
+          mesh.position.set(
+            (Math.random() - 0.5) * size * 0.4,
+            h / 2,
+            (Math.random() - 0.5) * size * 0.4
+          );
+          mesh.castShadow = true;
+          mesh.receiveShadow = true;
+          group.add(mesh);
+        }
+        group.position.set(x, 0, z);
+        scene.add(group);
+        return group;
+      }
+
+      function createTree(x, z) {
+        const group = new THREE.Group();
+        // Trunk
+        const trunkGeo = new THREE.CylinderGeometry(0.15, 0.25, 1.2, 6);
+        const trunkMat = new THREE.MeshStandardMaterial({ color: 0x5d4037 });
+        const trunk = new THREE.Mesh(trunkGeo, trunkMat);
+        trunk.position.y = 0.6;
+        trunk.castShadow = true;
+        group.add(trunk);
+        // Leaves
+        const leavesGeo = new THREE.ConeGeometry(0.9, 1.6, 6);
+        const leavesMat = new THREE.MeshStandardMaterial({ color: 0x4caf50 });
+        const leaves = new THREE.Mesh(leavesGeo, leavesMat);
+        leaves.position.y = 1.7;
+        leaves.castShadow = true;
+        group.add(leaves);
+        group.position.set(x, 0, z);
+        scene.add(group);
+        return group;
+      }
+
+      function createPalace(x, y, z) {
+        const group = new THREE.Group();
+        // Main keep
+        const keepGeo = new THREE.BoxGeometry(6, 8, 6);
+        const keepMat = new THREE.MeshStandardMaterial({ color: 0xffeef5, roughness: 0.7 });
+        const keep = new THREE.Mesh(keepGeo, keepMat);
+        keep.position.set(0, 4, 0);
+        keep.castShadow = true;
+        keep.receiveShadow = true;
+        group.add(keep);
+
+        // Towers
+        for (let i = 0; i < 4; i++) {
+          const angle = (i * Math.PI) / 2;
+          const towerGeo = new THREE.CylinderGeometry(0.8, 0.8, 4, 6);
+          const tower = new THREE.Mesh(towerGeo, keepMat);
+          tower.position.set(Math.cos(angle) * 3.2, 2, Math.sin(angle) * 3.2);
+          tower.castShadow = true;
+          group.add(tower);
+          // Roof
+          const roofGeo = new THREE.ConeGeometry(1, 1, 6, 1, true);
+          const roof = new THREE.Mesh(roofGeo, new THREE.MeshStandardMaterial({ color: 0xffd6ba }));
+          roof.position.set(0, 2.1, 0);
+          roof.rotation.z = angle;
+          roof.position.x = Math.cos(angle) * 0.4;
+          roof.position.z = Math.sin(angle) * 0.4;
+          group.add(roof);
+        }
+
+        // Balcony
+        const balconyGeo = new THREE.BoxGeometry(5, 0.1, 1);
+        const balcony = new THREE.Mesh(balconyGeo, new THREE.MeshStandardMaterial({ color: 0xe1bee7 }));
+        balcony.position.set(0, 4.2, 2.8);
+        group.add(balcony);
+
+        group.position.set(x, y, z);
+        scene.add(group);
+        return group;
+      }
+
+      function createKing(x, y, z) {
+        const group = new THREE.Group();
+        // Body/robe
+        const robeGeo = new THREE.CylinderGeometry(0.7, 1.1, 1.8, 8);
+        const robeMat = new THREE.MeshStandardMaterial({ color: 0x8d1c50 });
+        const robe = new THREE.Mesh(robeGeo, robeMat);
+        robe.position.y = 0.9;
+        robe.castShadow = true;
+        group.add(robe);
+
+        // Head
+        const headGeo = new THREE.SphereGeometry(0.35, 8, 6);
+        const headMat = new THREE.MeshStandardMaterial({ color: 0xffe9a6 });
+        const head = new THREE.Mesh(headGeo, headMat);
+        head.position.y = 2.1;
+        head.castShadow = true;
+        group.add(head);
+
+        // Crown
+        const crownGeo = new THREE.CylinderGeometry(0.38, 0.42, 0.2, 6);
+        const crownMat = new THREE.MeshStandardMaterial({ color: 0xffd6ba });
+        const crown = new THREE.Mesh(crownGeo, crownMat);
+        crown.position.y = 2.35;
+        group.add(crown);
+
+        // Desk
+        const deskGeo = new THREE.BoxGeometry(1.6, 0.9, 1);
+        const deskMat = new THREE.MeshStandardMaterial({ color: 0x5d4037 });
+        const desk = new THREE.Mesh(deskGeo, deskMat);
+        desk.position.set(0.6, 0.45, 0.2);
+        desk.castShadow = true;
+        desk.receiveShadow = true;
+        group.add(desk);
+
+        // Scroll on desk
+        const scrollGeo = new THREE.BoxGeometry(0.4, 0.02, 0.25);
+        const scrollMat = new THREE.MeshStandardMaterial({ color: 0xffe9a6 });
+        const scroll = new THREE.Mesh(scrollGeo, scrollMat);
+        scroll.position.set(0.6, 0.5, 0.2);
+        group.add(scroll);
+
+        // Quill
+        const quillGeo = new THREE.CylinderGeometry(0.02, 0.02, 0.5, 4);
+        const quillMat = new THREE.MeshStandardMaterial({ color: 0x5d4037 });
+        const quill = new THREE.Mesh(quillGeo, quillMat);
+        quill.position.set(0.75, 0.5, 0.1);
+        quill.rotation.z = -0.5;
+        group.add(quill);
+
+        group.position.set(x, y, z);
+        group.rotation.y = -0.4;
+        scene.add(group);
+        return group;
+      }
+
+      function createRiver(x, z, w, d) {
+        const geo = new THREE.PlaneGeometry(w, d, 32, 32);
+        geo.rotateX(-Math.PI / 2);
+        const vertices = geo.attributes.position.array;
+        for (let i = 0; i < vertices.length; i += 3) {
+          vertices[i + 1] = (Math.random() - 0.5) * 0.02;
+        }
+        const mat = new THREE.MeshStandardMaterial({ color: 0xb2ebf2, roughness: 0.2, metalness: 0.3, transparent: true, opacity: 0.8 });
+        const river = new THREE.Mesh(geo, mat);
+        river.position.set(x, 0.01, z);
+        river.receiveShadow = true;
+        scene.add(river);
+        return { mesh: river, vertices, geo };
+      }
+
+      function createVillage(x, z) {
+        const group = new THREE.Group();
+        for (let i = 0; i < 5; i++) {
+          const h = 1.5 + Math.random() * 1.5;
+          const geo = new THREE.BoxGeometry(1, h, 1);
+          const mat = new THREE.MeshStandardMaterial({ color: 0xffeef5 });
+          const house = new THREE.Mesh(geo, mat);
+          house.position.set((Math.random() - 0.5) * 3, h / 2, (Math.random() - 0.5) * 3);
+          house.castShadow = true;
+          group.add(house);
+          // Roof
+          const roofGeo = new THREE.ConeGeometry(0.8, 0.8, 4, 1, true);
+          const roofMat = new THREE.MeshStandardMaterial({ color: 0xffd6ba });
+          const roof = new THREE.Mesh(roofGeo, roofMat);
+          roof.position.set(0, h + 0.4, 0);
+          group.add(roof);
+        }
+        group.position.set(x, 0, z);
+        scene.add(group);
+        return group;
+      }
+
+      function createRecipient(x, y, z) {
+        const group = new THREE.Group();
+        const bodyGeo = new THREE.CylinderGeometry(0.6, 0.9, 1.6, 8);
+        const bodyMat = new THREE.MeshStandardMaterial({ color: 0xffe9a6 });
+        const body = new THREE.Mesh(bodyGeo, bodyMat);
+        body.position.y = 0.8;
+        body.castShadow = true;
+        group.add(body);
+        const headGeo = new THREE.SphereGeometry(0.3, 8, 6);
+        const head = new THREE.Mesh(headGeo, bodyMat);
+        head.position.y = 1.9;
+        group.add(head);
+        group.position.set(x, y, z);
+        scene.add(group);
+        return group;
+      }
+
+      // Build scene objects
+      const pigeon = createPigeon();
+      const king = createKing(0, 0, 0);
+
+      // Mountains in background
+      createMountain(-40, -60, 30, 0xfff0f5);
+      createMountain(40, -80, 35, 0xffeef5);
+      createMountain(-20, -100, 25, 0xfff0f5);
+      createMountain(60, -120, 28, 0xffeef5);
+
+      // River
+      const river = createRiver(0, -40, 60, 100);
+
+      // Palace behind king
+      createPalace(0, 0, -15);
+
+      // Trees around
+      for (let i = 0; i < 15; i++) {
+        createTree((Math.random() - 0.5) * 50, (Math.random() - 0.5) * 60 - 20);
+      }
+
+      // Villages
+      createVillage(-30, -40);
+      createVillage(30, -60);
+
+      // Recipient house at end
+      const recipient = createRecipient(0, 0, 80);
+
+      // ===== ANIMATION TIMELINE =====
+      let tl = gsap.timeline({ paused: true });
+      let flutterTl;
+      let riverTime = 0;
+
+      // Helper to make pigeon flap wings
+      function startFlapping() {
+        pigeon.userData.isFlying = true;
+        flutterTl = gsap.to(pigeon.userData.wingL.rotation, {
+          z: 0.8,
+          duration: 0.12,
+          repeat: -1,
+          yoyo: true,
+          ease: 'sine.inOut'
+        });
+        gsap.to(pigeon.userData.wingR.rotation, {
+          z: -0.8,
+          duration: 0.12,
+          repeat: -1,
+          yoyo: true,
+          ease: 'sine.inOut'
+        });
+        // Body bob
+        gsap.to(pigeon.userData.body.position, {
+          y: 0.8,
+          duration: 0.4,
+          repeat: -1,
+          yoyo: true,
+          ease: 'sine.inOut'
+        });
+      }
+
+      function stopFlapping() {
+        if (flutterTl) flutterTl.kill();
+        pigeon.userData.isFlying = false;
+        gsap.to(pigeon.userData.wingL.rotation, { z: -0.4, duration: 0.5 });
+        gsap.to(pigeon.userData.wingR.rotation, { z: 0.4, duration: 0.5 });
+        gsap.to(pigeon.userData.body.position, { y: 0.6, duration: 0.5 });
+      }
+
+      // Scene 1: Aerial view -> approach palace
+      tl.to(camera.position, { x: -5, y: 15, z: 15, duration: 3, ease: 'power2.inOut' })
+        .to(camera.position, { x: -8, y: 12, z: 10, duration: 2, ease: 'power2.inOut' }, '-=1')
+        .to(pigeon.position, { x: -8, y: 6, z: -10, duration: 3 }, '-=2')
+        .to(pigeon.rotation, { y: 0.5, duration: 1 }, '-=2.5')
+        .to(storylineEl, { opacity: 1, duration: 1 }, '-=1')
+        .to(storylineEl, { text: 'A king writes a secret scroll...', duration: 0.5 }, '-=0.5');
+
+      // Scene 2: King writes message
+      tl.to(camera.position, { x: 0, y: 5, z: 6, duration: 2.5, ease: 'power2.inOut' })
+        .to(camera.rotation, { y: 0, duration: 2.5 }, '-=2.5')
+        .to(storylineEl, { text: 'The king seals his message with royal wax.', duration: 0.5 }, '-=2')
+        .to(king.position, { y: 0.2, duration: 1 }, '-=1.5') // King "writes" (bob)
+        .to(scroll.position, { z: 0.22, duration: 0.5 }, '-=1');
+
+      // Scene 3: King attaches scroll to pigeon & takes off
+      tl.to(camera.position, { x: -2, y: 4, z: 4, duration: 2, ease: 'power2.inOut' })
+        .to(camera.rotation, { y: -0.3, duration: 2 }, '-=2')
+        .to(pigeon.position, { x: 0, y: 0.8, z: 0.4, duration: 1.5 }, '-=1.8')
+        .to(pigeon.rotation, { y: 0, duration: 1 }, '-=1.5')
+        .call(() => startFlapping())
+        .to(pigeon.position, { x: 5, y: 8, z: -5, duration: 2, ease: 'power2.inOut' }, '-=0.5')
+        .to(pigeon.rotation, { y: -0.8, duration: 1 }, '-=2')
+        .to(camera.position, { x: 10, y: 12, z: -10, duration: 3, ease: 'power2.inOut' }, '-=2')
+        .to(camera.rotation, { y: -0.8, duration: 3 }, '-=3')
+        .to(storylineEl, { text: 'The pigeon takes flight across the kingdom.', duration: 0.5 }, '-=2.5');
+
+      // Scene 4: Journey through landscapes
+      tl.to(pigeon.position, { x: -25, y: 10, z: -40, duration: 4, ease: 'sine.inOut' })
+        .to(camera.position, { x: -30, y: 18, z: -45, duration: 4 }, '-=4')
+        .to(camera.rotation, { y: -0.6, x: -0.2, duration: 4 }, '-=4')
+        .to(storylineEl, { text: 'Over snow-capped mountains and ancient valleys.', duration: 0.5 }, '-=3.5')
+
+        .to(pigeon.position, { x: 15, y: 6, z: -80, duration: 4, ease: 'sine.inOut' })
+        .to(camera.position, { x: 20, y: 12, z: -85, duration: 4 }, '-=4')
+        .to(camera.rotation, { y: 0.2, x: -0.1, duration: 4 }, '-=4')
+        .to(storylineEl, { text: 'Above winding rivers reflecting the sun.', duration: 0.5 }, '-=3.5')
+
+        .to(pigeon.position, { x: -10, y: 9, z: -130, duration: 4, ease: 'sine.inOut' })
+        .to(camera.position, { x: -15, y: 16, z: -135, duration: 4 }, '-=4')
+        .to(camera.rotation, { y: -0.4, x: -0.15, duration: 4 }, '-=4')
+        .to(storylineEl, { text: 'Through dense forests where sunlight filters through.', duration: 0.5 }, '-=3.5')
+
+        .to(pigeon.position, { x: 25, y: 5, z: -170, duration: 4, ease: 'sine.inOut' })
+        .to(camera.position, { x: 30, y: 10, z: -175, duration: 4 }, '-=4')
+        .to(camera.rotation, { y: 0.3, x: -0.05, duration: 4 }, '-=4')
+        .to(storylineEl, { text: 'Past villages where daily life goes on.', duration: 0.5 }, '-=3.5');
+
+      // Scene 5: Arrival
+      tl.to(pigeon.position, { x: 0, y: 2, z: 75, duration: 4, ease: 'power2.inOut' })
+        .to(camera.position, { x: 0, y: 8, z: 85, duration: 4 }, '-=4')
+        .to(camera.rotation, { y: Math.PI, x: 0, duration: 4 }, '-=4')
+        .call(() => stopFlapping())
+        .to(pigeon.rotation, { y: Math.PI, duration: 1 }, '-=3')
+        .to(storylineEl, { text: 'The message arrives. The scroll is read.', duration: 0.5 }, '-=3');
+
+      // Scene 6: Transition to modern
+      tl.to(storylineEl, { opacity: 0, duration: 1 }, '-=1')
+        .to(titleEl, { opacity: 1, y: -10, duration: 1.5 }, '-=2')
+        .to(subtitleEl, { opacity: 1, y: -10, duration: 1.5 }, '-=1.5')
+        .to(skipBtn, { opacity: 0, duration: 0.5 }, '-=1.5')
+        .to(pigeon.position, { x: 0, y: 20, z: 0, duration: 2, ease: 'power2.inOut' }, '-=2')
+        .to(camera.position, { x: 0, y: 30, z: 0, duration: 2 }, '-=2')
+        .to(camera.rotation, { y: 0, x: -Math.PI / 2, duration: 2 }, '-=2')
+        .call(() => {
+          overlay.style.transition = 'opacity 1.5s ease';
+          overlay.style.opacity = '0';
+          setTimeout(() => {
+            overlay.style.display = 'none';
+            renderer.dispose();
+            scene.remove(pigeon);
+            enterBtn.classList.remove('hidden');
+            replayBtn.classList.remove('hidden');
+          }, 1500);
+        }, '+=0.5');
+
+      tl.duration(28);
+
+      // Animation loop for continuous effects (river waves, pigeon idle bobbing)
+      function animate(time) {
+        requestAnimationFrame(animate);
+        riverTime += 0.02;
+        const vertices = river.vertices;
+        for (let i = 0; i < vertices.length; i += 3) {
+          vertices[i + 1] = Math.sin(time * 0.002 + i) * 0.03 + Math.cos(time * 0.003 + i * 2) * 0.02;
+        }
+        river.geo.attributes.position.needsUpdate = true;
+
+        if (pigeon.userData.isFlying) {
+          // Gentle forward bob while flying
+          pigeon.position.y += Math.sin(time * 0.005) * 0.003;
+        }
+
+        renderer.render(scene, camera);
+      }
+      animate(0);
+
+      // Handle resize
+      window.addEventListener('resize', () => {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+      });
+
+      // Button handlers
+      skipBtn.addEventListener('click', () => {
+        tl.kill();
+        stopFlapping();
+        overlay.style.transition = 'opacity 0.8s ease';
+        overlay.style.opacity = '0';
+        renderer.dispose();
+        setTimeout(() => {
+          overlay.style.display = 'none';
+          enterBtn.classList.remove('hidden');
+          replayBtn.classList.remove('hidden');
+        }, 800);
+      });
+
+      replayBtn.addEventListener('click', () => {
+        tl.restart();
+        replayBtn.classList.add('hidden');
+        enterBtn.classList.add('hidden');
+        skipBtn.classList.remove('hidden');
+        titleEl.style.opacity = '0';
+        subtitleEl.style.opacity = '0';
+        overlay.style.opacity = '1';
+        overlay.style.display = 'flex';
+      });
+
+      enterBtn.addEventListener('click', () => {
+        tl.kill();
+        stopFlapping();
+        overlay.style.transition = 'opacity 1s ease';
+        overlay.style.opacity = '0';
+        renderer.dispose();
+        setTimeout(() => {
+          overlay.style.display = 'none';
+          showEntryView('create');
+        }, 1000);
+      });
+
+      // Auto-start timeline after a brief moment
+      setTimeout(() => tl.play(), 300);
+
+      cinematicIntro = { tl, renderer, scene, camera, stopFlapping };
+    }
+
     // Initialize application
     document.addEventListener("DOMContentLoaded", () => {
       syncMotionPreference();
       initTheme();
       initSocket();
+      initCinematicIntro();
 
       document.querySelectorAll('[data-entry-mode]').forEach((button) => {
         button.addEventListener('click', () => showEntryView(button.dataset.entryMode));
