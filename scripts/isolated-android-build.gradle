@@ -1,0 +1,20 @@
+gradle.beforeProject { project ->
+    // OneDrive can briefly lock incremental-resource directories. Keep only
+    // disposable Gradle intermediates in the system temp directory so the
+    // source checkout and final APK remain stable and writable.
+    def tempRoot = System.getenv('TEMP') ?: System.getProperty('java.io.tmpdir')
+    def outputRoot = new File(tempRoot, 'tempchat-android-build')
+    def projectName = project.path.replace(':', '_')
+    def isolatedBuildDirectory = new File(outputRoot, projectName)
+    project.layout.buildDirectory.set(isolatedBuildDirectory)
+
+    // The Android plugin sets its default build directory as it is applied.
+    // Reassign it at that exact point, before it registers resource tasks.
+    // That keeps plugin resource intermediates out of OneDrive as well.
+    project.plugins.withId('com.android.library') {
+        project.setBuildDir(isolatedBuildDirectory)
+    }
+    project.plugins.withId('com.android.application') {
+        project.setBuildDir(isolatedBuildDirectory)
+    }
+}

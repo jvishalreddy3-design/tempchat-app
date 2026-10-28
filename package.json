@@ -1,0 +1,34 @@
+{
+  "name": "tempchat-android",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Capacitor Android packaging for the TempChat frontend.",
+  "scripts": {
+    "build": "node scripts/build-android-web.js",
+    "android:sync": "cap sync android",
+    "android:debug": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-android-debug.ps1",
+    "test:backend": "node backend/test/socket-smoke.js",
+    "check:frontend": "node scripts/check-frontend.js",
+    "test:accounts": "node backend/test/account-security.js",
+    "test:social": "node backend/test/social-sockets.js"
+  },
+  "dependencies": {
+    "@aparajita/capacitor-secure-storage": "^8.0.1",
+    "@capacitor/android": "8.5.3",
+    "@capacitor/app": "8.1.2",
+    "@capacitor/core": "8.5.3",
+    "@capacitor/network": "8.0.1",
+    "@capacitor/splash-screen": "8.0.2",
+    "@capacitor/status-bar": "8.0.4",
+    "socket.io-client": "4.8.4"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^8.4.3",
+    "@rollup/plugin-commonjs": "^29.0.3",
+    "@rollup/plugin-node-resolve": "^16.0.3",
+    "rollup": "^4.65.0"
+  },
+  "allowScripts": {
+    "esbuild@0.28.2": true
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "appId": "com.tempchat.app",
+  "appName": "TempChat",
+  "webDir": "www",
+  "bundledWebRuntime": false,
+  "server": {
+    "cleartext": false
+  },
+  "plugins": {
+    "StatusBar": {
+      "style": "LIGHT",
+      "backgroundColor": "#FFF5FA"
+    },
+    "SplashScreen": {
+      "launchShowDuration": 0,
+      "backgroundColor": "#FFF5FA"
+    }
+  }
+}
