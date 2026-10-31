@@ -18,9 +18,6 @@
   <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
   <script>if (typeof window.io !== 'function') { document.write('<script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.5/socket.io.min.js"><\/script>'); }</script>
   <script>if (typeof window.io !== 'function') { document.write('<script src="https://cdn.jsdelivr.net/npm/socket.io-client@4.7.5/dist/socket.io.min.js"><\/script>'); }</script>
-  <!-- Three.js & GSAP for Cinematic Intro -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
 
   <script>
     tailwind.config = {
@@ -1030,104 +1027,6 @@
       #landing-view.liquid-landing .liquid-nav-links { display: flex; }
     }
 
-    /* ===== Cinematic Landing Page Glassmorphism =====
-       The 3D canvas sits behind (z-[-1]) while the landing page content
-       floats above in frosted-glass cards. */
-    #landing-view.liquid-landing .liquid-nav {
-      background: rgba(255, 255, 255, 0.55) !important;
-      backdrop-filter: blur(20px) saturate(1.2) !important;
-      -webkit-backdrop-filter: blur(20px) saturate(1.2) !important;
-      border: 1px solid rgba(255, 255, 255, 0.55) !important;
-      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12) !important;
-    }
-    #landing-view.liquid-landing .liquid-nav-links button,
-    #landing-view.liquid-landing .liquid-nav-link {
-      color: rgba(255, 255, 255, 0.9) !important;
-    }
-    #landing-view.liquid-landing .liquid-nav-link:hover {
-      color: #fff !important;
-    }
-    #landing-view.liquid-landing .nav-start {
-      background: linear-gradient(135deg, #d478a8 0%, #f43f5e 100%) !important;
-      color: #fff !important;
-      border: 1px solid rgba(255, 255, 255, 0.6) !important;
-      backdrop-filter: blur(10px) !important;
-      -webkit-backdrop-filter: blur(10px) !important;
-    }
-    #landing-view.liquid-landing .story-hero {
-      background: rgba(255, 255, 255, 0.35) !important;
-      backdrop-filter: blur(24px) saturate(1.1) !important;
-      -webkit-backdrop-filter: blur(24px) saturate(1.1) !important;
-      border: 1px solid rgba(255, 255, 255, 0.45) !important;
-      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.12) !important;
-    }
-    #landing-view.liquid-landing .privacy-badge {
-      background: rgba(255, 255, 255, 0.45) !important;
-      backdrop-filter: blur(10px) !important;
-      -webkit-backdrop-filter: blur(10px) !important;
-      border: 1px solid rgba(255, 255, 255, 0.5) !important;
-    }
-    #landing-view.liquid-landing .story-primary {
-      background: linear-gradient(135deg, #d478a8 0%, #f43f5e 100%) !important;
-      color: #fff !important;
-      border: 1px solid rgba(255, 255, 255, 0.5) !important;
-      backdrop-filter: blur(10px) !important;
-      -webkit-backdrop-filter: blur(10px) !important;
-    }
-    #landing-view.liquid-landing .story-secondary {
-      background: rgba(255, 255, 255, 0.45) !important;
-      border: 1px solid rgba(255, 255, 255, 0.45) !important;
-      backdrop-filter: blur(10px) !important;
-      -webkit-backdrop-filter: blur(10px) !important;
-    }
-    #landing-view.liquid-landing .security-line {
-      background: rgba(255, 255, 255, 0.35) !important;
-      backdrop-filter: blur(10px) !important;
-      -webkit-backdrop-filter: blur(10px) !important;
-      border: 1px solid rgba(255, 255, 255, 0.35) !important;
-    }
-    #landing-view.liquid-landing .landing-benefits {
-      background: rgba(255, 255, 255, 0.35) !important;
-      backdrop-filter: blur(20px) saturate(1.1) !important;
-      -webkit-backdrop-filter: blur(20px) saturate(1.1) !important;
-      border: 1px solid rgba(255, 255, 255, 0.45) !important;
-      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.12) !important;
-    }
-    #landing-view.liquid-landing .landing-benefit {
-      background: rgba(255, 255, 255, 0.3) !important;
-      backdrop-filter: blur(10px) !important;
-      -webkit-backdrop-filter: blur(10px) !important;
-      border: 1px solid rgba(255, 255, 255, 0.35) !important;
-    }
-    #landing-view.liquid-landing .liquid-footer {
-      background: rgba(255, 255, 255, 0.35) !important;
-      backdrop-filter: blur(20px) saturate(1.1) !important;
-      -webkit-backdrop-filter: blur(20px) saturate(1.1) !important;
-      border: 1px solid rgba(255, 255, 255, 0.45) !important;
-    }
-
-    /* ===== Cinematic Intro Controls (non-blocking overlay) ===== */
-    #cinematic-intro {
-      pointer-events: auto !important;
-    }
-    #cinematic-intro .bg-white\/90 {
-      backdrop-filter: blur(20px) saturate(1.2) !important;
-      -webkit-backdrop-filter: blur(20px) saturate(1.2) !important;
-    }
-
-    /* Ensure story-stage (3D castle scene) stays behind UI but visible */
-    #landing-view.liquid-landing .story-stage {
-      background: rgba(255, 255, 255, 0.3) !important;
-      backdrop-filter: blur(15px) saturate(1.1) !important;
-      -webkit-backdrop-filter: blur(15px) saturate(1.1) !important;
-      border: 1px solid rgba(255, 255, 255, 0.4) !important;
-    }
-
-    @media (max-width: 768px) {
-      #landing-view.liquid-landing .brand-lockup { font-size: 1.25rem; line-height: 1.75rem; }
-      #landing-view.liquid-landing .nav-start { padding: 0.5rem 1rem; font-size: 0.875rem; }
-    }
-
     /* ===== Create / Join Room: readable link text =====
        Beats the earlier midnight-theme rule (.entry-card #toggle-mode-btn).
        The connection-status colors are set from updateConnectionStatus(). */
@@ -1170,6 +1069,82 @@
       *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; scroll-behavior: auto !important; transition-duration: 0.01ms !important; }
     }
     [data-reduced-motion="true"] *, [data-reduced-motion="true"] *::before, [data-reduced-motion="true"] *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+    /* TempChat product system: pearl surfaces, one restrained violet accent. */
+    :root {
+      --bg-base: #f6f5fa; --bg-surface: #fff; --bg-panel: #fff; --bg-elevated: #fff; --bg-soft: #efedf6;
+      --text-main: #252337; --text-muted: #686579; --text-faint: #777487;
+      --border-color: #e4e1ec; --border-strong: #c9c4dc;
+      --accent-color: #5d54be; --accent-hover: #49419f;
+      --accent-gradient: linear-gradient(135deg, #6c63cc, #5148ad); --accent-wash: rgba(93,84,190,.1);
+      --bubble-me: #5d54be; --bubble-them: #fff; --text-bubble-me: #fff; --text-bubble-them: #252337;
+      --shadow-sm: 0 4px 16px rgba(37,35,55,.06); --shadow-md: 0 12px 32px rgba(37,35,55,.1);
+      --glass-bg: rgba(255,255,255,.95); --glass-border: #e4e1ec; --glass-shadow: 0 8px 28px rgba(37,35,55,.08);
+    }
+    body { height: var(--app-viewport-height, 100dvh) !important; background: #f6f5fa !important; color: #252337; overscroll-behavior: none; }
+    #landing-view.liquid-landing { background: #f6f5fa !important; color: #252337; overflow-y: auto; }
+    #landing-view .liquid-field, #landing-view .petal-field, #landing-view .story-stage, #landing-view .landing-benefits, #landing-view .liquid-footer { display: none !important; }
+    #landing-view .liquid-nav { position: sticky !important; inset: auto !important; top: max(8px, env(safe-area-inset-top)) !important; left: auto !important; transform: none !important; width: min(calc(100% - 24px), 1040px); height: 62px; margin: max(8px, env(safe-area-inset-top)) auto 0 !important; padding: 0 16px; border: 1px solid #e4e1ec; border-radius: 17px; background: rgba(255,255,255,.96); box-shadow: 0 8px 26px rgba(37,35,55,.07); backdrop-filter: blur(16px); }
+    #landing-view .liquid-nav > div { height: 100%; gap: 12px; }
+    #landing-view .brand-lockup { color: #252337; font-size: 1rem; }
+    #landing-view .brand-mark { display: grid; width: 34px; height: 34px; place-items: center; border-radius: 11px; color: white; background: #5d54be; }
+    #landing-view .liquid-nav-links { display: flex !important; align-items: center; gap: 2px; }
+    #landing-view .liquid-nav-links button { min-height: 40px; padding: 0 11px; border: 0; border-radius: 10px; color: #686579; background: transparent; font-size: .8rem; font-weight: 700; }
+    #landing-view .liquid-nav-links button.active, #landing-view .liquid-nav-links button:hover { color: #49419f; background: #efedf6; }
+    #landing-view .home-connection { display: flex; align-items: center; gap: 8px; }
+    .connection-indicator { display: inline-flex; align-items: center; gap: 7px; color: #686579; font-size: .72rem; white-space: nowrap; }
+    .connection-indicator::before { content: ''; width: 8px; height: 8px; border-radius: 50%; background: #d4a72c; }
+    .connection-indicator[data-state="connected"]::before { background: #198754; }
+    .connection-indicator[data-state="disconnected"]::before { background: #c43d50; }
+    #connection-retry, .retry-entry { min-height: 34px; padding: 0 10px; border: 1px solid #d8d4eb; border-radius: 10px; color: #49419f; background: #f5f3fc; font-size: .75rem; font-weight: 800; }
+    #landing-view .story-hero { display: block; width: min(calc(100% - 36px), 760px); min-height: auto; margin: clamp(46px, 12vh, 110px) auto 0; padding: 0 0 48px; }
+    #landing-view .story-copy { max-width: 720px; margin: auto; text-align: center; }
+    #landing-view .privacy-badge { display: inline-flex; padding: 8px 12px; border: 1px solid #e4e1ec; border-radius: 999px; color: #5148ad; background: white; font-size: .68rem; font-weight: 800; letter-spacing: .07em; }
+    #landing-view .story-title { max-width: 680px; margin: 23px auto 15px; color: #252337; font-size: clamp(2.4rem, 7.6vw, 4.5rem); line-height: 1.07; letter-spacing: -.065em; text-shadow: none; }
+    #landing-view .story-title span { display: block; color: #5d54be; }
+    #landing-view .story-title em { display: none; }
+    #landing-view .story-description { max-width: 540px; margin: 0 auto 26px; color: #686579; font-size: 1rem; line-height: 1.7; }
+    #landing-view .story-actions { justify-content: center; gap: 11px; }
+    #landing-view .story-primary, #landing-view .story-secondary { min-height: 50px; padding: 0 19px; border-radius: 14px; font-size: .9rem; }
+    #landing-view .story-primary { background: #5d54be; box-shadow: 0 7px 16px rgba(93,84,190,.2); }
+    #landing-view .story-secondary { border: 1px solid #e0ddea; color: #353248; background: white; }
+    #landing-view .security-line { justify-content: center; margin: 19px auto 0; color: #686579; font-size: .78rem; }
+    .entry-stage { padding: max(16px, env(safe-area-inset-top)) 0 max(16px, env(safe-area-inset-bottom)); background: #f6f5fa !important; }
+    .entry-card { padding: 26px !important; border: 1px solid #e4e1ec; border-radius: 22px !important; background: white !important; box-shadow: 0 18px 54px rgba(37,35,55,.11) !important; }
+    #username-input, #room-input { min-height: 50px; border-color: #e4e1ec; border-radius: 13px; background: #f8f7fb; font-size: 16px; }
+    #room-input { text-align: center; font-size: 1.15rem; }
+    .btn-primary { background: #5d54be !important; }
+    .connection-row { display: flex; align-items: center; justify-content: center; gap: 9px; }
+    #chat-view.chat-shell { padding-top: env(safe-area-inset-top); padding-bottom: env(safe-area-inset-bottom); background: #f6f5fa; }
+    #chat-view .chat-header { min-height: 64px; height: 64px; padding-left: 15px; padding-right: 15px; background: rgba(255,255,255,.97); }
+    #chat-view .message-stage { background-color: #f6f5fa; overscroll-behavior-y: contain; scroll-padding-bottom: 16px; }
+    #chat-view .composer-dock { padding-bottom: max(10px, env(safe-area-inset-bottom)); background: rgba(255,255,255,.98); }
+    #chat-view .composer-shell { min-height: 54px; border-radius: 17px; background: #f8f7fb; }
+    .room-empty-notice { display: flex; width: min(100%, 760px); align-items: center; gap: 12px; margin: 0 auto 4px; padding: 13px 14px; border: 1px solid #e2dfef; border-radius: 16px; background: #fff; color: #252337; }
+    .room-empty-notice.hidden { display: none; }
+    .empty-room-icon { display: grid; width: 38px; height: 38px; flex: 0 0 auto; place-items: center; border-radius: 12px; color: #5148ad; background: #efedf6; }
+    .room-empty-notice strong { display: block; font-size: .84rem; }
+    .room-empty-notice p { margin: 3px 0 0; color: #686579; font-size: .72rem; line-height: 1.45; }
+    .room-empty-notice button { width: 38px; height: 38px; flex: 0 0 auto; margin-left: auto; border: 0; border-radius: 11px; color: white; background: #5d54be; }
+    .message-meta { position: static !important; display: flex; align-items: center; justify-content: flex-end; gap: 6px; margin-top: 4px; opacity: 1 !important; color: #686579; font-size: .68rem; }
+    .delivery-status { font-weight: 700; }
+    .delivery-status[data-state="delivered"] { color: #18794e; }
+    .delivery-status[data-state="failed"] { color: #b42335; }
+    .delivery-status[data-state="sending"] { color: #686579; }
+    @media (max-width: 600px) {
+      #landing-view .liquid-nav { width: calc(100% - 16px); height: 56px; padding: 0 9px; }
+      #landing-view .brand-lockup { gap: 6px; font-size: .83rem; }
+      #landing-view .brand-mark { width: 29px; height: 29px; border-radius: 9px; }
+      #landing-view .liquid-nav-links button { padding: 0 8px; font-size: .7rem; }
+      #landing-view .connection-indicator { width: 9px; height: 9px; overflow: hidden; color: transparent; }
+      #landing-view .connection-indicator::before { flex: 0 0 auto; }
+      #landing-view .story-hero { width: calc(100% - 32px); margin-top: clamp(60px, 14vh, 100px); padding-bottom: 32px; }
+      #landing-view .story-title { font-size: clamp(2.35rem, 11.5vw, 3.5rem); }
+      #landing-view .story-description { font-size: .92rem; }
+      #landing-view .story-actions { display: grid; grid-template-columns: 1fr 1fr; }
+      #landing-view .story-primary, #landing-view .story-secondary { justify-content: center; padding: 0 10px; font-size: .8rem; }
+      .entry-card { padding: 22px 18px !important; }
+      #chat-view .message-stage { padding: 12px 12px 8px; }
+    }
   </style>
 </head>
 <body class="h-screen w-screen flex flex-col font-sans antialiased text-sm md:text-base">
@@ -1179,68 +1154,33 @@
   <!-- ==========================================
        VIEW 1: LANDING PAGE
        ========================================== -->
-  <div id="landing-view" class="landing-experience liquid-landing flex-1 overflow-y-auto w-full h-full absolute inset-0 z-40 transition-opacity duration-500 relative">
-    <!-- 3D Canvas Background Layer -->
-    <canvas id="pigeon-canvas" class="absolute inset-0 w-full h-full block z-[-1] select-none"></canvas>
+  <div id="landing-view" class="landing-experience liquid-landing flex-1 overflow-y-auto w-full h-full absolute inset-0 z-40 transition-opacity duration-500">
     <div class="liquid-field" aria-hidden="true"><span class="liquid-orb liquid-orb--one"></span><span class="liquid-orb liquid-orb--two"></span><span class="liquid-orb liquid-orb--three"></span></div>
     <div class="petal-field" aria-hidden="true"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></div>
-
-    <!-- Cinematic Intro Controls (top-center, non-blocking) -->
-    <div id="cinematic-intro" class="absolute top-6 left-1/2 transform -translate-x-1/2 z-[2000] flex flex-col items-center gap-4 pointer-events-auto">
-      <!-- Cinematic title/text during intro animation -->
-      <div id="cinematic-text" class="flex flex-col items-center gap-4 text-center">
-        <h1 id="cinematic-title" class="text-5xl font-extrabold text-[#5b183d] tracking-tighter leading-tight opacity-0 transition-opacity duration-1000 sm:text-6xl">TEMPCHAT</h1>
-        <p id="cinematic-subtitle" class="text-lg text-[#6b2137] opacity-0 transition-opacity duration-1000 sm:text-xl max-w-md px-4">From Ancient Messages to Instant Connections</p>
-        <p id="cinematic-storyline" class="text-sm text-[#8b4a62] opacity-0 transition-opacity duration-1000 mt-2 max-w-xs px-4 sm:text-base">A message travels on wings...</p>
-      </div>
-    </div>
-
-    <!-- Skip Intro button (always clickable, positioned above everything) -->
-    <button id="skip-intro" class="absolute top-6 right-6 z-[2010] px-5 py-2.5 rounded-full bg-white/90 text-[#5b183d] font-bold shadow-md hover:bg-white transition-all backdrop-blur-sm pointer-events-auto">Skip Intro</button>
-
-    <!-- Replay Intro button (hidden by default) -->
-    <button id="replay-intro" class="absolute bottom-8 left-1/2 transform -translate-x-1/2 z-[2010] hidden px-5 py-2.5 rounded-full bg-white/90 text-[#5b183d] font-bold shadow-md hover:bg-white transition-all backdrop-blur-sm pointer-events-auto">Replay</button>
-
-    <!-- Enter App button (shown after intro) -->
-    <button id="enter-app-btn" class="absolute bottom-8 right-6 z-[2010] hidden px-7 py-3 rounded-full bg-[#d478a8] text-white font-bold shadow-xl hover:bg-[#c06894] transition-all backdrop-blur-sm pointer-events-auto">Start Chatting</button>
-
     <nav class="product-nav liquid-nav z-50">
       <div class="mx-auto flex items-center justify-between">
         <a class="brand-lockup flex items-center gap-2 font-extrabold text-xl" href="#home" data-scroll-target="home" aria-label="TempChat home">
           <i class="fa-solid fa-paper-plane brand-mark" aria-hidden="true"></i><span>TempChat</span>
         </a>
-        <div class="liquid-nav-links hidden items-center gap-8 text-sm font-semibold md:flex">
-          <a class="liquid-nav-link" href="#home" data-scroll-target="home">Home</a>
-          <a class="liquid-nav-link" href="#features" data-scroll-target="features">Features</a>
-          <a class="liquid-nav-link" href="#about" data-scroll-target="about">About</a>
+        <div class="liquid-nav-links" aria-label="Main navigation">
+          <button type="button" data-home-nav="home" class="active">Home</button>
+          <button type="button" data-home-nav="rooms">Rooms</button>
+          <button type="button" data-home-nav="settings">Settings</button>
         </div>
-        <button type="button" data-entry-mode="create" class="nav-start rounded-xl px-4 py-2 text-sm font-bold">Get Started</button>
-      </div>
-    </nav>
-    <nav class="product-nav liquid-nav z-50">
-      <div class="mx-auto flex items-center justify-between">
-        <a class="brand-lockup flex items-center gap-2 font-extrabold text-xl" href="#home" data-scroll-target="home" aria-label="TempChat home">
-          <i class="fa-solid fa-paper-plane brand-mark" aria-hidden="true"></i><span>TempChat</span>
-        </a>
-        <div class="liquid-nav-links hidden items-center gap-8 text-sm font-semibold md:flex">
-          <a class="liquid-nav-link" href="#home" data-scroll-target="home">Home</a>
-          <a class="liquid-nav-link" href="#features" data-scroll-target="features">Features</a>
-          <a class="liquid-nav-link" href="#about" data-scroll-target="about">About</a>
-        </div>
-        <button type="button" data-entry-mode="create" class="nav-start rounded-xl px-4 py-2 text-sm font-bold">Get Started</button>
+        <div class="home-connection"><span id="connection-status" class="connection-indicator" role="status" aria-live="polite">Connecting…</span><button id="connection-retry" type="button" class="hidden">Retry</button></div>
       </div>
     </nav>
 
     <header id="home" class="story-hero">
       <div class="story-copy">
-        <div class="privacy-badge">PRIVATE&nbsp; • &nbsp;E2EE</div>
-        <h1 class="story-title">Messages <span>That Reach</span><em>You.</em></h1>
-        <p class="story-description">Connect, share and communicate privately — with conversations protected by end-to-end encryption.</p>
+        <div class="privacy-badge">TEMPORARY ROOMS • NO ACCOUNT REQUIRED</div>
+        <h1 class="story-title">Private conversations.<span>Simple connections.</span></h1>
+        <p class="story-description">Create a room and share its code, or ask to join a room. The host approves every guest.</p>
         <div class="story-actions">
-          <button type="button" data-entry-mode="create" class="story-primary">Start Chatting</button>
+          <button type="button" data-entry-mode="create" class="story-primary"><i class="fa-solid fa-plus mr-2" aria-hidden="true"></i>Create Room</button>
           <button type="button" data-entry-mode="join" class="story-secondary"><i class="fa-solid fa-arrow-right-to-bracket mr-2" aria-hidden="true"></i>Join a Room</button>
         </div>
-        <p class="security-line"><i class="fa-solid fa-shield-halved" aria-hidden="true"></i>End-to-end encrypted <span aria-hidden="true">•</span> No message history <span aria-hidden="true">•</span> No account required</p>
+        <p class="security-line"><i class="fa-solid fa-circle-info" aria-hidden="true"></i>Room membership is temporary and visible to participants.</p>
       </div>
 
       <div class="story-stage" role="img" aria-label="A white dove carries a private message through a rose castle landscape to a small king receiving the letter.">
@@ -1298,14 +1238,14 @@
         
         <div id="room-code-container">
           <label class="block text-sm font-medium text-[var(--text-muted)] mb-1">Room Code</label>
-          <input type="text" id="room-input" class="w-full bg-[var(--bg-base)] border border-[var(--border-color)] rounded-xl px-4 py-3 text-[var(--text-main)] focus:outline-none focus:border-[var(--accent-color)] font-mono uppercase transition-all" placeholder="e.g. A1B2C">
+          <input type="text" id="room-input" inputmode="numeric" autocomplete="one-time-code" maxlength="6" pattern="[0-9]{6}" class="w-full bg-[var(--bg-base)] border border-[var(--border-color)] rounded-xl px-4 py-3 text-[var(--text-main)] focus:outline-none focus:border-[var(--accent-color)] font-mono tracking-[0.24em] transition-all" placeholder="000000" aria-describedby="entry-helper">
         </div>
 
         <div class="flex items-center justify-between text-sm mt-2">
           <button id="toggle-mode-btn" onclick="toggleEntryMode()" class="text-[var(--accent-color)] hover:underline">Want to create a room instead?</button>
         </div>
 
-        <p id="connection-status" class="hidden text-center text-sm" role="status" aria-live="polite"></p>
+        <div class="connection-row"><p id="entry-connection-status" class="hidden text-center text-sm" role="status" aria-live="polite"></p><button id="entry-connection-retry" type="button" class="retry-entry hidden">Retry connection</button></div>
         <button id="enter-room-btn" onclick="handleEnterRoom()" class="w-full btn-primary py-3.5 rounded-xl font-bold text-lg mt-4 shadow-md">
           Enter Room
         </button>
@@ -1385,10 +1325,7 @@
       <!-- Background pattern layer -->
       <div id="chat-bg-layer" class="absolute inset-0 opacity-5 pointer-events-none transition-all"></div>
       
-      <!-- Date Separator Example (Injected dynamically but showing structure here) -->
-      <div class="date-divider text-center my-4 relative z-0">
-        <span class="bg-[var(--bg-surface)] px-3 py-1 rounded-full text-xs font-medium text-[var(--text-muted)] border border-[var(--border-color)] shadow-sm">Today</span>
-      </div>
+      <section id="room-empty-notice" class="room-empty-notice hidden" role="status"><span class="empty-room-icon"><i class="fa-regular fa-comment-dots" aria-hidden="true"></i></span><div><strong>You’re the only one here</strong><p>Share the room link or code. Messages can be sent after someone joins.</p></div><button type="button" onclick="openShareRoomModal()" aria-label="Share room"><i class="fa-solid fa-share-nodes" aria-hidden="true"></i></button></section>
 
       <!-- Messages inject here -->
       <div id="messages-list" class="flex flex-col gap-1 w-full max-w-4xl mx-auto z-10 pb-4"></div>
@@ -1648,7 +1585,6 @@
       user: { id: null, username: '' },
       room: { code: '', users: [], token: '', isHost: false, pending: [] },
       theme: { mode: 'light', accent: '#ec4899', bg: 'plain', bgColor: 'none' },
-      isMock: false,
       currentGame: null,
       gameSession: null
     };
@@ -2086,6 +2022,13 @@
     const reducedMotionQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
     function syncMotionPreference() { document.documentElement.dataset.reducedMotion = reducedMotionQuery.matches ? 'true' : 'false'; }
     reducedMotionQuery.addEventListener('change', syncMotionPreference);
+    function syncVisualViewport() {
+      const height = window.visualViewport?.height || window.innerHeight;
+      document.documentElement.style.setProperty('--app-viewport-height', `${height}px`);
+      if (!document.getElementById('chat-view').classList.contains('hidden')) window.setTimeout(scrollToBottom, 80);
+    }
+    window.addEventListener('resize', syncVisualViewport);
+    window.visualViewport?.addEventListener('resize', syncVisualViewport);
 
     // --- UI NAVIGATION ---
     let entryMode = 'join'; // 'join' or 'create'
@@ -2150,7 +2093,8 @@
 
     function getShareRoomLink() {
       if (!AppState.room.code) return '';
-      const url = new URL(window.location.href);
+      const configuredBase = window.TEMPCHAT_CONFIG?.publicBaseUrl;
+      const url = new URL(configuredBase || window.location.href);
       url.search = '';
       url.hash = '';
       url.searchParams.set('room', AppState.room.code);
@@ -2317,7 +2261,29 @@
 
     function getSharedRoomCodeFromUrl() {
       const roomCode = new URLSearchParams(window.location.search).get('room');
-      return roomCode && /^[A-Za-z0-9]{3,12}$/.test(roomCode) ? roomCode.toUpperCase() : '';
+      return roomCode && /^\d{6}$/.test(roomCode) ? roomCode : '';
+    }
+
+    function applySharedRoomLink(rawUrl) {
+      try {
+        const sharedRoom = new URL(rawUrl, window.location.href).searchParams.get('room');
+        if (!sharedRoom || !/^\d{6}$/.test(sharedRoom)) return false;
+        if (AppState.room.code) {
+          showToast('Leave your current room before opening another room link.', 'info');
+          return false;
+        }
+        const appUrl = new URL(window.location.href);
+        appUrl.search = '';
+        appUrl.hash = '';
+        appUrl.searchParams.set('room', sharedRoom);
+        window.history.replaceState({}, '', appUrl);
+        showEntryView('join');
+        document.getElementById('room-input').value = sharedRoom;
+        return true;
+      } catch (error) {
+        console.warn('Ignored an invalid room link:', error);
+        return false;
+      }
     }
 
     function tryRejoinSavedRoom() {
@@ -2349,16 +2315,18 @@
     }
 
     function updateConnectionStatus() {
-      const status = document.getElementById('connection-status');
-      if (!status) return;
-
-      status.classList.remove('hidden');
-      status.textContent = socketConnectionMessage;
-      status.style.color = socketConnectionState === 'connected'
-        ? '#15803D'
-        : socketConnectionState === 'connecting'
-          ? '#1D4ED8'
-          : '#DC2626';
+      ['connection-status', 'entry-connection-status'].forEach((id) => {
+        const status = document.getElementById(id);
+        if (!status) return;
+        status.classList.remove('hidden');
+        status.dataset.state = socketConnectionState;
+        status.textContent = socketConnectionMessage;
+      });
+      ['connection-retry', 'entry-connection-retry'].forEach((id) => {
+        const button = document.getElementById(id);
+        if (button) button.classList.toggle('hidden', socketConnectionState !== 'disconnected');
+      });
+      updateComposerAvailability();
     }
 
     function setSocketConnectionState(state, message) {
@@ -2374,7 +2342,12 @@
         return;
       }
 
-      socket = window.io('https://tempchat-app-backend.onrender.com', {
+      const socketUrl = window.TEMPCHAT_CONFIG?.socketUrl || 'https://tempchat-app-backend.onrender.com';
+      if (!/^https:\/\//i.test(socketUrl)) {
+        setSocketConnectionState('disconnected', 'A secure chat endpoint has not been configured for this build.');
+        return;
+      }
+      socket = window.io(socketUrl, {
         timeout: 8000,
         reconnection: true,
         reconnectionAttempts: 5
@@ -2383,16 +2356,24 @@
       socket.on('connect', () => {
         setSocketConnectionState('connected', 'Connected securely. You can enter a room.');
         AppState.user.id = socket.id;
+        updateComposerAvailability();
         tryRejoinSavedRoom();
         console.info('Connected to the Socket.IO server.');
       });
 
       socket.on('connect_error', () => {
-        setSocketConnectionState('disconnected', 'Unable to reach the chat server. Retrying…');
+        setSocketConnectionState('connecting', 'Unable to reach the chat server. Retrying…');
+      });
+
+      socket.io.on('reconnect_attempt', (attempt) => {
+        setSocketConnectionState('connecting', `Reconnecting to the chat server (attempt ${attempt})…`);
+      });
+      socket.io.on('reconnect_failed', () => {
+        setSocketConnectionState('disconnected', 'Could not reconnect. Check your connection and try again.');
       });
 
       socket.on('disconnect', () => {
-        setSocketConnectionState('disconnected', 'Connection lost. Reconnecting…');
+        setSocketConnectionState('connecting', 'Connection lost. Reconnecting…');
         // Pending requests are tied to a socket ID and are deliberately removed
         // by the server on disconnect. Do not leave a joiner in a stale wait UI.
         if (pendingJoinRequest) {
@@ -2402,6 +2383,8 @@
           showToast('Your connection changed. Request to join again after reconnecting.', 'error');
         }
       });
+
+      socket.on('connect_error', () => updateComposerAvailability());
 
       // Generate identity key pair on connection
       Crypto.generateIdentityKeyPair().then(({ publicKey, fingerprint }) => {
@@ -2417,8 +2400,11 @@
       socket.on('update-users', (users) => {
         AppState.room.users = users;
         updatePresenceUI();
-        document.getElementById('send-btn').disabled = !AppState.room.code;
+        updateComposerAvailability();
       });
+
+      socket.on('message:delivered', (receipt) => updateMessageDelivery(receipt, true));
+      socket.on('message:delivery-failed', (receipt) => updateMessageDelivery(receipt, false));
 
       // Host approval flow. The server is the source of truth for every request;
       // this UI only renders requests that the server sent to the actual host.
@@ -2496,38 +2482,46 @@
       });
 
       // E2EE: Handle encrypted chat messages
-      socket.on('chat-message', async (data) => {
+      const receivedMessageIds = new Set();
+      socket.on('chat-message', async (data, acknowledge) => {
+        const ack = (received) => { if (typeof acknowledge === 'function') acknowledge({ received }); };
+        if (!data || data.to !== socket.id || !data.id) return ack(false);
+        if (receivedMessageIds.has(data.id)) return ack(true);
         setRemoteTyping({ sender: data.sender, isTyping: false });
         try {
           // Handle file messages
           if (data.type === 'file' && data.file) {
             // Only process if this file is for us
             if (data.to !== AppState.user.id) {
-              return;
+              return ack(false);
             }
-            await handleIncomingFile(data);
-            return;
+            const received = await handleIncomingFile(data);
+            if (received) receivedMessageIds.add(data.id);
+            return ack(received);
           }
           
           // STRICT E2EE: Only accept valid encrypted payloads
           // Reject any payload without proper encryption structure
           if (!(data.v === 1 && data.ct && data.iv)) {
             renderSystemMessage('Unsupported encrypted message format');
-            return;
+            return ack(false);
           }
           
           // Only attempt decryption if this message is for us
           if (data.to !== AppState.user.id) {
-            return; // Silently ignore messages not for us
+            return ack(false); // Silently ignore messages not for us
           }
           
           const plaintext = await Crypto.decryptMessage(data);
           const senderUser = AppState.room.users.find(u => u.id === data.from);
           const senderName = senderUser ? senderUser.username : data.from;
           renderMessage({ ...data, sender: senderName, text: plaintext }, false);
+          receivedMessageIds.add(data.id);
+          ack(true);
         } catch (e) {
           console.error('[E2EE] Decryption failed:', e);
           renderSystemMessage('Failed to decrypt a message (key mismatch or tampering)');
+          ack(false);
         }
       });
 
@@ -2580,16 +2574,19 @@
             timestamp: Date.now(),
             id: generateMessageId()
           }, false);
+          receivedMessageIds.add(data.id);
 
           if (progressBar && progressText) {
             progressBar.style.width = '100%';
             progressText.textContent = 'Complete!';
             progressText.classList.add('text-green-500');
           }
+          return true;
 
         } catch (e) {
           console.error('[E2EE] File decryption failed:', e);
           renderSystemMessage('Failed to decrypt file (key mismatch or tampering)');
+          return false;
         } finally {
           setTimeout(() => {
             progressContainer.classList.add('hidden');
@@ -2650,10 +2647,13 @@
     }
 
     function completeRoomEntry(username, roomCode, options = {}) {
+      if (!socket?.connected || !/^\d{6}$/.test(roomCode)) {
+        showToast('A live server connection and valid six-digit room code are required.', 'error');
+        return;
+      }
       const wasInRoom = AppState.room.code === roomCode;
       AppState.user.username = username;
-      // Use socket.id for real socket, or mock ID for MockSocket
-      AppState.user.id = socket.id || (AppState.isMock ? '1' : null);
+      AppState.user.id = socket.id;
       AppState.room.code = roomCode;
       AppState.room.token = options.token || AppState.room.token;
       AppState.room.isHost = Boolean(options.isHost);
@@ -2666,7 +2666,7 @@
       window.history.replaceState({}, '', roomUrl);
       document.getElementById('header-room-code').innerText = roomCode;
       showChatView();
-      document.getElementById('send-btn').disabled = false;
+      updateComposerAvailability();
       if (!options.reconnect) {
         showToast(`Joined Room ${roomCode}`, 'success');
         if (!wasInRoom) renderSystemMessage('You joined the room');
@@ -2739,10 +2739,11 @@
       }
 
       const username = document.getElementById('username-input').value.trim();
-      const roomCode = document.getElementById('room-input').value.trim().toUpperCase();
+      const roomCode = document.getElementById('room-input').value.trim();
       
       if (!username) return showToast('Please enter a name', 'error');
       if (entryMode === 'join' && !roomCode) return showToast('Please enter a room code', 'error');
+      if (entryMode === 'join' && !/^\d{6}$/.test(roomCode)) return showToast('Room codes must be exactly six digits.', 'error');
 
       isEnteringRoom = true;
       setEntryBusy(true);
@@ -2777,6 +2778,17 @@
       });
     });
 
+    document.getElementById('room-input').addEventListener('input', (event) => {
+      event.target.value = event.target.value.replace(/\D/g, '').slice(0, 6);
+    });
+
+    function retrySocketConnection() {
+      if (socket?.connected) return;
+      setSocketConnectionState('connecting', 'Connecting to the chat server…');
+      if (socket) socket.connect();
+      else initSocket();
+    }
+
     function leaveRoom() {
       stopTyping();
       clearRoomSession();
@@ -2792,40 +2804,93 @@
     let typingTimeout;
     let remoteTypingTimeout;
     let isTyping = false;
+    const outgoingDeliveries = new Map();
 
-    function sendMessage() {
+    function updateComposerAvailability() {
+      const button = document.getElementById('send-btn');
+      if (!button) return;
+      const peers = AppState.room.users.filter((user) => user.id !== socket?.id);
+      const ready = Boolean(socket?.connected && AppState.room.code && peers.length && peers.every((peer) => Crypto.hasSessionKey(peer.id)));
+      button.disabled = !ready;
+      button.title = !socket?.connected
+        ? 'Waiting for a server connection'
+        : !peers.length
+          ? 'Waiting for another participant'
+          : !ready ? 'Waiting for secure setup with everyone in the room' : 'Send message';
+      const emptyNotice = document.getElementById('room-empty-notice');
+      if (emptyNotice) emptyNotice.classList.toggle('hidden', !AppState.room.code || peers.length > 0);
+    }
+
+    function updateMessageDelivery(receipt, delivered) {
+      if (!receipt?.id || !receipt?.to) return;
+      const tracker = outgoingDeliveries.get(receipt.id);
+      if (!tracker || !tracker.expected.has(receipt.to)) return;
+      if (delivered) tracker.confirmed.add(receipt.to);
+      else tracker.failed.add(receipt.to);
+      const settled = tracker.confirmed.size + tracker.failed.size;
+      if (settled < tracker.expected.size) {
+        tracker.element?.querySelector('.delivery-status')?.replaceChildren(document.createTextNode('Sending…'));
+        return;
+      }
+      const label = tracker.failed.size === 0 ? 'Delivered' : tracker.confirmed.size ? 'Partially delivered' : 'Not delivered';
+      const state = tracker.failed.size === 0 ? 'delivered' : 'failed';
+      const status = tracker.element?.querySelector('.delivery-status');
+      if (status) {
+        status.textContent = label;
+        status.dataset.state = state;
+      }
+      outgoingDeliveries.delete(receipt.id);
+    }
+
+    async function sendMessage() {
       const input = document.getElementById('message-input');
       const text = input.value.trim();
       if (!text) return;
+      if (!socket?.connected || !AppState.room.code) {
+        showToast('You are offline. Message not sent; your draft is still here.', 'error');
+        return;
+      }
+
+      const peers = AppState.room.users.filter((user) => user.id !== socket.id);
+      if (!peers.length) {
+        showToast('No one else is in the room yet. Message not sent.', 'info');
+        updateComposerAvailability();
+        return;
+      }
+      if (peers.some((peer) => !Crypto.hasSessionKey(peer.id))) {
+        showToast('Secure setup is still in progress. Message not sent.', 'info');
+        return;
+      }
 
       const messageId = generateMessageId();
       const timestamp = Date.now();
+      const messageElement = renderMessage({ sender: AppState.user.username, text, timestamp, id: messageId }, true, 'Sending…');
+      const tracker = { expected: new Set(peers.map((peer) => peer.id)), confirmed: new Set(), failed: new Set(), element: messageElement };
+      outgoingDeliveries.set(messageId, tracker);
+      window.setTimeout(() => {
+        if (!outgoingDeliveries.has(messageId)) return;
+        tracker.expected.forEach((id) => {
+          if (!tracker.confirmed.has(id) && !tracker.failed.has(id)) updateMessageDelivery({ id: messageId, to: id }, false);
+        });
+      }, 7000);
 
-      // Encrypt for each peer in the room (group chat = encrypt per recipient)
-      const peers = AppState.room.users.filter(u => u.id !== socket.id);
-      
-      if (peers.length === 0) {
-        // No peers - still render locally but don't send
-        renderMessage({ sender: AppState.user.username, text, timestamp, id: messageId }, true);
-      } else {
-        // Send encrypted copy to each peer
-        peers.forEach(async (peer) => {
-          if (!Crypto.hasSessionKey(peer.id)) {
-            console.warn('[E2EE] No session key for peer', peer.id, '- message not sent');
-            return;
-          }
+      try {
+        await Promise.all(peers.map(async (peer) => {
           try {
             const encrypted = await Crypto.encryptMessage(peer.id, text, AppState.user.id, messageId);
+            if (!socket?.connected || socket.id !== AppState.user.id) {
+              updateMessageDelivery({ id: messageId, to: peer.id }, false);
+              return;
+            }
             socket.emit('chat-message', encrypted);
-          } catch (e) {
-            console.error('[E2EE] Encryption failed for peer', peer.id, e);
+          } catch (error) {
+            console.error('[E2EE] Encryption failed for peer', peer.id, error);
+            updateMessageDelivery({ id: messageId, to: peer.id }, false);
           }
-        });
-
-        // Render our own message locally immediately
-        renderMessage({ sender: AppState.user.username, text, timestamp, id: messageId }, true);
+        }));
+      } catch (error) {
+        console.error('[E2EE] Message delivery failed:', error);
       }
-      
       stopTyping();
       input.value = '';
       input.style.height = 'auto';
@@ -2876,7 +2941,7 @@
       remoteTypingTimeout = setTimeout(() => indicator.classList.add('hidden'), 1600);
     }
 
-    function renderMessage(data, isMe) {
+    function renderMessage(data, isMe, deliveryLabel = '') {
       const container = document.getElementById('messages-list');
       const isNewGroup = lastMessageSender !== data.sender || (Date.now() - lastMessageTime > 60000); // 1 min grouping
       
@@ -2900,8 +2965,9 @@
           <div class="message-bubble px-4 py-2.5 shadow-sm text-[15px] leading-relaxed break-words ${bubbleClass} ${stackClass}">
             ${escapeHTML(data.text)}
           </div>
-          <div class="message-meta text-[10px] text-[var(--text-muted)] mt-1 opacity-0 group-hover:opacity-100 transition-opacity ${isMe ? 'text-right mr-1' : 'ml-1'} absolute -bottom-4 ${isMe ? 'right-0' : 'left-0'} whitespace-nowrap">
-            ${new Date(data.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+          <div class="message-meta text-[10px] text-[var(--text-muted)] mt-1 ${isMe ? 'text-right mr-1' : 'ml-1'} whitespace-nowrap">
+            <span>${new Date(data.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
+            ${isMe ? `<span class="delivery-status" data-state="sending">${deliveryLabel || 'Sent'}</span>` : ''}
           </div>
         </div>
       `;
@@ -2912,6 +2978,7 @@
       
       lastMessageSender = data.sender;
       lastMessageTime = data.timestamp;
+      return wrapper;
     }
 
     function renderSystemMessage(text) {
@@ -2951,7 +3018,7 @@
 
     function updatePresenceUI() {
       const count = AppState.room.users.length;
-      document.getElementById('header-presence').innerText = `${count} ${count === 1 ? 'person' : 'people'} online`;
+      document.getElementById('header-presence').innerText = `${count} ${count === 1 ? 'person' : 'people'} in room`;
       
       const listContainer = document.getElementById('users-list-container');
       listContainer.innerHTML = '';
@@ -2975,6 +3042,7 @@
           </li>
         `;
       });
+      updateComposerAvailability();
     }
 
     function showKeyVerification(peerId, peerName) {
@@ -3553,518 +3621,33 @@
       }
     }
 
-    // ========================================================================
-    // CINEMATIC INTRO — Pigeon Messenger Story
-    // ========================================================================
-    let cinematicIntro = null;
-
-        function initCinematicIntro() {
-      const reduced = document.documentElement.dataset.reducedMotion === 'true';
-      const canvas = document.getElementById('pigeon-canvas');
-      const overlay = document.getElementById('cinematic-intro');
-      const skipBtn = document.getElementById('skip-intro');
-      const replayBtn = document.getElementById('replay-intro');
-      const enterBtn = document.getElementById('enter-app-btn');
-      const titleEl = document.getElementById('cinematic-title');
-      const subtitleEl = document.getElementById('cinematic-subtitle');
-      const storylineEl = document.getElementById('cinematic-storyline');
-
-      if (!canvas || !overlay) return;
-
-      // Reduced motion fallback: skip 3D, go straight to UI
-      if (reduced) {
-        overlay.style.display = 'none';
-        enterBtn.classList.remove('hidden');
-        enterBtn.addEventListener('click', () => showEntryView('create'));
-        return;
-      }
-
-      // Three.js setup (with WebGL fallback)
-      let scene, camera, renderer;
-      try {
-        scene = new THREE.Scene();
-        scene.fog = new THREE.FogExp2(0xfff0f5, 0.0015);
-
-        camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 0.1, 2000);
-        camera.position.set(0, 12, 25);
-
-        renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
-        renderer.setSize(window.innerWidth, window.innerHeight);
-        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-        renderer.shadowMap.enabled = true;
-        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-        renderer.setClearColor(0xfff0f5, 1);
-
-        // Lights
-        const ambientLight = new THREE.AmbientLight(0xffeef5, 0.6);
-        scene.add(ambientLight);
-
-        const sunLight = new THREE.DirectionalLight(0xfff0f5, 1.2);
-        sunLight.position.set(30, 50, 30);
-        sunLight.castShadow = true;
-        sunLight.shadow.camera.left = -60;
-        sunLight.shadow.camera.right = 60;
-        sunLight.shadow.camera.top = 60;
-        sunLight.shadow.camera.bottom = -60;
-        sunLight.shadow.mapSize.width = 2048;
-        sunLight.shadow.mapSize.height = 2048;
-        scene.add(sunLight);
-
-        const fillLight = new THREE.DirectionalLight(0xe1bee7, 0.4);
-        fillLight.position.set(-30, 20, -10);
-        scene.add(fillLight);
-
-        threeReady = true;
-      } catch (e) {
-        console.warn('Three.js initialization failed:', e.message);
-        // Fallback: skip 3D, show UI directly
-        overlay.style.display = 'none';
-        enterBtn.classList.remove('hidden');
-        enterBtn.addEventListener('click', () => showEntryView('create'));
-        return;
-      }
-
-      // ===== HELPERS =====
-      function createPigeon() {
-        const group = new THREE.Group();
-
-        // Body
-        const bodyGeo = new THREE.SphereGeometry(1.2, 12, 10);
-        bodyGeo.scale(1, 0.8, 1.4);
-        const bodyMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.4, metalness: 0.1 });
-        const body = new THREE.Mesh(bodyGeo, bodyMat);
-        body.position.y = 0.6;
-        body.castShadow = true;
-        group.add(body);
-
-        // Head
-        const headGeo = new THREE.SphereGeometry(0.55, 10, 8);
-        const head = new THREE.Mesh(headGeo, bodyMat);
-        head.position.set(0, 1.25, 0.6);
-        head.castShadow = true;
-        group.add(head);
-
-        // Beak
-        const beakGeo = new THREE.ConeGeometry(0.15, 0.6, 6);
-        beakGeo.rotateX(Math.PI / 2);
-        const beakMat = new THREE.MeshStandardMaterial({ color: 0xffe9a6 });
-        const beak = new THREE.Mesh(beakGeo, beakMat);
-        beak.position.set(0, 1.15, 1.1);
-        beak.castShadow = true;
-        group.add(beak);
-
-        // Eyes
-        const eyeGeo = new THREE.SphereGeometry(0.08, 6, 4);
-        const eyeMat = new THREE.MeshStandardMaterial({ color: 0x222222 });
-        const eyeL = new THREE.Mesh(eyeGeo, eyeMat);
-        eyeL.position.set(-0.18, 1.35, 0.85);
-        const eyeR = new THREE.Mesh(eyeGeo, eyeMat);
-        eyeR.position.set(0.18, 1.35, 0.85);
-        group.add(eyeL, eyeR);
-
-        // Wings (left & right)
-        const wingGeo = new THREE.CylinderGeometry(0, 1.8, 1.2, 8, 1, true);
-        wingGeo.rotateZ(Math.PI / 2);
-        wingGeo.translate(0, 0, -0.3);
-        const wingMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.5, side: THREE.DoubleSide });
-
-        const wingL = new THREE.Mesh(wingGeo, wingMat);
-        wingL.position.set(-1.0, 1.0, 0);
-        wingL.rotation.z = -0.4;
-        wingL.castShadow = true;
-        group.add(wingL);
-
-        const wingR = new THREE.Mesh(wingGeo, wingMat);
-        wingR.position.set(1.0, 1.0, 0);
-        wingR.rotation.z = 0.4;
-        wingR.castShadow = true;
-        group.add(wingR);
-
-        // Tail
-        const tailGeo = new THREE.CylinderGeometry(0, 0.9, 0.8, 6, 1, true);
-        const tail = new THREE.Mesh(tailGeo, bodyMat);
-        tail.position.set(0, 0.7, -0.9);
-        tail.rotation.x = -0.6;
-        tail.castShadow = true;
-        group.add(tail);
-
-        // Legs
-        const legGeo = new THREE.CylinderGeometry(0.05, 0.05, 0.4, 4);
-        const legMat = new THREE.MeshStandardMaterial({ color: 0xffd6ba });
-        const legL = new THREE.Mesh(legGeo, legMat);
-        legL.position.set(-0.2, 0.2, 0.3);
-        legL.rotation.x = -0.4;
-        legL.castShadow = true;
-        group.add(legL);
-        const legR = new THREE.Mesh(legGeo, legMat);
-        legR.position.set(0.2, 0.2, 0.3);
-        legR.rotation.x = -0.4;
-        legR.castShadow = true;
-        group.add(legR);
-
-        // Message scroll attached to leg
-        const scrollGeo = new THREE.BoxGeometry(0.15, 0.03, 0.5);
-        const scrollMat = new THREE.MeshStandardMaterial({ color: 0xffe9a6 });
-        const scroll = new THREE.Mesh(scrollGeo, scrollMat);
-        scroll.position.set(-0.05, 0.15, 0.55);
-        scroll.rotation.z = -0.2;
-        scroll.castShadow = true;
-        group.add(scroll);
-
-        // Animation state
-        group.userData = {
-          wingL, wingR, body, scroll,
-          flapTime: 0,
-          isFlying: false,
-          flapSpeed: 12
-        };
-
-        scene.add(group);
-        return group;
-      }
-
-      function createMountain(x, z, size, color = 0xffeef5) {
-        const group = new THREE.Group();
-        const peaks = Math.floor(Math.random() * 3) + 2;
-        for (let i = 0; i < peaks; i++) {
-          const h = size * (0.5 + Math.random() * 0.8);
-          const geo = new THREE.ConeGeometry(size * (0.6 + Math.random() * 0.6), h, 6);
-          geo.rotateY(Math.random() * Math.PI * 2);
-          const mat = new THREE.MeshStandardMaterial({ color, roughness: 1, flatShading: true });
-          const mesh = new THREE.Mesh(geo, mat);
-          mesh.position.set(
-            (Math.random() - 0.5) * size * 0.4,
-            h / 2,
-            (Math.random() - 0.5) * size * 0.4
-          );
-          mesh.castShadow = true;
-          mesh.receiveShadow = true;
-          group.add(mesh);
-        }
-        group.position.set(x, 0, z);
-        scene.add(group);
-        return group;
-      }
-
-      function createTree(x, z) {
-        const group = new THREE.Group();
-        // Trunk
-        const trunkGeo = new THREE.CylinderGeometry(0.15, 0.25, 1.2, 6);
-        const trunkMat = new THREE.MeshStandardMaterial({ color: 0x5d4037 });
-        const trunk = new THREE.Mesh(trunkGeo, trunkMat);
-        trunk.position.y = 0.6;
-        trunk.castShadow = true;
-        group.add(trunk);
-        // Leaves
-        const leavesGeo = new THREE.ConeGeometry(0.9, 1.6, 6);
-        const leavesMat = new THREE.MeshStandardMaterial({ color: 0x4caf50 });
-        const leaves = new THREE.Mesh(leavesGeo, leavesMat);
-        leaves.position.y = 1.7;
-        leaves.castShadow = true;
-        group.add(leaves);
-        group.position.set(x, 0, z);
-        scene.add(group);
-        return group;
-      }
-
-      function createPalace(x, y, z) {
-        const group = new THREE.Group();
-        // Main keep
-        const keepGeo = new THREE.BoxGeometry(6, 8, 6);
-        const keepMat = new THREE.MeshStandardMaterial({ color: 0xffeef5, roughness: 0.7 });
-        const keep = new THREE.Mesh(keepGeo, keepMat);
-        keep.position.set(0, 4, 0);
-        keep.castShadow = true;
-        keep.receiveShadow = true;
-        group.add(keep);
-
-        // Towers
-        for (let i = 0; i < 4; i++) {
-          const angle = (i * Math.PI) / 2;
-          const towerGeo = new THREE.CylinderGeometry(0.8, 0.8, 4, 6);
-          const tower = new THREE.Mesh(towerGeo, keepMat);
-          tower.position.set(Math.cos(angle) * 3.2, 2, Math.sin(angle) * 3.2);
-          tower.castShadow = true;
-          group.add(tower);
-          // Roof
-          const roofGeo = new THREE.ConeGeometry(1, 1, 6, 1, true);
-          const roof = new THREE.Mesh(roofGeo, new THREE.MeshStandardMaterial({ color: 0xffd6ba }));
-          roof.position.set(0, 2.1, 0);
-          roof.rotation.z = angle;
-          roof.position.x = Math.cos(angle) * 0.4;
-          roof.position.z = Math.sin(angle) * 0.4;
-          group.add(roof);
-        }
-
-        // Balcony
-        const balconyGeo = new THREE.BoxGeometry(5, 0.1, 1);
-        const balcony = new THREE.Mesh(balconyGeo, new THREE.MeshStandardMaterial({ color: 0xe1bee7 }));
-        balcony.position.set(0, 4.2, 2.8);
-        group.add(balcony);
-
-        group.position.set(x, y, z);
-        scene.add(group);
-        return group;
-      }
-
-      function createRiver(x, z, w, d) {
-        const geo = new THREE.PlaneGeometry(w, d, 32, 32);
-        geo.rotateX(-Math.PI / 2);
-        const vertices = geo.attributes.position.array;
-        for (let i = 0; i < vertices.length; i += 3) {
-          vertices[i + 1] = (Math.random() - 0.5) * 0.02;
-        }
-        const mat = new THREE.MeshStandardMaterial({ color: 0xb2ebf2, roughness: 0.2, metalness: 0.3, transparent: true, opacity: 0.8 });
-        const river = new THREE.Mesh(geo, mat);
-        river.position.set(x, 0.01, z);
-        river.receiveShadow = true;
-        scene.add(river);
-        return { mesh: river, vertices, geo };
-      }
-
-      function createVillage(x, z) {
-        const group = new THREE.Group();
-        for (let i = 0; i < 5; i++) {
-          const h = 1.5 + Math.random() * 1.5;
-          const geo = new THREE.BoxGeometry(1, h, 1);
-          const mat = new THREE.MeshStandardMaterial({ color: 0xffeef5 });
-          const house = new THREE.Mesh(geo, mat);
-          house.position.set((Math.random() - 0.5) * 3, h / 2, (Math.random() - 0.5) * 3);
-          house.castShadow = true;
-          group.add(house);
-          // Roof
-          const roofGeo = new THREE.ConeGeometry(0.8, 0.8, 4, 1, true);
-          const roofMat = new THREE.MeshStandardMaterial({ color: 0xffd6ba });
-          const roof = new THREE.Mesh(roofGeo, roofMat);
-          roof.position.set(0, h + 0.4, 0);
-          group.add(roof);
-        }
-        group.position.set(x, 0, z);
-        scene.add(group);
-        return group;
-      }
-
-      function createRecipient(x, y, z) {
-        const group = new THREE.Group();
-        const bodyGeo = new THREE.CylinderGeometry(0.6, 0.9, 1.6, 8);
-        const bodyMat = new THREE.MeshStandardMaterial({ color: 0xffe9a6 });
-        const body = new THREE.Mesh(bodyGeo, bodyMat);
-        body.position.y = 0.8;
-        body.castShadow = true;
-        group.add(body);
-        const headGeo = new THREE.SphereGeometry(0.3, 8, 6);
-        const head = new THREE.Mesh(headGeo, bodyMat);
-        head.position.y = 1.9;
-        group.add(head);
-        group.position.set(x, y, z);
-        scene.add(group);
-        return group;
-      }
-
-      // Build scene objects
-      const pigeon = createPigeon();
-      const king = createKing(0, 0, 0);
-
-      // Mountains in background
-      createMountain(-40, -60, 30, 0xfff0f5);
-      createMountain(40, -80, 35, 0xffeef5);
-      createMountain(-20, -100, 25, 0xfff0f5);
-      createMountain(60, -120, 28, 0xffeef5);
-
-      // River
-      const river = createRiver(0, -40, 60, 100);
-
-      // Palace behind king
-      createPalace(0, 0, -15);
-
-      // Trees around
-      for (let i = 0; i < 15; i++) {
-        createTree((Math.random() - 0.5) * 50, (Math.random() - 0.5) * 60 - 20);
-      }
-
-      // Villages
-      createVillage(-30, -40);
-      createVillage(30, -60);
-
-      // Recipient house at end
-      const recipient = createRecipient(0, 0, 80);
-
-      // ===== ANIMATION TIMELINE =====
-      let tl = gsap.timeline({ paused: true });
-      let flutterTl;
-      let riverTime = 0;
-
-      // Helper to make pigeon flap wings
-      function startFlapping() {
-        pigeon.userData.isFlying = true;
-        flutterTl = gsap.to(pigeon.userData.wingL.rotation, {
-          z: 0.8,
-          duration: 0.12,
-          repeat: -1,
-          yoyo: true,
-          ease: 'sine.inOut'
-        });
-        gsap.to(pigeon.userData.wingR.rotation, {
-          z: -0.8,
-          duration: 0.12,
-          repeat: -1,
-          yoyo: true,
-          ease: 'sine.inOut'
-        });
-        // Body bob
-        gsap.to(pigeon.userData.body.position, {
-          y: 0.8,
-          duration: 0.4,
-          repeat: -1,
-          yoyo: true,
-          ease: 'sine.inOut'
-        });
-      }
-
-      function stopFlapping() {
-        if (flutterTl) flutterTl.kill();
-        pigeon.userData.isFlying = false;
-        gsap.to(pigeon.userData.wingL.rotation, { z: -0.4, duration: 0.5 });
-        gsap.to(pigeon.userData.wingR.rotation, { z: 0.4, duration: 0.5 });
-        gsap.to(pigeon.userData.body.position, { y: 0.6, duration: 0.5 });
-      }
-
-      // Scene 1: Aerial view -> approach palace
-      tl.to(camera.position, { x: -5, y: 15, z: 15, duration: 3, ease: 'power2.inOut' })
-        .to(camera.position, { x: -8, y: 12, z: 10, duration: 2, ease: 'power2.inOut' }, '-=1')
-        .to(pigeon.position, { x: -8, y: 6, z: -10, duration: 3 }, '-=2')
-        .to(pigeon.rotation, { y: 0.5, duration: 1 }, '-=2.5')
-        .to(storylineEl, { opacity: 1, duration: 1 }, '-=1')
-        .to(storylineEl, { text: 'A king writes a secret scroll...', duration: 0.5 }, '-=0.5');
-
-      // Scene 2: King writes message
-      tl.to(camera.position, { x: 0, y: 5, z: 6, duration: 2.5, ease: 'power2.inOut' })
-        .to(camera.rotation, { y: 0, duration: 2.5 }, '-=2.5')
-        .to(storylineEl, { text: 'The king seals his message with royal wax.', duration: 0.5 }, '-=2')
-        .to(king.position, { y: 0.2, duration: 1 }, '-=1.5') // King "writes" (bob)
-        .to(scroll.position, { z: 0.22, duration: 0.5 }, '-=1');
-
-      // Scene 3: King attaches scroll to pigeon & takes off
-      tl.to(camera.position, { x: -2, y: 4, z: 4, duration: 2, ease: 'power2.inOut' })
-        .to(camera.rotation, { y: -0.3, duration: 2 }, '-=2')
-        .to(pigeon.position, { x: 0, y: 0.8, z: 0.4, duration: 1.5 }, '-=1.8')
-        .to(pigeon.rotation, { y: 0, duration: 1 }, '-=1.5')
-        .call(() => startFlapping())
-        .to(pigeon.position, { x: 5, y: 8, z: -5, duration: 2, ease: 'power2.inOut' }, '-=0.5')
-        .to(pigeon.rotation, { y: -0.8, duration: 1 }, '-=2')
-        .to(camera.position, { x: 10, y: 12, z: -10, duration: 3, ease: 'power2.inOut' }, '-=2')
-        .to(camera.rotation, { y: -0.8, duration: 3 }, '-=3')
-        .to(storylineEl, { text: 'The pigeon takes flight across the kingdom.', duration: 0.5 }, '-=2.5');
-
-      // Scene 4: Journey through landscapes
-      tl.to(pigeon.position, { x: -25, y: 10, z: -40, duration: 4, ease: 'sine.inOut' })
-        .to(camera.position, { x: -30, y: 18, z: -45, duration: 4 }, '-=4')
-        .to(camera.rotation, { y: -0.6, x: -0.2, duration: 4 }, '-=4')
-        .to(storylineEl, { text: 'Over snow-capped mountains and ancient valleys.', duration: 0.5 }, '-=3.5')
-
-        .to(pigeon.position, { x: 15, y: 6, z: -80, duration: 4, ease: 'sine.inOut' })
-        .to(camera.position, { x: 20, y: 12, z: -85, duration: 4 }, '-=4')
-        .to(camera.rotation, { y: 0.2, x: -0.1, duration: 4 }, '-=4')
-        .to(storylineEl, { text: 'Above winding rivers reflecting the sun.', duration: 0.5 }, '-=3.5')
-
-        .to(pigeon.position, { x: -10, y: 9, z: -130, duration: 4, ease: 'sine.inOut' })
-        .to(camera.position, { x: -15, y: 16, z: -135, duration: 4 }, '-=4')
-        .to(camera.rotation, { y: -0.4, x: -0.15, duration: 4 }, '-=4')
-        .to(storylineEl, { text: 'Through dense forests where sunlight filters through.', duration: 0.5 }, '-=3.5')
-
-        .to(pigeon.position, { x: 25, y: 5, z: -170, duration: 4, ease: 'sine.inOut' })
-        .to(camera.position, { x: 30, y: 10, z: -175, duration: 4 }, '-=4')
-        .to(camera.rotation, { y: 0.3, x: -0.05, duration: 4 }, '-=4')
-        .to(storylineEl, { text: 'Past villages where daily life goes on.', duration: 0.5 }, '-=3.5');
-
-      // Scene 5: Arrival
-      tl.to(pigeon.position, { x: 0, y: 2, z: 75, duration: 4, ease: 'power2.inOut' })
-        .to(camera.position, { x: 0, y: 8, z: 85, duration: 4 }, '-=4')
-        .to(camera.rotation, { y: Math.PI, x: 0, duration: 4 }, '-=4')
-        .call(() => stopFlapping())
-        .to(pigeon.rotation, { y: Math.PI, duration: 1 }, '-=3')
-        .to(storylineEl, { text: 'The message arrives. The scroll is read.', duration: 0.5 }, '-=3');
-
-      tl.duration(28);
-
-      // Animation loop for continuous effects (river waves, pigeon idle bobbing)
-      function animate(time) {
-        requestAnimationFrame(animate);
-        riverTime += 0.02;
-        const vertices = river.vertices;
-        for (let i = 0; i < vertices.length; i += 3) {
-          vertices[i + 1] = Math.sin(time * 0.002 + i) * 0.03 + Math.cos(time * 0.003 + i * 2) * 0.02;
-        }
-        river.geo.attributes.position.needsUpdate = true;
-
-        if (pigeon.userData.isFlying) {
-          // Gentle forward bob while flying
-          pigeon.position.y += Math.sin(time * 0.005) * 0.003;
-        }
-
-        renderer.render(scene, camera);
-      }
-      animate(0);
-
-      // Handle resize
-      window.addEventListener('resize', () => {
-        camera.aspect = window.innerWidth / window.innerHeight;
-        camera.updateProjectionMatrix();
-        renderer.setSize(window.innerWidth, window.innerHeight);
-      });
-
-      // Button handlers
-      skipBtn.addEventListener('click', () => {
-        tl.kill();
-        stopFlapping();
-        // Hide intro text, keep chat surface visible
-        titleEl.style.opacity = '0';
-        subtitleEl.style.opacity = '0';
-        storylineEl.style.opacity = '0';
-        skipBtn.style.opacity = '0';
-        setTimeout(() => {
-          skipBtn.style.display = 'none';
-        }, 800);
-        replayBtn.classList.remove('hidden');
-        enterBtn.classList.remove('hidden');
-        enterBtn.style.opacity = '1';
-      });
-
-      replayBtn.addEventListener('click', () => {
-        tl.restart();
-        replayBtn.classList.add('hidden');
-        enterBtn.classList.add('hidden');
-        skipBtn.classList.remove('hidden');
-        skipBtn.style.opacity = '1';
-        titleEl.style.opacity = '0';
-        subtitleEl.style.opacity = '0';
-        storylineEl.style.opacity = '0';
-        tl.play();
-      });
-
-      enterBtn.addEventListener('click', () => {
-        tl.kill();
-        stopFlapping();
-        overlay.style.transition = 'opacity 1s ease';
-        overlay.style.opacity = '0';
-        setTimeout(() => {
-          overlay.style.display = 'none';
-          showEntryView('create');
-        }, 1000);
-      });
-
-      // Auto-start timeline after a brief moment
-      setTimeout(() => tl.play(), 300);
-
-      cinematicIntro = { tl, renderer, scene, camera, stopFlapping };
-    }
-
     // Initialize application
     document.addEventListener("DOMContentLoaded", () => {
       syncMotionPreference();
       initTheme();
       initSocket();
-      initCinematicIntro();
+
+      const appPlugin = window.Capacitor?.Plugins?.App;
+      if (appPlugin?.addListener) {
+        appPlugin.addListener('appUrlOpen', ({ url }) => applySharedRoomLink(url))
+          .catch((error) => console.warn('Native room-link handling is unavailable:', error));
+        if (appPlugin.getLaunchUrl) {
+          appPlugin.getLaunchUrl()
+            .then((result) => { if (result?.url) applySharedRoomLink(result.url); })
+            .catch((error) => console.warn('Unable to read the Android launch link:', error));
+        }
+      }
+
+      document.getElementById('connection-retry').addEventListener('click', retrySocketConnection);
+      document.getElementById('entry-connection-retry').addEventListener('click', retrySocketConnection);
+      document.querySelectorAll('[data-home-nav]').forEach((button) => {
+        button.addEventListener('click', () => {
+          document.querySelectorAll('[data-home-nav]').forEach((item) => item.classList.toggle('active', item === button));
+          if (button.dataset.homeNav === 'rooms') showEntryView('join');
+          else if (button.dataset.homeNav === 'settings') openModal('theme-modal');
+          else showLandingView();
+        });
+      });
 
       document.querySelectorAll('[data-entry-mode]').forEach((button) => {
         button.addEventListener('click', () => showEntryView(button.dataset.entryMode));
@@ -4080,12 +3663,20 @@
         });
       });
 
+      // Capacitor's native back event is used when the installed App plugin is
+      // present; browser history remains the fallback for web previews.
+      window.Capacitor?.Plugins?.App?.addListener?.('backButton', () => {
+        const visibleModal = Array.from(document.querySelectorAll('[role="dialog"]')).find((item) => !item.classList.contains('hidden'));
+        if (visibleModal) { visibleModal.classList.add('hidden'); return; }
+        if (!document.getElementById('chat-view').classList.contains('hidden')) { leaveRoom(); return; }
+        if (!document.getElementById('entry-view').classList.contains('hidden')) showLandingView();
+      }).catch?.((error) => console.warn('Native back handling is unavailable:', error));
+
       // A shared room link only pre-fills the join form. It never admits a
       // visitor; the normal host-approval request still happens on submit.
       const sharedRoom = getSharedRoomCodeFromUrl();
       if (sharedRoom) {
-        showEntryView('join');
-        document.getElementById('room-input').value = sharedRoom;
+        applySharedRoomLink(window.location.href);
       }
       
       // File attachment handler
@@ -4143,7 +3734,29 @@
         </div>
       `;
 
+      let fileMessageId;
       try {
+        fileMessageId = generateMessageId();
+        const fileMessageElement = renderMessage({
+          sender: AppState.user.username,
+          text: `📎 Encrypted file: ${file.name} (${formatFileSize(file.size)})`,
+          timestamp: Date.now(),
+          id: fileMessageId
+        }, true, 'Sending…');
+        outgoingDeliveries.set(fileMessageId, {
+          expected: new Set(peers.map((peer) => peer.id)),
+          confirmed: new Set(),
+          failed: new Set(),
+          element: fileMessageElement
+        });
+        window.setTimeout(() => {
+          const tracker = outgoingDeliveries.get(fileMessageId);
+          if (!tracker) return;
+          tracker.expected.forEach((id) => {
+            if (!tracker.confirmed.has(id) && !tracker.failed.has(id)) updateMessageDelivery({ id: fileMessageId, to: id }, false);
+          });
+        }, 7000);
+
         // Encrypt file for first peer (in group, we'd encrypt for each peer)
         // For simplicity, encrypt once per peer
         for (const peer of peers) {
@@ -4160,7 +3773,6 @@
 
           // Send each chunk as a separate message (or as a single file message)
           // For now, send the whole encrypted file as one message
-          const fileMessageId = generateMessageId();
           const filePayload = {
             v: 1,
             id: fileMessageId,
@@ -4175,20 +3787,13 @@
 
         if (progressBar && progressText) {
           progressBar.style.width = '100%';
-          progressText.textContent = 'Sent!';
-          progressText.classList.add('text-green-500');
+          progressText.textContent = 'Encrypted. Waiting for recipient confirmation…';
         }
-
-        // Show sent confirmation in chat
-        renderMessage({
-          sender: AppState.user.username,
-          text: `📎 Sent encrypted file: ${escapeHTML(file.name)} (${formatFileSize(file.size)})`,
-          timestamp: Date.now(),
-          id: generateMessageId()
-        }, true);
 
       } catch (e) {
         console.error('[E2EE] File encryption failed:', e);
+        const tracker = outgoingDeliveries.get(fileMessageId);
+        if (tracker) tracker.expected.forEach((id) => updateMessageDelivery({ id: fileMessageId, to: id }, false));
         showToast('Failed to encrypt/send file', 'error');
       } finally {
         setTimeout(() => {
@@ -4206,4 +3811,3 @@
   </script>
 </body>
 </html>
-
