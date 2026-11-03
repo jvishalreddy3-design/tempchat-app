@@ -1078,6 +1078,8 @@
   }
 
   function markChatDisconnected() {
+    // Invalidate any in-flight private:open request from the previous socket.
+    state.chatOpenSeq += 1;
     clearChatInbox();
     const chat = state.activeChat;
     if (!chat) return;
@@ -1129,7 +1131,13 @@
   }
 
   async function openChat(friendId) {
-    const friend = state.friends.find((entry) => entry.id === friendId);
+    let friend = state.friends.find((entry) => entry.id === friendId);
+    if (!friend) {
+      // A message can arrive immediately after reconnect, before social:ready
+      // has repopulated the friend list. Refresh once before giving up.
+      try { await loadSocial(); } catch (_) { /* keep the original error below */ }
+      friend = state.friends.find((entry) => entry.id === friendId);
+    }
     if (!friend) { toast('That friend is no longer in your list.', 'error'); return; }
 
     // Leave the previous conversation explicitly. The backend also enforces

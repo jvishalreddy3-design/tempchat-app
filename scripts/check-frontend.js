@@ -52,11 +52,21 @@ for (const marker of ['roomReconnectPromise', "reason === 'io server disconnect'
 }
 for (const file of ['frontend/assets/tempchat-app.js', 'www/assets/tempchat-app.js']) {
   const source = fs.readFileSync(file, 'utf8');
-  for (const marker of ['accessTokenExpiresAt', 'refreshPromise', 'prepareRoomReconnect(roomSocket, options', 'forceRefresh']) {
-    if (!source.includes(marker)) throw new Error(`${file} is missing session refresh marker: ${marker}`);
+  for (const marker of [
+    'accessTokenExpiresAt',
+    'refreshPromise',
+    'prepareRoomReconnect(roomSocket, options',
+    'forceRefresh',
+    'acceptIncomingMessage',
+    'restoreActiveChat',
+    'chatInbox',
+    "reason === 'recipient_unavailable'",
+    "name === 'retry-chat'"
+  ]) {
+    if (!source.includes(marker)) throw new Error(`${file} is missing private-chat delivery marker: ${marker}`);
   }
 }
-console.log('Room session refresh/reconnect markers validated in frontend and Android bundle.');
+console.log('Room session refresh/reconnect and private-chat delivery markers validated in frontend and Android bundle.');
 const backHandler = nativeHtml.match(/addListener\?\.\('backButton',[\s\S]*?Native back handling is unavailable/)?.[0] || '';
 if (backHandler.includes('leaveRoom()')) throw new Error('Android system back must not explicitly leave an active room.');
 console.log('EKA home structure, exact four-item bottom navigation, secure room restoration, and non-destructive Android back handling validated.');
