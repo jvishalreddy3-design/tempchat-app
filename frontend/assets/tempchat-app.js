@@ -29,6 +29,8 @@
     socket: null,
     socketRefreshTried: false,
     activeChat: null,
+    chatInbox: new Map(),
+    chatOpenSeq: 0,
     viewedProfile: null,
     friendsFilter: 'all',
     requestsFilter: 'incoming',
@@ -264,6 +266,21 @@
     });
   }
 
+  function notifyPrivateMessage(message) {
+    if (!message?.id || !message?.from) return;
+    const friend = state.friends.find((entry) => entry.id === message.from)
+      || { id: message.from, username: message.sender || 'friend', displayName: message.sender || 'Friend' };
+    const preview = String(message.text || '');
+    showEkaNotification({
+      key: `message:${message.conversationId}:${message.id}`,
+      user: friend,
+      title: displayNameOf(friend),
+      body: preview.length > 90 ? `${preview.slice(0, 90)}…` : preview,
+      actionsHtml: `<button type="button" class="eka-notify-accept" data-notify-chat="${esc(friend.id)}">Open chat</button>`,
+      timeout: 9000
+    });
+  }
+
   function notifyFriendRequest(request) {
     if (!request?.id || state.notifiedRequests.has(request.id)) return;
     state.notifiedRequests.add(request.id);
@@ -305,6 +322,15 @@
       const id = decline.getAttribute('data-notify-decline');
       dismissEkaNotification(`request:${id}`);
       await respondRequest(id, false);
+      return;
+    }
+
+    const chatAction = event.target.closest('[data-notify-chat]');
+    if (chatAction) {
+      event.preventDefault();
+      const friendId = chatAction.getAttribute('data-notify-chat');
+      removeEkaNotification(chatAction.closest('.eka-notify'));
+      openChat(friendId);
       return;
     }
 
@@ -533,6 +559,7 @@
       state.socket = null;
     }
     clearChatMemory();
+    clearChatInbox();
     clearNotifications();
   }
 
@@ -851,12 +878,18 @@
 
     socket.on('connect', () => {
       state.socketRefreshTried = false;
-      if (state.activeChat) renderChatHeader();
+      if (state.activeChat) {
+        // A reconnect creates a new socket ID on the server, so the previous
+        // conversation registration is gone. Re-open the active chat before
+        // enabling the composer again.
+        if (state.currentScreen === 'chat') restoreActiveChat();
+        else renderChatHeader();
+      }
     });
     socket.on('disconnect', async (reason) => {
       // Privacy rule: a dropped connection clears the active conversation.
-      clearChatMemory();
-      if (state.activeChat) renderChatHeader();
+      // Keep the friend on screen so a reconnect can re-open the conversation.
+      markChatDisconnected();
       // Socket.IO does not automatically reconnect after a server-initiated
       // disconnect. The backend uses one when the 10-minute JWT expires, so
       // rotate the session and explicitly reconnect with the fresh token.
@@ -929,9 +962,11 @@
     });
     socket.on('social:changed', () => { loadSocial().catch(() => {}); });
     socket.on('private:message', (message, acknowledge) => {
-      if (typeof acknowledge === 'function') acknowledge({ received: true });
-      if (!state.activeChat || message?.conversationId !== state.activeChat.conversationId) return;
-      appendMessage(message, false);
+      // Acknowledge only after the message has actually been accepted: either
+      // rendered in the matching active conversation or kept in the client's
+      // ephemeral inbox. This is what makes "Delivered" truthful.
+      const accepted = acceptIncomingMessage(message);
+      if (typeof acknowledge === 'function') acknowledge({ received: accepted });
     });
     socket.on('private:typing', (payload) => {
       if (!state.activeChat || payload?.conversationId !== state.activeChat.conversationId) return;
@@ -993,11 +1028,129 @@
     return `m_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 12)}`;
   }
 
+  const CHAT_INBOX_LIMIT = 100;
+
+  function inboxFor(conversationId) {
+    if (!conversationId) return null;
+    let list = state.chatInbox.get(conversationId);
+    if (!list) {
+      list = [];
+      state.chatInbox.set(conversationId, list);
+    }
+    return list;
+  }
+
+  function takeChatInbox(conversationId) {
+    const list = state.chatInbox.get(conversationId);
+    if (!list) return [];
+    state.chatInbox.delete(conversationId);
+    return [...list];
+  }
+
+  function clearChatInbox() {
+    state.chatInbox.clear();
+  }
+
+  function acceptIncomingMessage(message) {
+    if (!state.user
+      || typeof message?.id !== 'string'
+      || typeof message?.conversationId !== 'string'
+      || typeof message?.text !== 'string') return false;
+
+    const chat = state.activeChat;
+    if (chat && chat.conversationId === message.conversationId) {
+      if (chat.messages.some((entry) => entry.id === message.id)) return true;
+      chat.messages.push(message);
+      appendMessage(message, message.from === state.user.id);
+      return true;
+    }
+
+    // The friend is online but this conversation is not open on this device.
+    // Keep the message only in JavaScript memory and let the user open the
+    // chat from the notification. Nothing is written to storage or PostgreSQL.
+    const inbox = inboxFor(message.conversationId);
+    if (!inbox) return false;
+    if (inbox.some((entry) => entry.id === message.id)) return true;
+    inbox.push(message);
+    while (inbox.length > CHAT_INBOX_LIMIT) inbox.shift();
+    notifyPrivateMessage(message);
+    return true;
+  }
+
+  function markChatDisconnected() {
+    clearChatInbox();
+    const chat = state.activeChat;
+    if (!chat) return;
+    chat.ready = false;
+    chat.conversationId = null;
+    chat.peerOnline = false;
+    chat.messages = [];
+    chat.error = null;
+    renderChatHeader();
+    renderChatMessages();
+  }
+
+  async function restoreActiveChat() {
+    const chat = state.activeChat;
+    if (!chat?.friend || !state.socket?.connected) {
+      renderChatHeader();
+      return;
+    }
+    if (chat.restoring) return;
+    chat.restoring = true;
+    const seq = ++state.chatOpenSeq;
+    chat.ready = false;
+    chat.error = null;
+    renderChatHeader();
+    renderChatMessages();
+    try {
+      const response = await emitAck('private:open', { friendId: chat.friend.id });
+      if (seq !== state.chatOpenSeq || state.activeChat !== chat) return;
+      if (!response?.success) {
+        chat.ready = false;
+        chat.error = response?.message || 'Unable to restore this chat.';
+        renderChatHeader();
+        renderChatMessages();
+        return;
+      }
+      chat.conversationId = response.conversation.id;
+      chat.peerOnline = Boolean(response.conversation.peerOnline);
+      chat.ready = true;
+      chat.error = null;
+      const pending = takeChatInbox(chat.conversationId);
+      for (const message of pending) {
+        if (!chat.messages.some((entry) => entry.id === message.id)) chat.messages.push(message);
+      }
+      renderChatMessages();
+      renderChatHeader();
+    } finally {
+      chat.restoring = false;
+    }
+  }
+
   async function openChat(friendId) {
     const friend = state.friends.find((entry) => entry.id === friendId);
     if (!friend) { toast('That friend is no longer in your list.', 'error'); return; }
+
+    // Leave the previous conversation explicitly. The backend also enforces
+    // one conversation per socket, but this keeps the transition immediate.
+    const previous = state.activeChat;
+    if (previous?.conversationId && state.socket?.connected) {
+      state.socket.emit('private:leave', { conversationId: previous.conversationId });
+    }
     clearChatMemory();
-    state.activeChat = { friend, conversationId: null, messages: [], peerOnline: Boolean(friend.online) };
+
+    const seq = ++state.chatOpenSeq;
+    const chat = {
+      friend,
+      conversationId: null,
+      messages: [],
+      peerOnline: Boolean(friend.online),
+      ready: false,
+      error: null,
+      restoring: false
+    };
+    state.activeChat = chat;
     showScreen('chat');
     renderChatHeader();
     renderChatMessages();
@@ -1008,29 +1161,43 @@
       // all. Create one before waiting; waitForSocket cannot connect a null socket.
       if (!state.socket) connectSocket();
       const connected = await waitForSocket();
+      if (seq !== state.chatOpenSeq || state.activeChat !== chat) return;
       if (!connected) {
-        toast('Could not connect. Try again when you are online.', 'error');
+        chat.error = 'Could not connect to the chat server. Check your connection and retry.';
+        renderChatHeader();
+        renderChatMessages();
+        toast(chat.error, 'error');
         return;
       }
     }
 
     const response = await emitAck('private:open', { friendId });
+    if (seq !== state.chatOpenSeq || state.activeChat !== chat) return;
     if (!response?.success) {
-      toast(response?.message || 'Unable to open this chat.', 'error');
-      clearChatMemory();
-      showScreen('friends');
+      chat.ready = false;
+      chat.error = response?.message || 'Unable to open this chat.';
+      renderChatHeader();
+      renderChatMessages();
+      toast(chat.error, 'error');
       return;
     }
-    if (!state.activeChat) return;
-    state.activeChat.conversationId = response.conversation.id;
-    state.activeChat.peerOnline = Boolean(response.conversation.peerOnline);
+    chat.conversationId = response.conversation.id;
+    chat.peerOnline = Boolean(response.conversation.peerOnline);
+    chat.ready = true;
+    chat.error = null;
     // Deliberately ignore any messages field: reopened conversations are empty.
-    state.activeChat.messages = [];
+    // Only messages received on this device while the chat was closed are shown.
+    const pending = takeChatInbox(chat.conversationId);
+    for (const message of pending) {
+      if (!chat.messages.some((entry) => entry.id === message.id)) chat.messages.push(message);
+    }
     renderChatMessages();
+    renderChatHeader();
     byId('tc-chat-input')?.focus();
   }
 
   function clearChatMemory() {
+    state.chatOpenSeq += 1;
     state.activeChat = null;
     const container = byId('tc-chat-messages');
     if (container) container.innerHTML = '';
@@ -1049,27 +1216,72 @@
   }
 
   function renderChatHeader() {
-    const friend = state.activeChat?.friend;
+    const chat = state.activeChat;
+    const friend = chat?.friend;
     if (!friend) return;
-    const online = Boolean(state.activeChat.peerOnline);
+    const ready = Boolean(chat.ready);
+    const online = ready && Boolean(chat.peerOnline);
     const avatar = byId('tc-chat-avatar');
     if (avatar) avatar.innerHTML = `${avatarInner(friend)}<span class="tc-dot ${online ? 'online' : ''}"></span>`;
     setText('tc-chat-name', displayNameOf(friend));
-    const status = online ? 'Online' : friend.lastSeenAt ? `Last seen ${formatLastSeen(friend.lastSeenAt)}` : 'Offline';
+    const status = chat.error
+      ? 'Not connected'
+      : !ready
+        ? 'Connecting…'
+        : online
+          ? 'Online'
+          : friend.lastSeenAt
+            ? `Last seen ${formatLastSeen(friend.lastSeenAt)}`
+            : 'Offline';
     const statusEl = byId('tc-chat-status');
     if (statusEl) statusEl.innerHTML = `<span class="tc-dot ${online ? 'online' : ''}"></span>${esc(status)}`;
     const input = byId('tc-chat-input');
     const send = byId('tc-chat-send');
-    if (input) input.disabled = false;
-    if (send) send.disabled = false;
+    const canSend = ready && Boolean(state.socket?.connected);
+    if (input) input.disabled = !canSend;
+    if (send) send.disabled = !canSend;
+  }
+
+  function renderChatNotice(message, { retry = false } = {}) {
+    const container = byId('tc-chat-messages');
+    if (!container) return;
+    container.innerHTML = '';
+    const notice = document.createElement('div');
+    notice.className = 'tc-chat-empty';
+    const icon = document.createElement('i');
+    icon.className = retry ? 'fa-solid fa-triangle-exclamation' : 'fa-solid fa-circle-notch fa-spin';
+    const title = document.createElement('strong');
+    title.textContent = retry ? 'Chat could not open' : 'Connecting…';
+    const copy = document.createElement('div');
+    copy.textContent = String(message || '');
+    notice.append(icon, title, copy);
+    if (retry) {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'tc-btn tc-btn-primary tc-btn-sm';
+      button.dataset.action = 'retry-chat';
+      button.style.marginTop = '10px';
+      button.textContent = 'Retry';
+      notice.appendChild(button);
+    }
+    container.appendChild(notice);
   }
 
   function renderChatMessages() {
     const container = byId('tc-chat-messages');
     if (!container) return;
     container.innerHTML = '';
-    if (!state.activeChat) return;
-    if (!state.activeChat.messages.length) {
+    const chat = state.activeChat;
+    if (!chat) return;
+    if (chat.error) {
+      renderChatNotice(chat.error, { retry: true });
+      return;
+    }
+    if (!chat.ready) {
+      renderChatNotice('Opening a temporary conversation…');
+      return;
+    }
+    if (!chat.messages.length) {
       const empty = document.createElement('div');
       empty.className = 'tc-chat-empty';
       empty.id = 'tc-chat-empty';
@@ -1077,7 +1289,7 @@
       container.appendChild(empty);
       return;
     }
-    for (const message of state.activeChat.messages) appendMessage(message, message.from === state.user?.id, true);
+    for (const message of chat.messages) appendMessage(message, message.from === state.user?.id, true);
     scrollChatToBottom();
   }
 
@@ -1141,7 +1353,10 @@
     const input = byId('tc-chat-input');
     const text = String(input?.value || '').trim();
     if (!text) return;
-    if (!state.activeChat?.conversationId) { toast('Wait for the conversation to open.', 'error'); return; }
+    if (!state.activeChat?.ready || !state.activeChat?.conversationId) {
+      toast('The chat is still opening. Wait a moment and try again.', 'error');
+      return;
+    }
     if (!state.socket?.connected) { toast('You are offline. Reconnect to send.', 'error'); return; }
     if (text.length > 4000) { toast('Messages are limited to 4000 characters.', 'error'); return; }
 
@@ -1163,17 +1378,26 @@
     if (response?.delivered) {
       message.delivery = 'delivered';
       updateMessageStatus(message.id, 'Delivered');
-    } else {
-      message.delivery = 'failed';
-      const reason = response?.reason;
-      const label = reason === 'recipient_offline'
-        ? 'Not delivered — friend is offline'
+      return;
+    }
+    message.delivery = 'failed';
+    const reason = response?.reason;
+    const label = reason === 'recipient_offline'
+      ? 'Not delivered — friend is offline'
+      : reason === 'recipient_unavailable'
+        ? 'Not delivered — friend could not be reached'
         : reason === 'recipient_not_in_chat'
           ? 'Not delivered — friend is not in this chat'
           : reason === 'rate_limited'
             ? 'Not delivered — slow down'
-            : 'Not delivered';
-      updateMessageStatus(message.id, label);
+            : reason === 'unauthorized'
+              ? 'Not delivered — chat closed. Reopening…'
+              : 'Not delivered';
+    updateMessageStatus(message.id, label);
+    if (reason === 'unauthorized') {
+      // The socket was replaced or the conversation was cleaned up. Re-open
+      // the chat so the user can retry without losing the screen.
+      restoreActiveChat().catch(() => {});
     }
   }
 
@@ -1575,6 +1799,7 @@
         else if (name === 'refresh-social') loadSocial().catch((error) => toast(error.message, 'error'));
         else if (name === 'open-profile' && state.user) openProfile(state.user.id);
         else if (name === 'open-chat' && state.activeChat?.friend) openChat(state.activeChat.friend.id);
+        else if (name === 'retry-chat' && state.activeChat?.friend) openChat(state.activeChat.friend.id);
       }
     });
   }
@@ -1733,6 +1958,8 @@
         } else {
           connectSocket();
         }
+      } else if (state.activeChat && !state.activeChat.ready && state.currentScreen === 'chat') {
+        restoreActiveChat().catch(() => {});
       }
     }
   });

@@ -26,6 +26,13 @@ function installSocialSockets(io, store, accountService, options = {}) {
 
   const accountSockets = (userId) => activeSocketsByUser.get(userId) || new Set();
   const isOnline = (userId) => accountSockets(userId).size > 0;
+  // Every authenticated device currently connected for an account. A friend
+  // does not have to have opened the chat before a message can reach them:
+  // the recipient device acknowledges the event and either renders it in the
+  // active conversation or keeps it in its own short-lived inbox.
+  const userSockets = (userId) => [...accountSockets(userId)]
+    .map((socketId) => io.sockets.sockets.get(socketId))
+    .filter(Boolean);
 
   function presencePayload(userId, online, lastSeenAt) {
     return {
@@ -121,6 +128,13 @@ function installSocialSockets(io, store, accountService, options = {}) {
 
         const pairKey = store.pairKey(socket.accountUser.id, payload.friendId);
         const conversationId = conversationIdFor(pairKey);
+
+        // A socket participates in one private conversation at a time. Leaving
+        // any previous conversation here prevents a stale room membership from
+        // acknowledging messages the user can no longer see after switching
+        // chats.
+        leaveAll(socket);
+
         let conversation = conversations.get(conversationId);
         if (!conversation) {
           if (conversations.size >= PRIVATE_MAX_CONVERSATIONS) {
@@ -214,6 +228,10 @@ function installSocialSockets(io, store, accountService, options = {}) {
         else if (++rate.count > PRIVATE_SEND_RATE_LIMIT) { acknowledge({ success: false, delivered: false, reason: 'rate_limited' }); return; }
 
         const peerId = conversation.userIds.find((id) => id !== senderId);
+        if (!conversation.userIds.includes(senderId) || !peerId) {
+          acknowledge({ success: false, delivered: false, reason: 'unauthorized' });
+          return;
+        }
         if (!(await store.areFriends(senderId, peerId))) {
           leaveConversation(socket, payload.conversationId);
           acknowledge({ success: false, delivered: false, reason: 'friendship_required' });
@@ -225,14 +243,15 @@ function installSocialSockets(io, store, accountService, options = {}) {
           return;
         }
 
-        const recipients = [...conversation.sockets].filter((socketId) => {
-          if (socketId === socket.id) return false;
-          return io.sockets.sockets.get(socketId)?.accountUser?.id === peerId;
-        });
+        // Deliver to every authenticated device the recipient currently has
+        // connected. This is the fix for an online friend who has not opened
+        // the chat yet: opening a chat is not a precondition for receiving a
+        // message in the ephemeral model, but an acknowledgement still is.
+        const recipients = userSockets(peerId).filter((recipient) => recipient.id !== socket.id);
         if (!recipients.length) {
           // Do not retain text that had no possible recipient. A different
           // device owned by the sender must never count as peer delivery.
-          const reason = isOnline(peerId) ? 'recipient_not_in_chat' : 'recipient_offline';
+          const reason = isOnline(peerId) ? 'recipient_unavailable' : 'recipient_offline';
           acknowledge({ success: true, delivered: false, reason, id: payload.id });
           return;
         }
@@ -268,10 +287,21 @@ function installSocialSockets(io, store, accountService, options = {}) {
         const finish = () => {
           if (settled || --remaining > 0) return;
           settled = true;
+          if (!delivered) {
+            // Nobody acknowledged the message. Remove it from the ephemeral
+            // buffer so a retry is not blocked by a message that was never
+            // received, and so the sender's failure status stays truthful.
+            conversation.seenIds.delete(message.id);
+            const index = conversation.messages.indexOf(message);
+            if (index !== -1) {
+              conversation.messages.splice(index, 1);
+              totalBufferedChars -= message.text.length;
+            }
+          }
           acknowledge({ success: true, delivered, id: payload.id, reason: delivered ? undefined : 'recipient_unavailable' });
         };
-        for (const recipientSocketId of recipients) {
-          io.to(recipientSocketId).timeout(5000).emit('private:message', message, (error, responses) => {
+        for (const recipient of recipients) {
+          io.to(recipient.id).timeout(5000).emit('private:message', message, (error, responses) => {
             if (!error && Array.isArray(responses) && responses.some((response) => response?.received === true)) delivered = true;
             finish();
           });

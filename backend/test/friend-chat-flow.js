@@ -124,7 +124,7 @@ function createStore() {
     async respondFriendRequest(requestId, recipientId, accept) {
       const request = requests.get(requestId);
       if (!request || request.recipientId !== recipientId || request.state !== 'pending') return null;
-      if (accept) return this.acceptRequest(requestId, recipientId, request.senderId);
+      if (accept) return this.acceptRequest(requestId, request.recipientId, request.senderId);
       request.state = 'declined';
       request.respondedAt = new Date();
       return request;
@@ -146,17 +146,56 @@ function createStore() {
   };
 }
 
-function waitFor(socket, event, timeout = 4000) {
+function waitFor(socket, event, timeout = 5000) {
   return new Promise((resolve, reject) => {
     const timer = setTimeout(() => reject(new Error(`Timed out waiting for ${event}`)), timeout);
     socket.once(event, (value) => { clearTimeout(timer); resolve(value); });
   });
 }
-function emitAck(socket, event, data) {
-  return new Promise((resolve) => socket.emit(event, data, resolve));
+function emitAck(socket, event, data, timeout = 8000) {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(`Timed out waiting for ${event} acknowledgement`)), timeout);
+    socket.emit(event, data, (value) => { clearTimeout(timer); resolve(value); });
+  });
 }
-function connect(url, token) {
-  return connectSocket(url, { auth: { accessToken: token }, transports: ['websocket'], forceNew: true, reconnection: false });
+function connectReady(url, token) {
+  return new Promise((resolve, reject) => {
+    const socket = connectSocket(url, {
+      auth: { accessToken: token },
+      transports: ['websocket'],
+      forceNew: true,
+      reconnection: false
+    });
+    const timer = setTimeout(() => reject(new Error('Timed out connecting social socket')), 5000);
+    socket.once('connect_error', (error) => {
+      clearTimeout(timer);
+      reject(error);
+    });
+    socket.once('social:ready', () => {
+      clearTimeout(timer);
+      resolve(socket);
+    });
+  });
+}
+function attachCollector(socket) {
+  const messages = [];
+  socket.on('private:message', (message, acknowledge) => {
+    messages.push(message);
+    if (typeof acknowledge === 'function') acknowledge({ received: true });
+  });
+  return messages;
+}
+function countId(messages, id) {
+  return messages.filter((message) => message.id === id).length;
+}
+function settle(ms = 60) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+function openChat(socket, friendId) {
+  return emitAck(socket, 'private:open', { friendId });
+}
+function sendMessage(socket, conversationId, id, text) {
+  return emitAck(socket, 'private:send', { conversationId, id, text });
 }
 
 async function post(base, path, token, body) {
@@ -204,31 +243,31 @@ async function run() {
   const clients = [];
 
   try {
-    for (const username of ['alice_flow', 'bob_flow']) {
-      const created = await post(base, '/register', null, { username, password: 'flow-test-password' });
+    const password = 'flow-test-password';
+    for (const username of ['alice_flow', 'bob_flow', 'mallory_flow']) {
+      const created = await post(base, '/register', null, { username, password });
       assert.equal(created.response.status, 201, `${username} must register`);
     }
-    const aliceLogin = await post(base, '/login', null, { username: 'alice_flow', password: 'flow-test-password' });
-    const bobLogin = await post(base, '/login', null, { username: 'bob_flow', password: 'flow-test-password' });
+    const aliceLogin = await post(base, '/login', null, { username: 'alice_flow', password });
+    const bobLogin = await post(base, '/login', null, { username: 'bob_flow', password });
+    const malloryLogin = await post(base, '/login', null, { username: 'mallory_flow', password });
     assert.equal(aliceLogin.response.status, 200);
     assert.equal(bobLogin.response.status, 200);
+    assert.equal(malloryLogin.response.status, 200);
     const aliceToken = aliceLogin.data.accessToken;
     const bobToken = bobLogin.data.accessToken;
+    const malloryToken = malloryLogin.data.accessToken;
     const aliceId = aliceLogin.data.user.id;
     const bobId = bobLogin.data.user.id;
 
-    const alice = connect(origin, aliceToken); clients.push(alice);
-    const bob = connect(origin, bobToken); clients.push(bob);
-    const aliceReady = waitFor(alice, 'social:ready');
-    const bobReady = waitFor(bob, 'social:ready');
-    await waitFor(alice, 'connect');
-    await waitFor(bob, 'connect');
-    await aliceReady;
-    await bobReady;
+    let alice = await connectReady(origin, aliceToken); clients.push(alice);
+    let bob = await connectReady(origin, bobToken); clients.push(bob);
+    const mallory = await connectReady(origin, malloryToken); clients.push(mallory);
 
-    const beforeAccept = await emitAck(alice, 'private:open', { friendId: bobId });
-    assert.equal(beforeAccept.success, false, 'pending friends must not be able to open a private chat');
-    assert.match(beforeAccept.message, /accepted friends/i);
+    // H. A pending friend request cannot open a private conversation.
+    const pendingOpen = await openChat(alice, bobId);
+    assert.equal(pendingOpen.success, false, 'pending friends must not be able to open a private chat');
+    assert.match(pendingOpen.message, /accepted friends/i);
 
     const sent = await post(base, '/friend-requests', aliceToken, { username: 'bob_flow' });
     assert.equal(sent.response.status, 200);
@@ -253,25 +292,161 @@ async function run() {
     const bobFriends = await get(base, '/friends', bobToken);
     assert.equal(bobFriends.data.friends.some((friend) => friend.id === aliceId || friend._id === aliceId), true);
 
-    const aliceOpen = await emitAck(alice, 'private:open', { friendId: bobId });
+    // I. A non-friend cannot open or send to a private conversation.
+    const nonFriendOpen = await openChat(mallory, aliceId);
+    assert.equal(nonFriendOpen.success, false, 'non-friends must not open private conversations');
+    const forgedSend = await sendMessage(mallory, `dm_${'0'.repeat(32)}`, 'friend-flow-forged-0001', 'not allowed');
+    assert.equal(forgedSend.delivered, false);
+    assert.equal(forgedSend.reason, 'unauthorized', 'a non-participant must never be able to send');
+
+    const aliceMessages = attachCollector(alice);
+    const bobMessages = attachCollector(bob);
+
+    // A. Both users online, both open the same chat, messages delivered.
+    const aliceOpen = await openChat(alice, bobId);
     assert.equal(aliceOpen.success, true, 'accepted friends must be able to open a private chat');
     assert.deepEqual(aliceOpen.conversation.messages, [], 'reopened chats must not return history');
-    const bobOpen = await emitAck(bob, 'private:open', { friendId: aliceId });
+    const bobOpen = await openChat(bob, aliceId);
     assert.equal(bobOpen.success, true);
-    assert.equal(bobOpen.conversation.id, aliceOpen.conversation.id);
+    assert.equal(bobOpen.conversation.id, aliceOpen.conversation.id, 'both users must join the same deterministic conversation');
+    const conversationId = aliceOpen.conversation.id;
 
-    let received = null;
-    bob.on('private:message', (message, acknowledge) => { received = message; acknowledge({ received: true }); });
-    const delivery = await emitAck(alice, 'private:send', {
-      conversationId: aliceOpen.conversation.id,
-      id: 'friend-flow-message-0001',
-      text: 'hello from the friend flow'
-    });
-    assert.equal(delivery.delivered, true, 'accepted friends must be able to exchange messages');
-    assert.equal(received.text, 'hello from the friend flow');
+    const a1 = await sendMessage(alice, conversationId, 'friend-flow-a-0001', 'hello one');
+    assert.equal(a1.delivered, true, 'accepted friends must be able to exchange messages');
+    assert.equal(countId(bobMessages, 'friend-flow-a-0001'), 1);
+    assert.equal(countId(aliceMessages, 'friend-flow-a-0001'), 0, 'the sender must not receive their own message');
+
+    // B. Both online, only the sender has opened the chat. This is the
+    // production failure that returned "friend is not in this chat".
+    bob.emit('private:leave', { conversationId });
+    await settle();
+    assert.equal(social.conversations.has(conversationId), true, 'the sender must keep the conversation active');
+    const a2 = await sendMessage(alice, conversationId, 'friend-flow-a-0002', 'hello while closed');
+    assert.equal(a2.delivered, true, 'an online friend who has not opened the chat must still receive the message');
+    assert.notEqual(a2.reason, 'recipient_not_in_chat');
+    assert.equal(countId(bobMessages, 'friend-flow-a-0002'), 1);
+    assert.equal(countId(aliceMessages, 'friend-flow-a-0002'), 0);
+
+    // C. The receiver opens the chat after the sender.
+    const bobOpenLate = await openChat(bob, aliceId);
+    assert.equal(bobOpenLate.success, true);
+    assert.equal(bobOpenLate.conversation.id, conversationId);
+    const a3 = await sendMessage(alice, conversationId, 'friend-flow-a-0003', 'hello after opening');
+    assert.equal(a3.delivered, true);
+    assert.equal(countId(bobMessages, 'friend-flow-a-0003'), 1);
+    const b1 = await sendMessage(bob, conversationId, 'friend-flow-b-0001', 'reply from bob');
+    assert.equal(b1.delivered, true);
+    assert.equal(countId(aliceMessages, 'friend-flow-b-0001'), 1);
+
+    // D. The receiver closes and reopens the chat.
+    bob.emit('private:leave', { conversationId });
+    await settle();
+    assert.equal(social.conversations.has(conversationId), true, 'one participant leaving must not destroy an active conversation');
+    const bobReopen = await openChat(bob, aliceId);
+    assert.equal(bobReopen.success, true);
+    assert.equal(bobReopen.conversation.id, conversationId);
+    const a4 = await sendMessage(alice, conversationId, 'friend-flow-a-0004', 'after reopen');
+    assert.equal(a4.delivered, true);
+    assert.equal(countId(bobMessages, 'friend-flow-a-0004'), 1);
+
+    // E. The sender disconnects and reconnects with a new socket.
+    alice.disconnect();
+    await settle(80);
+    assert.equal(social.conversations.has(conversationId), true, 'the receiver must keep the conversation alive');
+    alice = await connectReady(origin, aliceToken); clients.push(alice);
+    const aliceMessagesAfterReconnect = attachCollector(alice);
+    const aliceReopen = await openChat(alice, bobId);
+    assert.equal(aliceReopen.success, true);
+    assert.equal(aliceReopen.conversation.id, conversationId);
+    const a5 = await sendMessage(alice, conversationId, 'friend-flow-a-0005', 'after sender reconnect');
+    assert.equal(a5.delivered, true);
+    assert.equal(countId(bobMessages, 'friend-flow-a-0005'), 1);
+    assert.equal(countId(aliceMessagesAfterReconnect, 'friend-flow-a-0005'), 0);
+
+    // F. The receiver disconnects and reconnects with a new socket.
+    bob.disconnect();
+    await settle(80);
+    const offline = await sendMessage(alice, conversationId, 'friend-flow-a-0006', 'offline attempt');
+    assert.equal(offline.delivered, false, 'an offline receiver must never produce a false delivery receipt');
+    assert.equal(offline.reason, 'recipient_offline');
+    bob = await connectReady(origin, bobToken); clients.push(bob);
+    const bobMessagesAfterReconnect = attachCollector(bob);
+    const bobReopenAfterReconnect = await openChat(bob, aliceId);
+    assert.equal(bobReopenAfterReconnect.success, true);
+    assert.equal(bobReopenAfterReconnect.conversation.id, conversationId);
+    const a6 = await sendMessage(alice, conversationId, 'friend-flow-a-0007', 'after receiver reconnect');
+    assert.equal(a6.delivered, true);
+    assert.equal(countId(bobMessagesAfterReconnect, 'friend-flow-a-0007'), 1);
+
+    // G. Both users have multiple devices connected.
+    const bobDevice2 = await connectReady(origin, bobToken); clients.push(bobDevice2);
+    const bobDevice2Messages = attachCollector(bobDevice2);
+    const bobDevice3 = await connectReady(origin, bobToken); clients.push(bobDevice3);
+    const bobDevice3Messages = attachCollector(bobDevice3);
+    const aliceDevice2 = await connectReady(origin, aliceToken); clients.push(aliceDevice2);
+    const aliceDevice2Messages = attachCollector(aliceDevice2);
+    const [bobDevice2Open, bobDevice3Open, aliceDevice2Open] = await Promise.all([
+      openChat(bobDevice2, aliceId),
+      openChat(bobDevice3, aliceId),
+      openChat(aliceDevice2, bobId)
+    ]);
+    assert.equal(bobDevice2Open.success, true);
+    assert.equal(bobDevice3Open.success, true);
+    assert.equal(aliceDevice2Open.success, true);
+    assert.equal(bobDevice2Open.conversation.id, conversationId);
+    assert.equal(bobDevice3Open.conversation.id, conversationId);
+    assert.equal(aliceDevice2Open.conversation.id, conversationId);
+
+    const a7 = await sendMessage(alice, conversationId, 'friend-flow-a-0008', 'multi device');
+    assert.equal(a7.delivered, true);
+    assert.equal(countId(bobMessagesAfterReconnect, 'friend-flow-a-0008'), 1);
+    assert.equal(countId(bobDevice2Messages, 'friend-flow-a-0008'), 1, 'each recipient device must receive one copy');
+    assert.equal(countId(bobDevice3Messages, 'friend-flow-a-0008'), 1, 'each recipient device must receive one copy');
+    assert.equal(countId(aliceDevice2Messages, 'friend-flow-a-0008'), 0, 'a sender device must not receive the sender message');
+
+    // L. No duplicate delivery when the same message ID is retried.
+    const duplicate = await sendMessage(alice, conversationId, 'friend-flow-a-0008', 'multi device');
+    assert.equal(duplicate.duplicate, true);
+    assert.equal(duplicate.delivered, true);
+    assert.equal(countId(bobMessagesAfterReconnect, 'friend-flow-a-0008'), 1);
+    assert.equal(countId(bobDevice2Messages, 'friend-flow-a-0008'), 1);
+    assert.equal(countId(bobDevice3Messages, 'friend-flow-a-0008'), 1);
+
+    // J. Repeated exchange in both directions without delivery failures.
+    for (let index = 0; index < 6; index += 1) {
+      const aliceMessageId = `friend-flow-j-a-${String(index).padStart(3, '0')}`;
+      const bobMessageId = `friend-flow-j-b-${String(index).padStart(3, '0')}`;
+      const fromAlice = await sendMessage(alice, conversationId, aliceMessageId, `alice ${index}`);
+      assert.equal(fromAlice.delivered, true, `alice message ${index} must be delivered`);
+      assert.equal(countId(bobMessagesAfterReconnect, aliceMessageId), 1);
+      const fromBob = await sendMessage(bob, conversationId, bobMessageId, `bob ${index}`);
+      assert.equal(fromBob.delivered, true, `bob message ${index} must be delivered`);
+      assert.equal(countId(aliceMessagesAfterReconnect, bobMessageId), 1);
+    }
+
+    // K. Cleanup must not destroy a conversation while another participant is
+    // still active, and must destroy it once the last participant leaves.
+    const storedConversation = social.conversations.get(conversationId);
+    assert.ok(storedConversation, 'the active conversation must still exist');
+    const storedIds = storedConversation.messages.map((message) => message.id);
+    assert.equal(new Set(storedIds).size, storedIds.length, 'the server must not store duplicate message IDs');
+
+    bob.emit('private:leave', { conversationId });
+    bobDevice2.emit('private:leave', { conversationId });
+    bobDevice3.emit('private:leave', { conversationId });
+    await settle();
+    assert.equal(social.conversations.has(conversationId), true, 'an active sender must keep the conversation alive');
+
+    aliceDevice2.emit('private:leave', { conversationId });
+    await settle();
+    assert.equal(social.conversations.has(conversationId), true, 'one remaining participant must keep the conversation alive');
+
+    alice.emit('private:leave', { conversationId });
+    await settle();
+    assert.equal(social.conversations.has(conversationId), false, 'the conversation must be cleaned up after the last participant leaves');
+
     assert.equal(store.savedMessages, undefined, 'the flow test store has no message persistence methods');
-
-    console.log('Friend chat flow tests passed: pending requests cannot open private chat, accepted friends appear in both friend lists, and accepted friends can open the same ephemeral conversation and exchange a message.');
+    console.log('Friend chat flow tests passed: pending/non-friend rejection, same-conversation initialization, delivery to an online friend who has not opened the chat, receiver open/reopen, sender and receiver reconnect, multi-device fan-out, duplicate suppression, repeated exchange, truthful delivery receipts, and non-destructive cleanup.');
   } finally {
     for (const client of clients) client.disconnect();
     social.dispose();
