@@ -247,6 +247,8 @@ function installSocialSockets(io, store, accountService, options = {}) {
         // connected. This is the fix for an online friend who has not opened
         // the chat yet: opening a chat is not a precondition for receiving a
         // message in the ephemeral model, but an acknowledgement still is.
+        // The recipient client acknowledges only after rendering the message
+        // or placing it in its own in-memory inbox.
         const recipients = userSockets(peerId).filter((recipient) => recipient.id !== socket.id);
         if (!recipients.length) {
           // Do not retain text that had no possible recipient. A different
