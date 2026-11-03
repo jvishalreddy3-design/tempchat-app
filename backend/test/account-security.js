@@ -14,10 +14,12 @@ async function run() {
   assert.equal(PASSWORD_MIN_LENGTH, 8);
   assert.equal(PASSWORD_MAX_LENGTH, 128);
 
-  const user = { _id: 'user-test-123', username: 'tester', displayName: 'Test User', avatarUrl: null, emailVerified: true, passwordHash: hash, email: 'private@example.invalid', googleSub: 'secret-provider-id' };
+  const user = { _id: '11111111-1111-1111-1111-111111111111', username: 'tester', displayName: 'Test User', avatarUrl: null, emailVerified: true, passwordHash: hash, email: 'private@example.invalid', googleSub: 'secret-provider-id', createdAt: new Date('2026-01-01T00:00:00Z'), lastSeenAt: null };
   const store = {
     users: new Map([['tester', user]]),
     active: true,
+    revoked: 0,
+    deleted: false,
     findUserByUsername: async (username) => store.users.get(username) || null,
     createUser: async (newUser) => {
       if (store.users.has(newUser.usernameKey)) throw Object.assign(new Error('duplicate'), { code: '23505' });
@@ -27,6 +29,12 @@ async function run() {
     createSession: async () => {},
     findActiveSession: async () => store.active ? { _id: 'session-test-123' } : null,
     findUserById: async () => user,
+    findPublicUser: async (id) => id === user._id ? ({ id: user._id, username: user.username, displayName: user.displayName, avatarUrl: user.avatarUrl, createdAt: user.createdAt, lastSeenAt: user.lastSeenAt }) : null,
+    countFriends: async () => 2,
+    areFriends: async (a, b) => a === user._id && b === user._id,
+    updatePassword: async (_id, passwordHash) => { user.passwordHash = passwordHash; return user; },
+    revokeAllSessions: async () => { store.revoked += 1; },
+    deleteUser: async () => { store.deleted = true; },
   };
   const config = { jwtSecret: 'test-only-secret-that-is-long-enough-1234567890', webOrigin: 'https://example.invalid', email: {} };
   const service = createAccountService({ store, config });
@@ -41,6 +49,7 @@ async function run() {
   assert.equal('passwordHash' in safe, false);
   assert.equal('email' in safe, false);
   assert.equal('googleSub' in safe, false);
+  assert.equal(safe.lastSeenAt, null, 'public profiles must expose only the non-sensitive last-seen timestamp');
 
   const app = express();
   app.use(express.json());
@@ -73,8 +82,46 @@ async function run() {
     assert.equal(response.status, 404, 'Google login route must be unavailable');
     response = await fetch(`${base}/login`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ username: 'unknown', password: 'wrong' }) });
     assert.equal(response.status, 401);
+
+    // Authenticated account-management routes.
+    store.active = true;
+    const access = service.issueAccess(user._id, 'session-test-123');
+    const authHeaders = { ...headers, authorization: `Bearer ${access}` };
+
+    response = await fetch(`${base}/username-available?username=tester`);
+    assert.equal(response.status, 200);
+    assert.equal((await response.json()).available, false, 'taken usernames must not be reported as available');
+
+    response = await fetch(`${base}/username-available?username=brand_new`);
+    assert.equal(response.status, 200);
+    assert.equal((await response.json()).available, true);
+
+    response = await fetch(`${base}/users/${user._id}`, { headers: authHeaders });
+    assert.equal(response.status, 200);
+    const profile = await response.json();
+    assert.equal(profile.user.username, 'tester');
+    assert.equal('passwordHash' in profile.user, false);
+    assert.equal('email' in profile.user, false);
+    assert.equal(profile.friendsCount, 2);
+    assert.equal(profile.isFriend, true);
+
+    response = await fetch(`${base}/change-password`, { method: 'POST', headers: authHeaders, body: JSON.stringify({ currentPassword: 'wrong password', newPassword: 'new test password 123' }) });
+    assert.equal(response.status, 401, 'password changes must verify the current password');
+
+    response = await fetch(`${base}/change-password`, { method: 'POST', headers: authHeaders, body: JSON.stringify({ currentPassword: 'a sufficiently long test password', newPassword: 'new test password 123' }) });
+    assert.equal(response.status, 200, 'a valid password change must succeed');
+    const rotated = await response.json();
+    assert.equal(typeof rotated.accessToken, 'string');
+    assert.equal(store.revoked, 1, 'changing a password must revoke existing sessions');
+
+    response = await fetch(`${base}/me`, { method: 'DELETE', headers: authHeaders, body: JSON.stringify({ password: 'wrong password' }) });
+    assert.equal(response.status, 401, 'account deletion must verify the password');
+
+    response = await fetch(`${base}/me`, { method: 'DELETE', headers: authHeaders, body: JSON.stringify({ password: 'new test password 123' }) });
+    assert.equal(response.status, 200, 'a verified account deletion must succeed');
+    assert.equal(store.deleted, true);
   } finally { await new Promise((resolve) => server.close(resolve)); }
-  console.log('Account security tests passed: Argon2id hashing, 8–128 character password policy, username/password registration, duplicate handling, immediate login, incorrect-password rejection, revoked sessions, public profile filtering, and removed Google route.');
+  console.log('Account security tests passed: Argon2id hashing, 8–128 character password policy, username/password registration, duplicate handling, immediate login, incorrect-password rejection, username availability, public profile filtering, password-change session rotation, verified account deletion, revoked sessions, and removed Google route.');
 }
 
 run().catch((error) => { console.error(error); process.exitCode = 1; });

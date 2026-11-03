@@ -2,13 +2,25 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>TempChat | Chat Without Limits</title>
-  
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#fff7fb">
+  <meta name="description" content="EKA �?" private, real-time conversations that disappear when you leave.">
+  <title>EKA | Talk in the now</title>
+
+  <script>
+    try {
+      if (localStorage.getItem('eka.onboarding.v1') === 'complete') {
+        document.documentElement.classList.add('eka-onboarding-complete');
+      }
+    } catch (_) { /* The onboarding module finishes this check once storage is available. */ }
+  </script>
+  <link rel="icon" type="image/svg+xml" href="assets/eka-logo.svg">
+  <link rel="apple-touch-icon" href="assets/eka-logo.svg">
+
   <!-- Google Fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Manrope:wght@400;500;600;700;800&family=Sora:wght@500;600;700;800&display=swap" rel="stylesheet">
   
   <!-- FontAwesome for Icons -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -1069,154 +1081,979 @@
       *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; scroll-behavior: auto !important; transition-duration: 0.01ms !important; }
     }
     [data-reduced-motion="true"] *, [data-reduced-motion="true"] *::before, [data-reduced-motion="true"] *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
-    /* TempChat product system: pearl surfaces, one restrained violet accent. */
+    /* TempChat universal utility */
+    .hidden { display: none !important; }
+
+    /* TempChat product system: soft pearl canvas, elegant rose/pink accent, matching existing homepage. */
     :root {
-      --bg-base: #f6f5fa; --bg-surface: #fff; --bg-panel: #fff; --bg-elevated: #fff; --bg-soft: #efedf6;
-      --text-main: #252337; --text-muted: #686579; --text-faint: #777487;
-      --border-color: #e4e1ec; --border-strong: #c9c4dc;
-      --accent-color: #5d54be; --accent-hover: #49419f;
-      --accent-gradient: linear-gradient(135deg, #6c63cc, #5148ad); --accent-wash: rgba(93,84,190,.1);
-      --bubble-me: #5d54be; --bubble-them: #fff; --text-bubble-me: #fff; --text-bubble-them: #252337;
-      --shadow-sm: 0 4px 16px rgba(37,35,55,.06); --shadow-md: 0 12px 32px rgba(37,35,55,.1);
-      --glass-bg: rgba(255,255,255,.95); --glass-border: #e4e1ec; --glass-shadow: 0 8px 28px rgba(37,35,55,.08);
+      --bg-base: #fffafc;
+      --bg-surface: #ffffff;
+      --bg-panel: #ffffff;
+      --bg-elevated: #ffffff;
+      --bg-soft: #ffeef5;
+      --text-main: #1a1a2e;
+      --text-muted: #5d4e5c;
+      --text-faint: #9a8b96;
+      --border-color: rgba(212, 120, 168, 0.18);
+      --border-strong: rgba(212, 120, 168, 0.35);
+      --accent-color: #ec4899;
+      --accent-hover: #db2777;
+      --accent-gradient: linear-gradient(135deg, #ec4899 0%, #f43f5e 35%, #fb7185 70%, #fda4af 100%);
+      --accent-wash: rgba(236, 72, 153, 0.08);
+      --bubble-me: #ec4899;
+      --bubble-them: #ffffff;
+      --text-bubble-me: #ffffff;
+      --text-bubble-them: #1a1a2e;
+      --shadow-sm: 0 4px 16px rgba(212, 120, 168, 0.08);
+      --shadow-md: 0 12px 32px rgba(212, 120, 168, 0.14);
+      --glass-bg: rgba(255, 255, 255, 0.92);
+      --glass-border: rgba(212, 120, 168, 0.18);
+      --glass-shadow: 0 8px 28px rgba(212, 120, 168, 0.1);
     }
-    body { height: var(--app-viewport-height, 100dvh) !important; background: #f6f5fa !important; color: #252337; overscroll-behavior: none; }
-    #landing-view.liquid-landing { background: #f6f5fa !important; color: #252337; overflow-y: auto; }
-    #landing-view .liquid-field, #landing-view .petal-field, #landing-view .story-stage, #landing-view .landing-benefits, #landing-view .liquid-footer { display: none !important; }
-    #landing-view .liquid-nav { position: sticky !important; inset: auto !important; top: max(8px, env(safe-area-inset-top)) !important; left: auto !important; transform: none !important; width: min(calc(100% - 24px), 1040px); height: 62px; margin: max(8px, env(safe-area-inset-top)) auto 0 !important; padding: 0 16px; border: 1px solid #e4e1ec; border-radius: 17px; background: rgba(255,255,255,.96); box-shadow: 0 8px 26px rgba(37,35,55,.07); backdrop-filter: blur(16px); }
-    #landing-view .liquid-nav > div { height: 100%; gap: 12px; }
-    #landing-view .brand-lockup { color: #252337; font-size: 1rem; }
-    #landing-view .brand-mark { display: grid; width: 34px; height: 34px; place-items: center; border-radius: 11px; color: white; background: #5d54be; }
-    #landing-view .liquid-nav-links { display: flex !important; align-items: center; gap: 2px; }
-    #landing-view .liquid-nav-links button { min-height: 40px; padding: 0 11px; border: 0; border-radius: 10px; color: #686579; background: transparent; font-size: .8rem; font-weight: 700; }
-    #landing-view .liquid-nav-links button.active, #landing-view .liquid-nav-links button:hover { color: #49419f; background: #efedf6; }
-    #landing-view .home-connection { display: flex; align-items: center; gap: 8px; }
-    .connection-indicator { display: inline-flex; align-items: center; gap: 7px; color: #686579; font-size: .72rem; white-space: nowrap; }
-    .connection-indicator::before { content: ''; width: 8px; height: 8px; border-radius: 50%; background: #d4a72c; }
-    .connection-indicator[data-state="connected"]::before { background: #198754; }
-    .connection-indicator[data-state="disconnected"]::before { background: #c43d50; }
-    #connection-retry, .retry-entry { min-height: 34px; padding: 0 10px; border: 1px solid #d8d4eb; border-radius: 10px; color: #49419f; background: #f5f3fc; font-size: .75rem; font-weight: 800; }
-    #landing-view .story-hero { display: block; width: min(calc(100% - 36px), 760px); min-height: auto; margin: clamp(46px, 12vh, 110px) auto 0; padding: 0 0 48px; }
-    #landing-view .story-copy { max-width: 720px; margin: auto; text-align: center; }
-    #landing-view .privacy-badge { display: inline-flex; padding: 8px 12px; border: 1px solid #e4e1ec; border-radius: 999px; color: #5148ad; background: white; font-size: .68rem; font-weight: 800; letter-spacing: .07em; }
-    #landing-view .story-title { max-width: 680px; margin: 23px auto 15px; color: #252337; font-size: clamp(2.4rem, 7.6vw, 4.5rem); line-height: 1.07; letter-spacing: -.065em; text-shadow: none; }
-    #landing-view .story-title span { display: block; color: #5d54be; }
-    #landing-view .story-title em { display: none; }
-    #landing-view .story-description { max-width: 540px; margin: 0 auto 26px; color: #686579; font-size: 1rem; line-height: 1.7; }
-    #landing-view .story-actions { justify-content: center; gap: 11px; }
-    #landing-view .story-primary, #landing-view .story-secondary { min-height: 50px; padding: 0 19px; border-radius: 14px; font-size: .9rem; }
-    #landing-view .story-primary { background: #5d54be; box-shadow: 0 7px 16px rgba(93,84,190,.2); }
-    #landing-view .story-secondary { border: 1px solid #e0ddea; color: #353248; background: white; }
-    #landing-view .security-line { justify-content: center; margin: 19px auto 0; color: #686579; font-size: .78rem; }
-    .entry-stage { padding: max(16px, env(safe-area-inset-top)) 0 max(16px, env(safe-area-inset-bottom)); background: #f6f5fa !important; }
-    .entry-card { padding: 26px !important; border: 1px solid #e4e1ec; border-radius: 22px !important; background: white !important; box-shadow: 0 18px 54px rgba(37,35,55,.11) !important; }
-    #username-input, #room-input { min-height: 50px; border-color: #e4e1ec; border-radius: 13px; background: #f8f7fb; font-size: 16px; }
+    body {
+      height: var(--app-viewport-height, 100dvh) !important;
+      background:
+        radial-gradient(ellipse 60% 45% at 8% 0%, rgba(255, 182, 193, 0.42), transparent 55%),
+        radial-gradient(ellipse 50% 45% at 100% 100%, rgba(244, 114, 182, 0.24), transparent 55%),
+        radial-gradient(ellipse 40% 35% at 50% 45%, rgba(255, 255, 255, 0.7), transparent 60%),
+        linear-gradient(135deg, #fffafc 0%, #ffeef5 38%, #fff8fa 72%, #ffeef5 100%) !important;
+      color: #1a1a2e;
+      overscroll-behavior: none;
+    }
+    #landing-view.liquid-landing {
+      box-sizing: border-box;
+      width: 100%;
+      max-width: 100vw;
+      height: 100%;
+      overflow-x: hidden !important;
+      overflow-y: auto;
+      overscroll-behavior-x: none;
+      -webkit-overflow-scrolling: touch;
+      font-family: 'Manrope', sans-serif;
+      color: #1a1a2e;
+      background:
+        radial-gradient(ellipse 60% 45% at 8% 0%, rgba(255, 182, 193, 0.42), transparent 55%),
+        radial-gradient(ellipse 50% 45% at 100% 100%, rgba(244, 114, 182, 0.24), transparent 55%),
+        radial-gradient(ellipse 40% 35% at 50% 45%, rgba(255, 255, 255, 0.7), transparent 60%),
+        linear-gradient(135deg, #fffafc 0%, #ffeef5 38%, #fff8fa 72%, #ffeef5 100%) !important;
+    }
+    #landing-view.liquid-landing::before,
+    #landing-view.liquid-landing::after,
+    #landing-view .liquid-field,
+    #landing-view .petal-field,
+    #landing-view .story-stage,
+    #landing-view .landing-benefits,
+    #landing-view .liquid-footer,
+    #landing-view .liquid-nav-links {
+      display: none !important;
+    }
+
+    /* Top Navigation: Clean, compact, native header */
+    #landing-view.liquid-landing .liquid-nav {
+      position: sticky !important;
+      inset: auto !important;
+      top: max(8px, env(safe-area-inset-top)) !important;
+      left: auto !important;
+      transform: none !important;
+      box-sizing: border-box;
+      width: calc(100% - 24px);
+      max-width: 440px;
+      height: 50px;
+      min-height: 50px;
+      margin: max(8px, env(safe-area-inset-top)) auto 0 !important;
+      padding: 0 12px;
+      border: 1px solid rgba(212, 120, 168, 0.18);
+      border-radius: 16px;
+      background: rgba(255, 255, 255, 0.88);
+      box-shadow: 0 4px 18px rgba(212, 120, 168, 0.08);
+      backdrop-filter: blur(18px) saturate(1.15);
+      -webkit-backdrop-filter: blur(18px) saturate(1.15);
+      z-index: 50;
+    }
+    #landing-view.liquid-landing .liquid-nav > div {
+      width: 100%;
+      height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      padding: 0;
+      min-width: 0;
+      overflow: hidden;
+    }
+    #landing-view.liquid-landing .brand-lockup {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      color: #1a1a2e;
+      font-size: 0.9rem;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      text-decoration: none;
+      flex-shrink: 0;
+    }
+    #landing-view.liquid-landing .brand-mark {
+      display: grid;
+      width: 28px;
+      height: 28px;
+      place-items: center;
+      border-radius: 9px;
+      color: #ffffff;
+      background: linear-gradient(135deg, #ec4899 0%, #f43f5e 100%);
+      box-shadow: 0 4px 10px rgba(236, 72, 153, 0.28);
+      font-size: 0.75rem;
+      flex-shrink: 0;
+    }
+    #landing-view.liquid-landing .nav-right-actions {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      flex-shrink: 1;
+      min-width: 0;
+      max-width: calc(100% - 110px);
+      overflow: hidden;
+    }
+    #landing-view.liquid-landing .home-connection {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      flex-shrink: 1;
+      min-width: 0;
+      overflow: hidden;
+    }
+    .connection-indicator {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      color: #5d4e5c;
+      font-size: 0.68rem;
+      font-weight: 700;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 110px;
+    }
+    .connection-indicator::before {
+      content: '';
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: #f59e0b;
+      flex-shrink: 0;
+    }
+    .connection-indicator[data-state="connected"]::before { background: #16a34a; }
+    .connection-indicator[data-state="disconnected"]::before { background: #dc2626; }
+    #connection-retry, .retry-entry {
+      min-height: 26px;
+      padding: 0 8px;
+      border: 1px solid rgba(236, 72, 153, 0.2);
+      border-radius: 8px;
+      color: #be185d;
+      background: rgba(236, 72, 153, 0.08);
+      font-size: 0.68rem;
+      font-weight: 800;
+      cursor: pointer;
+    }
+
+    /* Temporary Rooms Hero: Native mobile card layout */
+    #landing-view.liquid-landing .story-hero {
+      display: block;
+      box-sizing: border-box;
+      width: calc(100% - 24px);
+      max-width: 440px;
+      min-height: auto;
+      margin: 12px auto 20px;
+      padding: 0 0 max(16px, env(safe-area-inset-bottom));
+    }
+    #landing-view.liquid-landing .story-copy {
+      box-sizing: border-box;
+      width: 100%;
+      max-width: 100%;
+      margin: 0 auto;
+      text-align: center;
+      background: rgba(255, 255, 255, 0.88);
+      border: 1px solid rgba(212, 120, 168, 0.18);
+      border-radius: 22px;
+      padding: 20px 16px 18px;
+      box-shadow: 0 8px 30px rgba(212, 120, 168, 0.08);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+    }
+    #landing-view.liquid-landing .privacy-badge {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      box-sizing: border-box;
+      max-width: 100%;
+      padding: 4px 10px;
+      margin: 0 auto 12px;
+      border: 1px solid rgba(236, 72, 153, 0.2);
+      border-radius: 999px;
+      color: #be185d;
+      background: rgba(236, 72, 153, 0.08);
+      font-size: 0.58rem;
+      font-weight: 800;
+      letter-spacing: 0.025em;
+      white-space: nowrap;
+      text-align: center;
+      line-height: 1.2;
+    }
+    #landing-view.liquid-landing .story-title {
+      box-sizing: border-box;
+      max-width: 100%;
+      margin: 0 0 8px;
+      color: #1a1a2e;
+      font-size: clamp(1.35rem, 5.5vw, 1.65rem);
+      font-weight: 800;
+      line-height: 1.24;
+      letter-spacing: -0.025em;
+      text-shadow: none;
+      overflow-wrap: break-word;
+      word-break: normal;
+    }
+    #landing-view.liquid-landing .story-title span {
+      display: block;
+      background: linear-gradient(135deg, #ec4899 0%, #db2777 50%, #be185d 100%);
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+    }
+    #landing-view.liquid-landing .story-title em {
+      display: none;
+    }
+    #landing-view.liquid-landing .story-description {
+      box-sizing: border-box;
+      max-width: 100%;
+      margin: 0 auto 16px;
+      color: #5d4e5c;
+      font-size: 0.82rem;
+      line-height: 1.48;
+    }
+    #landing-view.liquid-landing .story-actions {
+      display: flex;
+      flex-direction: column;
+      gap: 9px;
+      width: 100%;
+      margin: 0 auto;
+      box-sizing: border-box;
+    }
+    #landing-view.liquid-landing .story-primary,
+    #landing-view.liquid-landing .story-secondary {
+      box-sizing: border-box;
+      width: 100%;
+      min-height: 46px;
+      height: 46px;
+      padding: 0 16px;
+      border-radius: 14px;
+      font-size: 0.88rem;
+      font-weight: 800;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      text-decoration: none;
+      transition: transform 160ms ease, box-shadow 160ms ease, filter 160ms ease;
+    }
+    #landing-view.liquid-landing .story-primary {
+      border: 1px solid transparent;
+      color: #ffffff;
+      background: linear-gradient(135deg, #ec4899 0%, #f43f5e 35%, #fb7185 70%, #fda4af 100%);
+      box-shadow: 0 10px 24px rgba(236, 72, 153, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.3);
+    }
+    #landing-view.liquid-landing .story-primary:hover {
+      filter: saturate(1.08);
+      transform: translateY(-1px);
+    }
+    #landing-view.liquid-landing .story-primary:active {
+      transform: scale(0.98);
+    }
+    #landing-view.liquid-landing .story-secondary {
+      border: 1px solid rgba(212, 120, 168, 0.22);
+      color: #1a1a2e;
+      background: rgba(255, 255, 255, 0.9);
+      box-shadow: 0 4px 16px rgba(212, 120, 168, 0.07);
+    }
+    #landing-view.liquid-landing .story-secondary:hover {
+      background: #ffffff;
+      transform: translateY(-1px);
+    }
+    #landing-view.liquid-landing .story-secondary:active {
+      transform: scale(0.98);
+    }
+    #landing-view.liquid-landing .security-line {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      margin: 12px auto 0;
+      color: #5d4e5c;
+      font-size: 0.71rem;
+      line-height: 1.4;
+      text-align: center;
+    }
+    #landing-view.liquid-landing .security-line i {
+      color: #ec4899;
+    }
+
+    /* Entry Stage & Room Views: Pink & pearl harmony */
+    .entry-stage {
+      padding: max(16px, env(safe-area-inset-top)) 12px max(16px, env(safe-area-inset-bottom));
+      background:
+        radial-gradient(ellipse 60% 45% at 8% 0%, rgba(255, 182, 193, 0.42), transparent 55%),
+        radial-gradient(ellipse 50% 45% at 100% 100%, rgba(244, 114, 182, 0.24), transparent 55%),
+        radial-gradient(ellipse 40% 35% at 50% 45%, rgba(255, 255, 255, 0.7), transparent 60%),
+        linear-gradient(135deg, #fffafc 0%, #ffeef5 38%, #fff8fa 72%, #ffeef5 100%) !important;
+    }
+    .entry-card {
+      padding: 22px 18px !important;
+      border: 1px solid rgba(212, 120, 168, 0.18) !important;
+      border-radius: 22px !important;
+      background: rgba(255, 255, 255, 0.9) !important;
+      box-shadow: 0 8px 30px rgba(212, 120, 168, 0.1) !important;
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+    }
+    #entry-view .fa-bolt { color: #ec4899; }
+    #toggle-mode-btn { color: #be185d; font-weight: 700; }
+    #username-input, #room-input {
+      min-height: 48px;
+      border: 1px solid rgba(212, 120, 168, 0.2) !important;
+      border-radius: 14px !important;
+      background: rgba(255, 255, 255, 0.92) !important;
+      color: #1a1a2e !important;
+      font-size: 16px;
+    }
+    #username-input:focus, #room-input:focus {
+      border-color: #ec4899 !important;
+      box-shadow: 0 0 0 4px rgba(236, 72, 153, 0.14) !important;
+    }
     #room-input { text-align: center; font-size: 1.15rem; }
-    .btn-primary { background: #5d54be !important; }
+    .btn-primary, #enter-room-btn {
+      background: linear-gradient(135deg, #ec4899 0%, #f43f5e 35%, #fb7185 70%, #fda4af 100%) !important;
+      color: #ffffff !important;
+      border-radius: 14px !important;
+      box-shadow: 0 10px 24px rgba(236, 72, 153, 0.28) !important;
+      min-height: 48px;
+    }
     .connection-row { display: flex; align-items: center; justify-content: center; gap: 9px; }
-    #chat-view.chat-shell { padding-top: env(safe-area-inset-top); padding-bottom: env(safe-area-inset-bottom); background: #f6f5fa; }
-    #chat-view .chat-header { min-height: 64px; height: 64px; padding-left: 15px; padding-right: 15px; background: rgba(255,255,255,.97); }
-    #chat-view .message-stage { background-color: #f6f5fa; overscroll-behavior-y: contain; scroll-padding-bottom: 16px; }
+    #chat-view.chat-shell { padding-top: env(safe-area-inset-top); padding-bottom: env(safe-area-inset-bottom); background: #fffafc; }
+    #chat-view .chat-header { min-height: 64px; height: 64px; padding-left: 15px; padding-right: 15px; background: rgba(255,255,255,.97); border-bottom: 1px solid rgba(212,120,168,0.18); }
+    #chat-view .message-stage { background-color: #fffafc; overscroll-behavior-y: contain; scroll-padding-bottom: 16px; }
     #chat-view .composer-dock { padding-bottom: max(10px, env(safe-area-inset-bottom)); background: rgba(255,255,255,.98); }
-    #chat-view .composer-shell { min-height: 54px; border-radius: 17px; background: #f8f7fb; }
-    .room-empty-notice { display: flex; width: min(100%, 760px); align-items: center; gap: 12px; margin: 0 auto 4px; padding: 13px 14px; border: 1px solid #e2dfef; border-radius: 16px; background: #fff; color: #252337; }
-    .room-empty-notice.hidden { display: none; }
-    .empty-room-icon { display: grid; width: 38px; height: 38px; flex: 0 0 auto; place-items: center; border-radius: 12px; color: #5148ad; background: #efedf6; }
+    #chat-view .composer-shell { min-height: 54px; border-radius: 17px; background: rgba(255,255,255,0.92); border: 1px solid rgba(212,120,168,0.18); }
+    .room-empty-notice { display: flex; width: min(100%, 760px); align-items: center; gap: 12px; margin: 0 auto 4px; padding: 13px 14px; border: 1px solid rgba(212,120,168,0.18); border-radius: 16px; background: #fff; color: #1a1a2e; }
+    .empty-room-icon { display: grid; width: 38px; height: 38px; flex: 0 0 auto; place-items: center; border-radius: 12px; color: #be185d; background: rgba(236,72,153,0.1); }
     .room-empty-notice strong { display: block; font-size: .84rem; }
-    .room-empty-notice p { margin: 3px 0 0; color: #686579; font-size: .72rem; line-height: 1.45; }
-    .room-empty-notice button { width: 38px; height: 38px; flex: 0 0 auto; margin-left: auto; border: 0; border-radius: 11px; color: white; background: #5d54be; }
-    .message-meta { position: static !important; display: flex; align-items: center; justify-content: flex-end; gap: 6px; margin-top: 4px; opacity: 1 !important; color: #686579; font-size: .68rem; }
+    .room-empty-notice p { margin: 3px 0 0; color: #5d4e5c; font-size: .72rem; line-height: 1.45; }
+    .room-empty-notice button { width: 38px; height: 38px; flex: 0 0 auto; margin-left: auto; border: 0; border-radius: 11px; color: white; background: linear-gradient(135deg, #ec4899, #f43f5e); }
+    .message-meta { position: static !important; display: flex; align-items: center; justify-content: flex-end; gap: 6px; margin-top: 4px; opacity: 1 !important; color: #5d4e5c; font-size: .68rem; }
     .delivery-status { font-weight: 700; }
-    .delivery-status[data-state="delivered"] { color: #18794e; }
-    .delivery-status[data-state="failed"] { color: #b42335; }
-    .delivery-status[data-state="sending"] { color: #686579; }
-    @media (max-width: 600px) {
-      #landing-view .liquid-nav { width: calc(100% - 16px); height: 56px; padding: 0 9px; }
-      #landing-view .brand-lockup { gap: 6px; font-size: .83rem; }
-      #landing-view .brand-mark { width: 29px; height: 29px; border-radius: 9px; }
-      #landing-view .liquid-nav-links button { padding: 0 8px; font-size: .7rem; }
-      #landing-view .connection-indicator { width: 9px; height: 9px; overflow: hidden; color: transparent; }
-      #landing-view .connection-indicator::before { flex: 0 0 auto; }
-      #landing-view .story-hero { width: calc(100% - 32px); margin-top: clamp(60px, 14vh, 100px); padding-bottom: 32px; }
-      #landing-view .story-title { font-size: clamp(2.35rem, 11.5vw, 3.5rem); }
-      #landing-view .story-description { font-size: .92rem; }
-      #landing-view .story-actions { display: grid; grid-template-columns: 1fr 1fr; }
-      #landing-view .story-primary, #landing-view .story-secondary { justify-content: center; padding: 0 10px; font-size: .8rem; }
-      .entry-card { padding: 22px 18px !important; }
-      #chat-view .message-stage { padding: 12px 12px 8px; }
+    .delivery-status[data-state="delivered"] { color: #16a34a; }
+    .delivery-status[data-state="failed"] { color: #dc2626; }
+    .delivery-status[data-state="sending"] { color: #5d4e5c; }
+
+    @media (max-width: 400px) {
+      #landing-view.liquid-landing .liquid-nav {
+        padding: 0 10px;
+        height: 48px;
+        min-height: 48px;
+      }
+      #landing-view.liquid-landing .brand-lockup {
+        font-size: 0.88rem;
+        gap: 6px;
+      }
+      #landing-view.liquid-landing .brand-mark {
+        width: 28px;
+        height: 28px;
+        border-radius: 8px;
+        font-size: 0.72rem;
+      }
+      .connection-indicator {
+        max-width: 65px;
+        font-size: 0.65rem;
+      }
+      #landing-view.liquid-landing .privacy-badge {
+        font-size: 0.56rem;
+        padding: 4px 8px;
+        letter-spacing: 0.02em;
+      }
+      #landing-view.liquid-landing .story-title {
+        font-size: 1.35rem;
+        line-height: 1.22;
+      }
+      #landing-view.liquid-landing .story-description {
+        font-size: 0.8rem;
+        margin-bottom: 14px;
+      }
+      #landing-view.liquid-landing .story-primary,
+      #landing-view.liquid-landing .story-secondary {
+        min-height: 44px;
+        height: 44px;
+        font-size: 0.85rem;
+      }
     }
   </style>
+  <link rel="stylesheet" href="assets/tempchat-app.css">
+  <link rel="stylesheet" href="assets/eka.css">
+  <link rel="stylesheet" href="assets/eka-onboarding.css">
 </head>
-<body class="h-screen w-screen flex flex-col font-sans antialiased text-sm md:text-base">
+<body class="h-screen w-screen flex flex-col font-sans antialiased text-sm md:text-base account-mode">
 
   <div id="toast-container" class="fixed top-4 left-1/2 transform -translate-x-1/2 z-50 flex flex-col gap-2 pointer-events-none"></div>
+  <div id="eka-notify-stack" class="eka-notify-stack" aria-live="polite" aria-label="Notifications"></div>
+
+  <!-- First-launch consent and notification onboarding -->
+  <div id="eka-onboarding" class="eka-onb" role="dialog" aria-modal="true" aria-hidden="true" aria-labelledby="eka-onb-terms-title" aria-describedby="eka-onb-terms-copy">
+    <div class="eka-onb-canvas" aria-hidden="true">
+      <span class="eka-onb-glow eka-onb-glow-a"></span>
+      <span class="eka-onb-glow eka-onb-glow-b"></span>
+      <span class="eka-onb-grid"></span>
+    </div>
+
+    <div class="eka-onb-scroll">
+      <div class="eka-onb-shell">
+        <div class="eka-onb-brand">
+          <span class="eka-onb-logo"><img src="assets/eka-logo.svg" alt=""></span>
+          <span class="eka-onb-wordmark">EKA<small>Talk in the now</small></span>
+        </div>
+
+        <div class="eka-onb-card">
+          <section id="eka-onb-step-terms" class="eka-onb-step" aria-labelledby="eka-onb-terms-title">
+            <p class="eka-onb-kicker"><span></span>Welcome to EKA</p>
+            <h1 id="eka-onb-terms-title" class="eka-onb-title" tabindex="-1">A private space.<br><em>On your terms.</em></h1>
+            <p id="eka-onb-terms-copy" class="eka-onb-copy">Real-time conversations, thoughtful connections, and nothing left behind when you leave. Please review the essentials before we begin.</p>
+
+            <div class="eka-onb-pills" aria-label="EKA principles">
+              <span><i class="fa-solid fa-lock" aria-hidden="true"></i> Ephemeral by design</span>
+              <span><i class="fa-solid fa-wand-magic-sparkles" aria-hidden="true"></i> Made for the moment</span>
+            </div>
+
+            <div id="eka-onb-consent" class="eka-onb-consent">
+              <input id="eka-onb-terms-checkbox" class="eka-onb-checkbox" type="checkbox" aria-labelledby="eka-onb-consent-copy">
+              <div class="eka-onb-consent-body">
+                <p id="eka-onb-consent-copy">I have read and agree to the <button type="button" class="eka-legal-link" data-eka-legal="terms">Terms &amp; Conditions</button> and <button type="button" class="eka-legal-link" data-eka-legal="privacy">Privacy Policy</button>.</p>
+                <span class="eka-onb-consent-note">Required to continue</span>
+              </div>
+            </div>
+
+            <button type="button" id="eka-onb-continue" class="eka-onb-button eka-onb-button-primary" disabled aria-disabled="true">
+              Continue <i class="fa-solid fa-arrow-right" aria-hidden="true"></i>
+            </button>
+            <p class="eka-onb-fine"><i class="fa-solid fa-shield-halved" aria-hidden="true"></i> Your acceptance stays on this device.</p>
+          </section>
+
+          <section id="eka-onb-step-notifications" class="eka-onb-step hidden" aria-labelledby="eka-onb-notice-title">
+            <div class="eka-onb-bell" aria-hidden="true">
+              <span class="eka-onb-bell-ring eka-onb-bell-ring-a"></span>
+              <span class="eka-onb-bell-ring eka-onb-bell-ring-b"></span>
+              <div class="eka-onb-bell-core"><i class="fa-solid fa-bell"></i></div>
+            </div>
+
+            <p class="eka-onb-kicker"><span></span>One last thing</p>
+            <h1 id="eka-onb-notice-title" class="eka-onb-title" tabindex="-1">Stay in the loop.<br><em>Only when it matters.</em></h1>
+            <p id="eka-onb-notice-copy" class="eka-onb-copy">Allow notifications to hear about new messages, friend requests, and important EKA updates. No noise, no marketing spam.</p>
+
+            <ul class="eka-onb-notification-points">
+              <li><i class="fa-solid fa-comment-dots" aria-hidden="true"></i><span><strong>New messages</strong><small>Know when someone replies.</small></span></li>
+              <li><i class="fa-solid fa-user-group" aria-hidden="true"></i><span><strong>Friend requests</strong><small>See new connections as they arrive.</small></span></li>
+              <li><i class="fa-solid fa-sliders" aria-hidden="true"></i><span><strong>Your choice, always</strong><small>Change this anytime in Settings.</small></span></li>
+            </ul>
+
+            <div id="eka-onb-notification-status" class="eka-onb-status" role="status" aria-live="polite">Checking your notification settings...</div>
+
+            <button type="button" id="eka-onb-notification-primary" class="eka-onb-button eka-onb-button-primary" data-action="request">
+              Allow notifications <i class="fa-solid fa-bell" aria-hidden="true"></i>
+            </button>
+            <button type="button" id="eka-onb-notification-skip" class="eka-onb-button eka-onb-button-quiet hidden">Not now</button>
+            <p class="eka-onb-fine"><i class="fa-solid fa-shield-halved" aria-hidden="true"></i> EKA only uses notifications for activity you care about.</p>
+          </section>
+        </div>
+
+        <p class="eka-onb-footer">Private by intention. Present by design.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Legal reader used by onboarding and Settings -->
+  <div id="eka-legal-modal" class="eka-legal-backdrop hidden" role="dialog" aria-modal="true" aria-hidden="true" aria-labelledby="eka-legal-title">
+    <div class="eka-legal-backdrop-fill" data-eka-legal-close></div>
+    <div class="eka-legal-panel">
+      <header class="eka-legal-header">
+        <div>
+          <p id="eka-legal-kicker" class="eka-legal-kicker">EKA LEGAL</p>
+          <h2 id="eka-legal-title">Terms &amp; Conditions</h2>
+        </div>
+        <button type="button" id="eka-legal-close" class="eka-legal-close" data-eka-legal-close aria-label="Close legal document">
+          <i class="fa-solid fa-xmark" aria-hidden="true"></i>
+        </button>
+      </header>
+      <div id="eka-legal-body" class="eka-legal-body" tabindex="0"></div>
+      <footer class="eka-legal-footer">
+        <button type="button" class="eka-onb-button eka-onb-button-quiet" data-eka-legal-close>Close</button>
+      </footer>
+    </div>
+  </div>
+
+  <!-- ==========================================
+       ACCOUNT-FIRST APP (Welcome → Auth → Home → Friends → Chat)
+       ========================================== -->
+  <div id="account-app">
+    <!-- Session restore gate -->
+    <section id="screen-restore" class="tc-screen hidden">
+      <div class="tc-scroll tc-restore-scroll">
+        <div class="tc-wrap tc-restore-wrap">
+          <div class="tc-logo eka-logo-orb"><img src="assets/eka-logo.svg" alt="EKA logo"></div>
+          <p class="eka-eyebrow">EKA · PRIVATE</p>
+          <h1>Welcome back</h1>
+          <p id="tc-restore-status" class="tc-restore-status" role="status" aria-live="polite">Restoring your session…</p>
+          <div id="tc-restore-spinner" class="tc-restore-spinner" aria-hidden="true"><span></span><span></span><span></span></div>
+          <div class="tc-restore-actions">
+            <button id="tc-restore-retry" type="button" class="tc-btn tc-btn-primary tc-btn-block hidden"><i class="fa-solid fa-rotate-right"></i> Try again</button>
+            <button id="tc-restore-signin" type="button" class="tc-btn tc-btn-ghost tc-btn-block hidden"><i class="fa-solid fa-right-to-bracket"></i> Sign in instead</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Welcome -->
+    <section id="screen-welcome" class="tc-screen">
+      <div class="tc-scroll tc-welcome-scroll">
+        <div class="tc-wrap">
+          <div class="tc-hero eka-welcome-hero">
+            <div class="tc-logo eka-logo-orb"><img src="assets/eka-logo.svg" alt="EKA logo"></div>
+            <p class="eka-eyebrow">EKA · REAL-TIME · PRIVATE</p>
+            <h1>Talk in the now.<span>Leave no trace.</span></h1>
+            <p>Private rooms and real-time chats that vanish when you leave. Add friends, share a moment, and keep only the memory.</p>
+            <div class="tc-chips">
+              <span class="tc-chip"><i class="fa-solid fa-bolt"></i> Real-time</span>
+              <span class="tc-chip"><i class="fa-solid fa-user-group"></i> Friends only</span>
+              <span class="tc-chip"><i class="fa-solid fa-shield-halved"></i> No history</span>
+            </div>
+            <div class="tc-welcome-actions">
+              <button type="button" class="tc-btn tc-btn-primary" data-nav="login"><i class="fa-solid fa-right-to-bracket"></i> Sign in</button>
+              <button type="button" class="tc-btn tc-btn-ghost" data-nav="register"><i class="fa-solid fa-user-plus"></i> Create account</button>
+            </div>
+            <button type="button" class="tc-btn tc-btn-soft" data-action="open-rooms" style="margin-top:12px"><i class="fa-solid fa-door-open"></i> Open temporary rooms</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Login -->
+    <section id="screen-login" class="tc-screen hidden">
+      <div class="tc-header">
+        <button type="button" class="tc-icon-btn" data-nav="welcome" aria-label="Back"><i class="fa-solid fa-arrow-left"></i></button>
+        <div class="tc-header-title"><h1>Welcome back</h1><p>Sign in with your username and password.</p></div>
+      </div>
+      <div class="tc-scroll">
+        <div class="tc-wrap">
+          <div class="tc-card eka-auth-card">
+            <div class="eka-auth-brand"><img src="assets/eka-logo.svg" alt=""><div><strong>EKA</strong><span>Talk in the now</span></div></div>
+            <div id="tc-login-notice" class="tc-notice" role="status"></div>
+            <form id="tc-login-form" novalidate>
+              <div class="tc-field">
+                <label class="tc-label" for="tc-login-username">Username</label>
+                <input id="tc-login-username" class="tc-input" type="text" autocomplete="username" autocapitalize="none" spellcheck="false" placeholder="your_username">
+              </div>
+              <div class="tc-field">
+                <label class="tc-label" for="tc-login-password">Password</label>
+                <input id="tc-login-password" class="tc-input" type="password" autocomplete="current-password" placeholder="Your password">
+              </div>
+              <div id="tc-login-error" class="tc-error" role="alert"></div>
+              <button id="tc-login-submit" type="submit" class="tc-btn tc-btn-primary tc-btn-block" style="margin-top:16px"><i class="fa-solid fa-right-to-bracket"></i> Sign in</button>
+            </form>
+            <p class="tc-hint" style="text-align:center;margin-top:14px">New to EKA? <button type="button" data-nav="register" style="border:0;background:none;color:var(--accent-color);font-weight:800;cursor:pointer">Create an account</button></p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Register -->
+    <section id="screen-register" class="tc-screen hidden">
+      <div class="tc-header">
+        <button type="button" class="tc-icon-btn" data-nav="welcome" aria-label="Back"><i class="fa-solid fa-arrow-left"></i></button>
+        <div class="tc-header-title"><h1>Create account</h1><p>No email or phone number required.</p></div>
+      </div>
+      <div class="tc-scroll">
+        <div class="tc-wrap">
+          <div class="tc-card eka-auth-card">
+            <div class="eka-auth-brand"><img src="assets/eka-logo.svg" alt=""><div><strong>EKA</strong><span>Create your private space</span></div></div>
+            <form id="tc-register-form" novalidate>
+              <div class="tc-field">
+                <label class="tc-label" for="tc-register-username">Username</label>
+                <input id="tc-register-username" class="tc-input" type="text" autocomplete="username" autocapitalize="none" spellcheck="false" placeholder="3–24 letters, numbers, or _">
+                <p id="tc-register-hint" class="tc-hint">3–24 letters, numbers, or underscores.</p>
+              </div>
+              <div class="tc-field">
+                <label class="tc-label" for="tc-register-password">Password</label>
+                <input id="tc-register-password" class="tc-input" type="password" autocomplete="new-password" placeholder="At least 8 characters">
+              </div>
+              <div class="tc-field">
+                <label class="tc-label" for="tc-register-confirm">Confirm password</label>
+                <input id="tc-register-confirm" class="tc-input" type="password" autocomplete="new-password" placeholder="Repeat your password">
+              </div>
+              <div id="tc-register-error" class="tc-error" role="alert"></div>
+              <button id="tc-register-submit" type="submit" class="tc-btn tc-btn-primary tc-btn-block" style="margin-top:16px"><i class="fa-solid fa-user-plus"></i> Create account</button>
+            </form>
+            <p class="tc-hint" style="text-align:center;margin-top:14px">Already have an account? <button type="button" data-nav="login" style="border:0;background:none;color:var(--accent-color);font-weight:800;cursor:pointer">Sign in</button></p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Home -->
+    <section id="screen-home" class="tc-screen tc-has-nav hidden">
+      <div class="tc-header eka-app-header">
+        <a class="eka-app-brand" href="#" data-nav="home" aria-label="EKA home"><img src="assets/eka-logo.svg" alt=""><span>EKA</span></a>
+        <div class="eka-header-actions">
+          <button type="button" class="tc-icon-btn eka-bell" data-nav="requests" aria-label="Friend requests"><i class="fa-regular fa-bell"></i><span id="eka-bell-badge" class="eka-bell-badge hidden">0</span></button>
+          <button type="button" class="tc-icon-btn" data-action="open-profile" aria-label="Open profile"><i class="fa-solid fa-user"></i></button>
+        </div>
+      </div>
+      <div class="tc-scroll">
+        <div class="tc-wrap tc-home-minimal">
+          <div class="eka-home-hero">
+            <img class="eka-home-watermark" src="assets/eka-logo.svg" alt="" aria-hidden="true">
+            <p class="eka-eyebrow">YOUR SPACE</p>
+            <h2>Welcome, <span id="tc-home-name">there</span></h2>
+            <p class="eka-home-sub">Private rooms, real friends, zero history.</p>
+            <div class="eka-stat-row">
+              <div class="tc-stat-card"><strong id="tc-online-count">0</strong><span>Online</span></div>
+              <div class="tc-stat-card"><strong id="tc-home-friends-count">0 friends</strong><span>Friends</span></div>
+              <button type="button" class="tc-stat-card eka-pending-card" data-nav="requests">
+                <strong class="eka-pending-value"><span id="tc-home-requests-badge" class="eka-mini-badge hidden">0</span><i class="fa-regular fa-envelope"></i></strong>
+                <span id="tc-home-requests-count">0 pending</span>
+              </button>
+            </div>
+          </div>
+
+          <button type="button" class="tc-home-room eka-room-card" data-action="open-rooms">
+            <span class="tc-home-room-icon"><i class="fa-solid fa-comments" aria-hidden="true"></i></span>
+            <div><strong>Temporary rooms</strong><small>Start or rejoin a private room.</small></div>
+            <span class="eka-room-cta">Open <i class="fa-solid fa-arrow-right" aria-hidden="true"></i></span>
+          </button>
+
+          <div class="tc-section-head"><h3><span class="eka-live-dot"></span>Online now</h3><button type="button" data-nav="friends">See all</button></div>
+          <div id="tc-home-online" class="tc-list"></div>
+          <div class="tc-section-head"><h3>Offline</h3></div>
+          <div id="tc-home-offline" class="tc-list"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Friends -->
+    <section id="screen-friends" class="tc-screen tc-has-nav hidden">
+      <div class="tc-header">
+        <button type="button" class="tc-icon-btn" data-nav="home" aria-label="Back"><i class="fa-solid fa-arrow-left"></i></button>
+        <div class="tc-header-title"><h1>Friends</h1><p id="tc-friends-count">0 friends</p></div>
+        <button type="button" class="tc-icon-btn" data-nav="add" aria-label="Add friend"><i class="fa-solid fa-user-plus"></i></button>
+      </div>
+      <div class="tc-scroll">
+        <div class="tc-wrap">
+          <div class="tc-tabs">
+            <button type="button" class="tc-tab active" data-friends-filter="all">All</button>
+            <button type="button" class="tc-tab" data-friends-filter="online">Online</button>
+            <button type="button" class="tc-tab" data-friends-filter="offline">Offline</button>
+          </div>
+          <div id="tc-friends-list" class="tc-list"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Add friends -->
+    <section id="screen-add" class="tc-screen hidden">
+      <div class="tc-header">
+        <button type="button" class="tc-icon-btn" data-nav="friends" aria-label="Back"><i class="fa-solid fa-arrow-left"></i></button>
+        <div class="tc-header-title"><h1>Add friends</h1><p>Search by username</p></div>
+      </div>
+      <div class="tc-scroll">
+        <div class="tc-wrap">
+          <div class="tc-card">
+            <div class="tc-field">
+              <label class="tc-label" for="tc-search-input">Username</label>
+              <input id="tc-search-input" class="tc-input" type="search" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="Search by username">
+            </div>
+            <p id="tc-search-status" class="tc-hint" style="margin-top:8px"></p>
+          </div>
+          <div class="tc-section-head"><h3>Results</h3></div>
+          <div id="tc-search-results" class="tc-list"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Friend requests -->
+    <section id="screen-requests" class="tc-screen tc-has-nav hidden">
+      <div class="tc-header">
+        <button type="button" class="tc-icon-btn" data-nav="home" aria-label="Back"><i class="fa-solid fa-arrow-left"></i></button>
+        <div class="tc-header-title"><h1>Friend requests</h1><p>Accept or manage requests</p></div>
+      </div>
+      <div class="tc-scroll">
+        <div class="tc-wrap">
+          <div class="tc-tabs">
+            <button type="button" class="tc-tab active" data-requests-filter="incoming">Incoming (<span id="tc-requests-incoming-count">0</span>)</button>
+            <button type="button" class="tc-tab" data-requests-filter="outgoing">Sent (<span id="tc-requests-outgoing-count">0</span>)</button>
+          </div>
+          <div id="tc-requests-list" class="tc-list"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Private chat -->
+    <section id="screen-chat" class="tc-screen hidden">
+      <div class="tc-header">
+        <button type="button" class="tc-icon-btn" data-action="leave-chat" aria-label="Leave chat"><i class="fa-solid fa-arrow-left"></i></button>
+        <span id="tc-chat-avatar" class="tc-avatar tc-avatar-sm"></span>
+        <div class="tc-chat-head"><h1 id="tc-chat-name">Chat</h1><p id="tc-chat-status"><span class="tc-dot"></span>Offline</p></div>
+      </div>
+      <div id="tc-chat-messages" class="tc-chat-body"></div>
+      <div id="tc-chat-typing" class="tc-typing" aria-live="polite"></div>
+      <div class="tc-composer">
+        <textarea id="tc-chat-input" rows="1" maxlength="4000" placeholder="Write a temporary message…" aria-label="Message"></textarea>
+        <button id="tc-chat-send" type="button" class="tc-send" aria-label="Send message"><i class="fa-solid fa-paper-plane"></i></button>
+      </div>
+    </section>
+
+    <!-- Profile -->
+    <section id="screen-profile" class="tc-screen hidden">
+      <div class="tc-header">
+        <button type="button" class="tc-icon-btn" data-nav="home" aria-label="Back"><i class="fa-solid fa-arrow-left"></i></button>
+        <div class="tc-header-title"><h1>Profile</h1><p>Account details</p></div>
+      </div>
+      <div class="tc-scroll">
+        <div class="tc-wrap">
+          <div id="tc-profile-content"></div>
+          <div id="tc-profile-actions" class="tc-card hidden" style="margin-top:14px">
+            <button id="tc-profile-chat" type="button" class="tc-btn tc-btn-primary tc-btn-block" data-chat-user=""><i class="fa-solid fa-comment"></i> Chat privately</button>
+            <button id="tc-profile-remove" type="button" class="tc-btn tc-btn-danger tc-btn-block" data-remove-friend="" style="margin-top:8px"><i class="fa-solid fa-user-minus"></i> Remove friend</button>
+          </div>
+          <div id="tc-profile-nonfriend" class="tc-card hidden" style="margin-top:14px">
+            <p class="tc-hint" style="margin:0 0 10px;line-height:1.5">You are not friends yet. Add this person from the Add Friends screen to start a private chat.</p>
+            <button type="button" class="tc-btn tc-btn-primary tc-btn-block" data-nav="add"><i class="fa-solid fa-user-plus"></i> Add friends</button>
+          </div>
+          <form id="tc-profile-form" class="tc-card hidden" style="margin-top:14px" novalidate>
+            <h3 style="margin:0 0 12px;font-size:0.9rem">Edit profile</h3>
+            <div class="tc-field">
+              <label class="tc-label" for="tc-profile-display-name">Display name</label>
+              <input id="tc-profile-display-name" class="tc-input" type="text" maxlength="48" autocomplete="nickname">
+            </div>
+            <div class="tc-field">
+              <label class="tc-label" for="tc-profile-avatar-url">Profile picture URL (HTTPS)</label>
+              <input id="tc-profile-avatar-url" class="tc-input" type="url" maxlength="2048" placeholder="https://…">
+            </div>
+            <div id="tc-profile-error" class="tc-error" role="alert"></div>
+            <button id="tc-profile-save" type="submit" class="tc-btn tc-btn-primary tc-btn-block" style="margin-top:14px">Save profile</button>
+          </form>
+          <div class="tc-card" style="margin-top:14px">
+            <button type="button" class="tc-btn tc-btn-ghost tc-btn-block" data-action="logout"><i class="fa-solid fa-right-from-bracket"></i> Log out</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Settings -->
+    <section id="screen-settings" class="tc-screen tc-has-nav hidden">
+      <div class="tc-header">
+        <button type="button" class="tc-icon-btn" data-nav="home" aria-label="Back"><i class="fa-solid fa-arrow-left"></i></button>
+        <div class="tc-header-title"><h1>Settings</h1><p>Account and privacy</p></div>
+      </div>
+      <div class="tc-scroll">
+        <div class="tc-wrap">
+          <div class="tc-card">
+            <div class="tc-setting-row">
+              <i class="fa-solid fa-user"></i>
+              <div><strong>Edit profile</strong><small>Display name and profile picture</small></div>
+              <button type="button" class="tc-btn tc-btn-ghost tc-btn-sm" data-action="open-profile">Edit</button>
+            </div>
+            <div class="tc-setting-row">
+              <i class="fa-solid fa-user-group"></i>
+              <div><strong id="tc-settings-name">Account</strong><small id="tc-settings-friends">0 friends</small></div>
+            </div>
+            <div class="tc-setting-row">
+              <i class="fa-solid fa-envelope"></i>
+              <div><strong>Friend requests</strong><small id="tc-settings-requests">0 pending</small></div>
+              <button type="button" class="tc-btn tc-btn-ghost tc-btn-sm" data-nav="requests">Open</button>
+            </div>
+            <div class="tc-setting-row">
+              <i class="fa-solid fa-comments"></i>
+              <div><strong>Temporary rooms</strong><small>Original room chat</small></div>
+              <button type="button" class="tc-btn tc-btn-ghost tc-btn-sm" data-action="open-rooms">Open</button>
+            </div>
+          </div>
+
+          <div class="tc-card eka-settings-notification-card" style="margin-top:14px">
+            <div class="eka-settings-card-head">
+              <span class="eka-settings-card-icon"><i class="fa-solid fa-bell"></i></span>
+              <div><h3>Notifications</h3><p id="eka-notification-setting-status" role="status" aria-live="polite">Checking notification status...</p></div>
+            </div>
+            <button id="eka-notification-setting-button" type="button" class="tc-btn tc-btn-ghost tc-btn-block" data-eka-action="notifications">Manage</button>
+          </div>
+
+          <div class="tc-card eka-settings-legal-card" style="margin-top:14px">
+            <div class="eka-settings-card-head">
+              <span class="eka-settings-card-icon"><i class="fa-solid fa-file-shield"></i></span>
+              <div><h3>Terms &amp; privacy</h3><p>Read what you agreed to, any time.</p></div>
+            </div>
+            <div class="eka-settings-legal-links">
+              <button type="button" data-eka-legal="terms"><span><i class="fa-solid fa-file-lines"></i> Terms &amp; Conditions</span><i class="fa-solid fa-chevron-right"></i></button>
+              <button type="button" data-eka-legal="privacy"><span><i class="fa-solid fa-user-shield"></i> Privacy Policy</span><i class="fa-solid fa-chevron-right"></i></button>
+            </div>
+            <p class="eka-settings-legal-version">Version 2026-11-01</p>
+          </div>
+
+          <form id="tc-password-form" class="tc-card" style="margin-top:14px" novalidate>
+            <h3 style="margin:0 0 12px;font-size:0.9rem">Change password</h3>
+            <div class="tc-field">
+              <label class="tc-label" for="tc-current-password">Current password</label>
+              <input id="tc-current-password" class="tc-input" type="password" autocomplete="current-password">
+            </div>
+            <div class="tc-field">
+              <label class="tc-label" for="tc-new-password">New password</label>
+              <input id="tc-new-password" class="tc-input" type="password" autocomplete="new-password" placeholder="At least 8 characters">
+            </div>
+            <div class="tc-field">
+              <label class="tc-label" for="tc-confirm-password">Confirm new password</label>
+              <input id="tc-confirm-password" class="tc-input" type="password" autocomplete="new-password">
+            </div>
+            <div id="tc-password-error" class="tc-error" role="alert"></div>
+            <button id="tc-password-submit" type="submit" class="tc-btn tc-btn-primary tc-btn-block" style="margin-top:14px">Update password</button>
+          </form>
+
+          <div class="tc-card" style="margin-top:14px">
+            <h3 style="margin:0 0 8px;font-size:0.9rem">Privacy</h3>
+            <p class="tc-hint" style="line-height:1.55">Private messages are never saved to the database, local storage, or a backup. They exist only in memory while a conversation is open. Leaving the chat or disconnecting clears them. If the recipient is offline or has not opened the chat, the message is not delivered and no copy is kept.</p>
+          </div>
+
+          <div class="tc-card" style="margin-top:14px">
+            <h3 style="margin:0 0 12px;font-size:0.9rem">Delete account</h3>
+            <div class="tc-field">
+              <label class="tc-label" for="tc-delete-password">Password</label>
+              <input id="tc-delete-password" class="tc-input" type="password" autocomplete="current-password" placeholder="Confirm with your password">
+            </div>
+            <div id="tc-delete-error" class="tc-error" role="alert"></div>
+            <button id="tc-delete-account" type="button" class="tc-btn tc-btn-danger tc-btn-block" data-action="delete-account" style="margin-top:14px">Delete account permanently</button>
+          </div>
+
+          <div class="tc-card" style="margin-top:14px">
+            <button type="button" class="tc-btn tc-btn-ghost tc-btn-block" data-action="logout"><i class="fa-solid fa-right-from-bracket"></i> Log out</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <nav id="tc-bottom-nav" class="tc-bottom-nav hidden" aria-label="Account navigation">
+      <button type="button" class="tc-nav-item" data-nav="home"><i class="fa-solid fa-house"></i><span>Home</span></button>
+      <button type="button" class="tc-nav-item" data-nav="friends"><i class="fa-solid fa-user-group"></i><span>Friends</span></button>
+      <button type="button" class="tc-nav-item" data-nav="requests"><i class="fa-solid fa-envelope"></i><span>Requests</span><span id="tc-nav-requests-badge" class="tc-nav-badge hidden">0</span></button>
+      <button type="button" class="tc-nav-item" data-nav="settings"><i class="fa-solid fa-gear"></i><span>Settings</span></button>
+    </nav>
+  </div>
 
   <!-- ==========================================
        VIEW 1: LANDING PAGE
        ========================================== -->
-  <div id="landing-view" class="landing-experience liquid-landing flex-1 overflow-y-auto w-full h-full absolute inset-0 z-40 transition-opacity duration-500">
-    <div class="liquid-field" aria-hidden="true"><span class="liquid-orb liquid-orb--one"></span><span class="liquid-orb liquid-orb--two"></span><span class="liquid-orb liquid-orb--three"></span></div>
-    <div class="petal-field" aria-hidden="true"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></div>
-    <nav class="product-nav liquid-nav z-50">
-      <div class="mx-auto flex items-center justify-between">
-        <a class="brand-lockup flex items-center gap-2 font-extrabold text-xl" href="#home" data-scroll-target="home" aria-label="TempChat home">
-          <i class="fa-solid fa-paper-plane brand-mark" aria-hidden="true"></i><span>TempChat</span>
-        </a>
-        <div class="liquid-nav-links" aria-label="Main navigation">
-          <button type="button" data-home-nav="home" class="active">Home</button>
-          <button type="button" data-home-nav="rooms">Rooms</button>
-          <button type="button" data-home-nav="settings">Settings</button>
+  <div id="landing-view" class="eka-landing flex-1 w-full h-full absolute inset-0 z-40">
+    <div class="eka-aurora" aria-hidden="true">
+      <span class="eka-blob eka-blob-1"></span>
+      <span class="eka-blob eka-blob-2"></span>
+      <span class="eka-blob eka-blob-3"></span>
+      <span class="eka-grid"></span>
+      <canvas id="eka-particles"></canvas>
+    </div>
+
+    <nav class="eka-nav" aria-label="EKA room navigation">
+      <a class="eka-brand" href="#home" data-scroll-target="home" aria-label="EKA home">
+        <img src="assets/eka-logo.svg" alt="">
+        <span>EKA</span>
+      </a>
+      <div class="eka-nav-right">
+        <div class="home-connection">
+          <span id="connection-status" class="connection-indicator" role="status" aria-live="polite">Connecting…</span>
+          <button id="connection-retry" type="button" class="hidden">Retry</button>
         </div>
-        <div class="home-connection"><span id="connection-status" class="connection-indicator" role="status" aria-live="polite">Connecting…</span><button id="connection-retry" type="button" class="hidden">Retry</button></div>
+        <button id="tc-back-to-account" type="button" class="tc-back-to-account hidden"><i class="fa-solid fa-user"></i><span>My account</span></button>
       </div>
     </nav>
 
-    <header id="home" class="story-hero">
-      <div class="story-copy">
-        <div class="privacy-badge">TEMPORARY ROOMS • NO ACCOUNT REQUIRED</div>
-        <h1 class="story-title">Private conversations.<span>Simple connections.</span></h1>
-        <p class="story-description">Create a room and share its code, or ask to join a room. The host approves every guest.</p>
-        <div class="story-actions">
-          <button type="button" data-entry-mode="create" class="story-primary"><i class="fa-solid fa-plus mr-2" aria-hidden="true"></i>Create Room</button>
-          <button type="button" data-entry-mode="join" class="story-secondary"><i class="fa-solid fa-arrow-right-to-bracket mr-2" aria-hidden="true"></i>Join a Room</button>
+    <main class="eka-landing-main">
+      <section id="home" class="eka-hero">
+        <div class="eka-hero-copy">
+          <span class="eka-pill"><span class="eka-pill-dot"></span>PRIVATE ROOMS · NO ACCOUNT NEEDED</span>
+          <h1>Conversations<br><span>that feel alive.</span></h1>
+          <p class="eka-hero-text">Create a private room, share a six-digit code, and let the host welcome every guest. Nothing is stored. Everything is now.</p>
+          <div class="eka-hero-actions">
+            <button type="button" data-entry-mode="create" class="eka-btn eka-btn-primary"><i class="fa-solid fa-plus" aria-hidden="true"></i>Create Room</button>
+            <button type="button" data-entry-mode="join" class="eka-btn eka-btn-ghost"><i class="fa-solid fa-arrow-right-to-bracket" aria-hidden="true"></i>Join a Room</button>
+          </div>
+          <div class="eka-trust">
+            <span><i class="fa-solid fa-lock" aria-hidden="true"></i>Ephemeral by design</span>
+            <span><i class="fa-solid fa-bolt" aria-hidden="true"></i>Instant real-time</span>
+          </div>
         </div>
-        <p class="security-line"><i class="fa-solid fa-circle-info" aria-hidden="true"></i>Room membership is temporary and visible to participants.</p>
-      </div>
 
-      <div class="story-stage" role="img" aria-label="A white dove carries a private message through a rose castle landscape to a small king receiving the letter.">
-        <div class="story-sun" aria-hidden="true"></div>
-        <div class="story-cloud story-cloud--one" aria-hidden="true"></div><div class="story-cloud story-cloud--two" aria-hidden="true"></div>
-        <div class="castle castle--far" aria-hidden="true"><span class="castle-base"></span><span class="castle-tower castle-tower--one"></span><span class="castle-tower castle-tower--two"></span><span class="castle-tower castle-tower--three"></span></div>
-        <div class="castle castle--near" aria-hidden="true"><span class="castle-base"></span><span class="castle-tower castle-tower--one"></span><span class="castle-tower castle-tower--two"></span><span class="castle-tower castle-tower--three"></span></div>
-        <div class="story-ripple" aria-hidden="true"></div>
-        <div class="royal-gallery" aria-hidden="true"><span class="royal-drape"></span><span class="royal-letter"><i class="fa-solid fa-comment-dots"></i></span><span class="king"><i class="king-crown"></i><i class="king-head"></i><i class="king-robe"></i><i class="king-hand"></i></span></div>
-        <div class="story-dove" aria-hidden="true">
-          <svg viewBox="0 0 320 250" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <defs><linearGradient id="doveBody" x1="70" y1="70" x2="234" y2="201" gradientUnits="userSpaceOnUse"><stop stop-color="#fff"/><stop offset="0.64" stop-color="#fff8fb"/><stop offset="1" stop-color="#e9bad2"/></linearGradient><linearGradient id="doveWing" x1="70" y1="20" x2="185" y2="165" gradientUnits="userSpaceOnUse"><stop stop-color="#fff"/><stop offset="1" stop-color="#f2cde0"/></linearGradient></defs>
-            <g class="dove-wing dove-wing--far"><path d="M149 138C93 135 37 105 23 38C70 39 127 68 175 125L149 138Z" fill="url(#doveWing)" stroke="#E8BDD2" stroke-width="2"/><path d="M142 128C95 100 69 71 53 47M151 125C111 96 89 65 81 39M161 124C134 88 123 57 123 31" stroke="#E4B3CB" stroke-width="2" stroke-linecap="round" opacity=".68"/></g>
-            <path d="M131 147C92 164 68 186 48 224C91 213 129 193 162 162L131 147Z" fill="url(#doveWing)" stroke="#E8BDD2" stroke-width="2"/>
-            <ellipse cx="172" cy="145" rx="67" ry="42" transform="rotate(-13 172 145)" fill="url(#doveBody)" stroke="#E8BDD2" stroke-width="2"/>
-            <path d="M196 125C213 91 239 73 271 76C260 102 238 122 207 139L196 125Z" fill="url(#doveBody)" stroke="#E8BDD2" stroke-width="2"/>
-            <circle cx="258" cy="89" r="3.5" fill="#7C3157"/><path d="M275 96L294 102L277 109" fill="#E9729F"/>
-            <g class="dove-wing dove-wing--near"><path d="M170 145C150 94 154 43 196 11C219 53 213 109 187 154L170 145Z" fill="url(#doveWing)" stroke="#E8BDD2" stroke-width="2"/><path d="M177 139C178 94 184 55 198 25M184 145C193 109 204 77 218 52M191 148C208 122 222 102 240 87" stroke="#E4B3CB" stroke-width="2" stroke-linecap="round" opacity=".72"/></g>
-            <path d="M146 170C139 184 147 193 159 185M161 174C155 189 165 197 176 187" stroke="#CA6B91" stroke-width="3" stroke-linecap="round"/>
-          </svg>
-          <span class="dove-envelope"><i class="fa-solid fa-comment-dots"></i></span>
+        <div class="eka-hero-visual" aria-hidden="true">
+          <span class="eka-orbit eka-orbit-1"></span>
+          <span class="eka-orbit eka-orbit-2"></span>
+          <span class="eka-halo"></span>
+
+          <div class="eka-float-chip eka-chip-heart"><i class="fa-solid fa-heart"></i></div>
+          <div class="eka-float-chip eka-chip-bolt"><i class="fa-solid fa-bolt"></i></div>
+          <div class="eka-float-card eka-card-join">
+            <span class="eka-float-avatar">A</span>
+            <div><strong>@alex joined</strong><small>Room 824 196</small></div>
+            <i class="fa-solid fa-check"></i>
+          </div>
+          <div class="eka-float-card eka-card-private">
+            <i class="fa-solid fa-shield-halved"></i>
+            <div><strong>End-to-end</strong><small>Nothing saved</small></div>
+          </div>
+
+          <div class="eka-phone">
+            <div class="eka-phone-glass"></div>
+            <div class="eka-phone-screen">
+              <div class="eka-phone-status"><span>9:41</span><span><i class="fa-solid fa-signal"></i><i class="fa-solid fa-wifi"></i><i class="fa-solid fa-battery-full"></i></span></div>
+              <div class="eka-phone-head">
+                <img src="assets/eka-logo.svg" alt="">
+                <div><strong>EKA Room</strong><span><i class="eka-live-dot"></i>4 people online</span></div>
+                <span class="eka-phone-code">824 196</span>
+              </div>
+              <div class="eka-phone-chat">
+                <span class="eka-phone-time">Today · temporary</span>
+                <div class="eka-bubble eka-bubble-in">This room disappears when we leave?</div>
+                <div class="eka-bubble eka-bubble-out">Completely. No history, no screenshots needed.</div>
+                <div class="eka-bubble eka-bubble-in">Okay, that's kind of beautiful.</div>
+                <div class="eka-typing"><i></i><i></i><i></i><span>Maya is typing</span></div>
+              </div>
+              <div class="eka-phone-composer"><span>Message the room…</span><span class="eka-phone-send"><i class="fa-solid fa-paper-plane"></i></span></div>
+            </div>
+          </div>
         </div>
-        <p class="story-caption"><b>01</b> A private message begins its journey</p>
-      </div>
-    </header>
+      </section>
 
-    <section id="features" class="landing-benefits" aria-label="TempChat features">
-      <article class="landing-benefit"><i class="fa-solid fa-lock landing-benefit-icon" aria-hidden="true"></i><div><strong>Private by design</strong><span>Your conversation stays between you and the people you invite.</span></div></article>
-      <article class="landing-benefit"><i class="fa-solid fa-bolt landing-benefit-icon" aria-hidden="true"></i><div><strong>Instant rooms</strong><span>Start a space and share a code in a few seconds.</span></div></article>
-      <article class="landing-benefit"><i class="fa-solid fa-gamepad landing-benefit-icon" aria-hidden="true"></i><div><strong>More than messages</strong><span>Keep conversations alive with play built right in.</span></div></article>
-    </section>
+      <section id="features" class="eka-features" aria-label="EKA features">
+        <article class="eka-feature">
+          <span class="eka-feature-icon"><i class="fa-solid fa-lock" aria-hidden="true"></i></span>
+          <div><strong>Private by design</strong><p>Host approval keeps every room intentional. Share a code with the people you choose.</p></div>
+        </article>
+        <article class="eka-feature">
+          <span class="eka-feature-icon"><i class="fa-solid fa-bolt" aria-hidden="true"></i></span>
+          <div><strong>Instant rooms</strong><p>Open a room in seconds and invite friends with a single six-digit code.</p></div>
+        </article>
+        <article class="eka-feature">
+          <span class="eka-feature-icon"><i class="fa-solid fa-wand-magic-sparkles" aria-hidden="true"></i></span>
+          <div><strong>More than messages</strong><p>Keep the energy going with games, reactions and real-time presence.</p></div>
+        </article>
+      </section>
+    </main>
 
-    <footer id="about" class="liquid-footer">&copy; 2026 TempChat · Made for the conversations that matter.</footer>
+    <footer id="about" class="eka-footer">
+      <img src="assets/eka-logo.svg" alt="">
+      <span>&copy; 2026 EKA · Made for conversations that matter.</span>
+    </footer>
   </div>
 
-  <!-- ==========================================
+<!-- ==========================================
        VIEW 2: ROOM ENTRY
        ========================================== -->
   <div id="entry-view" class="entry-stage hidden flex-1 items-center justify-center w-full h-full absolute inset-0 z-30 bg-[var(--bg-base)]">
@@ -1225,20 +2062,23 @@
         <i class="fa-solid fa-arrow-left"></i>
       </button>
       
-      <div class="text-center mb-8 mt-4">
-        <i class="fa-solid fa-bolt text-4xl text-[var(--accent-color)] mb-4"></i>
-        <h2 class="text-2xl font-bold text-[var(--text-main)]" id="entry-title">Join a Room</h2>
+      <div class="eka-entry-head">
+        <img src="assets/eka-logo.svg" alt="EKA" class="eka-entry-logo">
+        <p class="eka-eyebrow">EKA PRIVATE ROOM</p>
+        <h2 id="entry-title">Join a Room</h2>
+        <p class="eka-entry-sub">Enter a display name and the six-digit code from your host.</p>
       </div>
 
       <div id="entry-form" class="space-y-4">
         <div>
-          <label class="block text-sm font-medium text-[var(--text-muted)] mb-1">Your Name</label>
-          <input type="text" id="username-input" class="w-full bg-[var(--bg-base)] border border-[var(--border-color)] rounded-xl px-4 py-3 text-[var(--text-main)] focus:outline-none focus:border-[var(--accent-color)] focus:ring-1 focus:ring-[var(--accent-color)] transition-all" placeholder="Enter a display name">
+          <label class="eka-field-label" for="username-input">Display name</label>
+          <input type="text" id="username-input" class="eka-field-input" autocomplete="nickname" placeholder="How should people see you?">
         </div>
         
         <div id="room-code-container">
-          <label class="block text-sm font-medium text-[var(--text-muted)] mb-1">Room Code</label>
-          <input type="text" id="room-input" inputmode="numeric" autocomplete="one-time-code" maxlength="6" pattern="[0-9]{6}" class="w-full bg-[var(--bg-base)] border border-[var(--border-color)] rounded-xl px-4 py-3 text-[var(--text-main)] focus:outline-none focus:border-[var(--accent-color)] font-mono tracking-[0.24em] transition-all" placeholder="000000" aria-describedby="entry-helper">
+          <label class="eka-field-label" for="room-input">Room code</label>
+          <input type="text" id="room-input" class="eka-field-input eka-code-input" inputmode="numeric" autocomplete="one-time-code" maxlength="6" pattern="[0-9]{6}" placeholder="000000" aria-describedby="entry-helper">
+          <p id="entry-helper" class="eka-field-hint">Ask the host for the six-digit code.</p>
         </div>
 
         <div class="flex items-center justify-between text-sm mt-2">
@@ -1275,7 +2115,7 @@
         </button>
         <div>
           <h2 class="font-bold text-[var(--text-main)] flex items-center gap-2">
-            Room <span id="header-room-code" class="font-mono text-[var(--accent-color)] bg-[var(--accent-color)]/10 px-2 py-0.5 rounded">---</span>
+            EKA Room <span id="header-room-code" class="font-mono text-[var(--accent-color)] bg-[var(--accent-color)]/10 px-2 py-0.5 rounded">---</span>
           </h2>
           <div class="text-xs font-medium text-[var(--text-muted)] flex items-center gap-1.5">
             <span class="relative flex h-2 w-2">
@@ -1477,6 +2317,15 @@
           </div>
           <!-- Swatches are generated from CHAT_BG_COLORS in the script below. -->
           <div id="bg-color-grid" class="bg-color-grid" role="group" aria-labelledby="bg-color-label"></div>
+        </div>
+
+        <!-- Legal -->
+        <div class="eka-theme-legal">
+          <label class="block text-xs font-bold uppercase tracking-wider text-[var(--text-muted)] mb-3">Legal &amp; privacy</label>
+          <div class="eka-settings-legal-links">
+            <button type="button" data-eka-legal="terms"><span><i class="fa-solid fa-file-lines"></i> Terms &amp; Conditions</span><i class="fa-solid fa-chevron-right"></i></button>
+            <button type="button" data-eka-legal="privacy"><span><i class="fa-solid fa-user-shield"></i> Privacy Policy</span><i class="fa-solid fa-chevron-right"></i></button>
+          </div>
         </div>
 
       </div>
@@ -2125,7 +2974,7 @@
     async function shareRoomNatively() {
       const link = getShareRoomLink();
       if (!link) return;
-      const shareData = { title: 'Join my private TempChat room', text: `Join my private chat room: ${link}`, url: link };
+      const shareData = { title: 'Join my private EKA room', text: `Join my private EKA room: ${link}`, url: link };
       if (navigator.share) {
         try {
           await navigator.share(shareData);
@@ -2226,35 +3075,54 @@
     let socket;
     let socketConnectionState = 'connecting';
     let socketConnectionMessage = 'Connecting to the chat server…';
+    let roomReconnectPromise = null;
+    let roomAuthRefreshTried = false;
+    let roomHasConnected = false;
+    let roomAuthReconnect = false;
     const ROOM_SESSION_KEY = 'tempchat_active_room_v1';
     let rejoinAttemptSocketId = '';
     let pendingJoinRequest = null;
 
-    function persistRoomSession() {
+    async function persistRoomSession() {
       if (!AppState.room.code || !AppState.room.token || !AppState.user.username) return;
+      const value = JSON.stringify({
+        roomCode: AppState.room.code,
+        token: AppState.room.token,
+        username: AppState.user.username
+      });
       try {
-        sessionStorage.setItem(ROOM_SESSION_KEY, JSON.stringify({
-          roomCode: AppState.room.code,
-          token: AppState.room.token,
-          username: AppState.user.username
-        }));
+        if (window.Capacitor?.isNativePlatform?.() && window.TempChatNative?.SecureStorage) {
+          await window.TempChatNative.SecureStorage.set(ROOM_SESSION_KEY, value);
+        } else {
+          sessionStorage.setItem(ROOM_SESSION_KEY, value);
+        }
       } catch (error) {
         console.warn('Room reconnect state could not be stored.', error);
       }
     }
 
-    function clearRoomSession() {
-      try { sessionStorage.removeItem(ROOM_SESSION_KEY); } catch (_) { /* Storage may be disabled. */ }
+    async function clearRoomSession() {
+      try {
+        if (window.Capacitor?.isNativePlatform?.() && window.TempChatNative?.SecureStorage) {
+          await window.TempChatNative.SecureStorage.remove(ROOM_SESSION_KEY);
+        } else {
+          sessionStorage.removeItem(ROOM_SESSION_KEY);
+        }
+      } catch (_) { /* Storage may be disabled. */ }
       rejoinAttemptSocketId = '';
     }
 
-    function readRoomSession() {
+    async function readRoomSession() {
       try {
-        const saved = JSON.parse(sessionStorage.getItem(ROOM_SESSION_KEY) || 'null');
+        const raw = window.Capacitor?.isNativePlatform?.() && window.TempChatNative?.SecureStorage
+          ? await window.TempChatNative.SecureStorage.get(ROOM_SESSION_KEY)
+          : sessionStorage.getItem(ROOM_SESSION_KEY);
+        const saved = typeof raw === 'string' ? JSON.parse(raw || 'null') : raw;
         if (!saved?.roomCode || !saved?.token || !saved?.username) return null;
+        if (!/^\d{6}$/.test(saved.roomCode) || typeof saved.token !== 'string' || typeof saved.username !== 'string') return null;
         return saved;
       } catch (_) {
-        clearRoomSession();
+        await clearRoomSession();
         return null;
       }
     }
@@ -2286,15 +3154,17 @@
       }
     }
 
-    function tryRejoinSavedRoom() {
+    async function tryRejoinSavedRoom() {
       if (!socket?.connected || rejoinAttemptSocketId === socket.id) return;
       // A different explicit shared link wins over a previous browser session.
       // A link for the already-admitted room can still restore safely on reload.
-      const saved = readRoomSession();
+      const connectedSocketId = socket.id;
+      rejoinAttemptSocketId = connectedSocketId;
+      const saved = await readRoomSession();
+      if (!socket?.connected || socket.id !== connectedSocketId) return;
       const sharedRoom = getSharedRoomCodeFromUrl();
       if (sharedRoom && (!saved || saved.roomCode !== sharedRoom)) return;
       if (!saved) return;
-      rejoinAttemptSocketId = socket.id;
       socket.emit('rejoin-room', saved, (result) => {
         if (!result?.success) {
           clearRoomSession();
@@ -2320,7 +3190,9 @@
         if (!status) return;
         status.classList.remove('hidden');
         status.dataset.state = socketConnectionState;
-        status.textContent = socketConnectionMessage;
+        status.textContent = id === 'connection-status'
+          ? (socketConnectionState === 'connected' ? 'Online' : socketConnectionState === 'disconnected' ? 'Offline' : 'Connecting…')
+          : socketConnectionMessage;
       });
       ['connection-retry', 'entry-connection-retry'].forEach((id) => {
         const button = document.getElementById(id);
@@ -2335,6 +3207,54 @@
       updateConnectionStatus();
     }
 
+    function roomSessionFailureMessage(reason) {
+      return reason === 'network'
+        ? 'Could not refresh your session. Check your connection and try again.'
+        : 'Your session expired. Sign in again to reconnect.';
+    }
+
+    async function recoverRoomConnection(options = {}) {
+      if (!socket) return false;
+      if (roomReconnectPromise) return roomReconnectPromise;
+      roomReconnectPromise = (async () => {
+        setSocketConnectionState('connecting', 'Refreshing the secure connection…');
+        let result;
+        try {
+          result = await window.TempChatApp?.prepareRoomReconnect?.(socket, options);
+        } catch (error) {
+          console.warn('Room socket authentication could not be refreshed.', error);
+          result = { ok: false, reason: 'network' };
+        }
+        if (result?.ok === false) {
+          setSocketConnectionState('disconnected', roomSessionFailureMessage(result.reason));
+          return false;
+        }
+        if (!socket.connected) {
+          setSocketConnectionState('connecting', 'Reconnecting securely…');
+          socket.connect();
+        }
+        return true;
+      })().finally(() => { roomReconnectPromise = null; });
+      return roomReconnectPromise;
+    }
+
+    window.TempChatRoom = Object.freeze({
+      open() {
+        if (AppState.room.code) showChatView();
+        else showLandingView();
+      },
+      authenticate(accessToken) {
+        if (!socket || !accessToken || socket.auth?.accessToken === accessToken) return;
+        socket.auth = { accessToken };
+        if (socket.connected) {
+          roomAuthReconnect = true;
+          socket.disconnect().connect();
+        } else if (roomHasConnected && !socket.active) {
+          socket.connect();
+        }
+      }
+    });
+
     function initSocket() {
       if (!window.io) {
         setSocketConnectionState('disconnected', 'Chat server client unavailable. Start the backend and refresh this page.');
@@ -2348,21 +3268,45 @@
         return;
       }
       socket = window.io(socketUrl, {
+        autoConnect: false,
         timeout: 8000,
         reconnection: true,
-        reconnectionAttempts: 5
+        reconnectionAttempts: 20
       });
 
+      Promise.resolve(window.TempChatApp?.prepareRoomReconnect?.(socket))
+        .then((result) => {
+          if (result?.ok === false) {
+            setSocketConnectionState('disconnected', roomSessionFailureMessage(result.reason));
+            return;
+          }
+          socket.connect();
+        })
+        .catch((error) => {
+          console.warn('Room socket authentication could not be refreshed.', error);
+          setSocketConnectionState('disconnected', roomSessionFailureMessage('network'));
+        });
+
       socket.on('connect', () => {
+        roomHasConnected = true;
+        roomAuthRefreshTried = false;
+        roomAuthReconnect = false;
         setSocketConnectionState('connected', 'Connected securely. You can enter a room.');
         AppState.user.id = socket.id;
         updateComposerAvailability();
-        tryRejoinSavedRoom();
+        void tryRejoinSavedRoom();
         console.info('Connected to the Socket.IO server.');
       });
 
-      socket.on('connect_error', () => {
-        setSocketConnectionState('connecting', 'Unable to reach the chat server. Retrying…');
+      socket.on('connect_error', (error) => {
+        updateComposerAvailability();
+        if (!/auth|token|session|expired/i.test(error?.message || '')) {
+          setSocketConnectionState('connecting', 'Unable to reach the chat server. Retrying…');
+          return;
+        }
+        if (roomAuthRefreshTried) return;
+        roomAuthRefreshTried = true;
+        void recoverRoomConnection({ forceRefresh: true });
       });
 
       socket.io.on('reconnect_attempt', (attempt) => {
@@ -2372,8 +3316,9 @@
         setSocketConnectionState('disconnected', 'Could not reconnect. Check your connection and try again.');
       });
 
-      socket.on('disconnect', () => {
-        setSocketConnectionState('connecting', 'Connection lost. Reconnecting…');
+      socket.on('disconnect', (reason) => {
+        const reauthenticating = roomAuthReconnect;
+        roomAuthReconnect = false;
         // Pending requests are tied to a socket ID and are deliberately removed
         // by the server on disconnect. Do not leave a joiner in a stale wait UI.
         if (pendingJoinRequest) {
@@ -2382,9 +3327,16 @@
           document.getElementById('room-input').value = roomCode;
           showToast('Your connection changed. Request to join again after reconnecting.', 'error');
         }
+        if (reason === 'io server disconnect' && !reauthenticating) {
+          roomAuthRefreshTried = false;
+          void recoverRoomConnection();
+          return;
+        }
+        setSocketConnectionState(
+          'connecting',
+          reauthenticating ? 'Refreshing the secure connection…' : 'Connection lost. Reconnecting…'
+        );
       });
-
-      socket.on('connect_error', () => updateComposerAvailability());
 
       // Generate identity key pair on connection
       Crypto.generateIdentityKeyPair().then(({ publicKey, fingerprint }) => {
@@ -2782,16 +3734,20 @@
       event.target.value = event.target.value.replace(/\D/g, '').slice(0, 6);
     });
 
-    function retrySocketConnection() {
+    async function retrySocketConnection() {
       if (socket?.connected) return;
       setSocketConnectionState('connecting', 'Connecting to the chat server…');
-      if (socket) socket.connect();
-      else initSocket();
+      if (!socket) {
+        initSocket();
+        return;
+      }
+      roomAuthRefreshTried = false;
+      await recoverRoomConnection();
     }
 
     function leaveRoom() {
       stopTyping();
-      clearRoomSession();
+      void clearRoomSession();
       const landingUrl = new URL(window.location.href);
       landingUrl.searchParams.delete('room');
       window.history.replaceState({}, '', landingUrl);
@@ -3631,6 +4587,18 @@
       if (appPlugin?.addListener) {
         appPlugin.addListener('appUrlOpen', ({ url }) => applySharedRoomLink(url))
           .catch((error) => console.warn('Native room-link handling is unavailable:', error));
+        appPlugin.addListener('appStateChange', async ({ isActive }) => {
+          if (!isActive) {
+            if (AppState.room.code) await persistRoomSession();
+            return;
+          }
+          await window.TempChatApp?.handleForeground?.();
+          if (!socket?.connected) {
+            await retrySocketConnection();
+          } else if (!AppState.room.code) {
+            await tryRejoinSavedRoom();
+          }
+        }).catch((error) => console.warn('Native lifecycle handling is unavailable:', error));
         if (appPlugin.getLaunchUrl) {
           appPlugin.getLaunchUrl()
             .then((result) => { if (result?.url) applySharedRoomLink(result.url); })
@@ -3663,13 +4631,31 @@
         });
       });
 
-      // Capacitor's native back event is used when the installed App plugin is
-      // present; browser history remains the fallback for web previews.
-      window.Capacitor?.Plugins?.App?.addListener?.('backButton', () => {
+      // One native back listener owns both the account and room navigation.
+      appPlugin?.addListener?.('backButton', () => {
+        const legalModal = document.getElementById('eka-legal-modal');
+        if (legalModal && !legalModal.classList.contains('hidden')) {
+          window.EkaOnboarding?.closeLegal?.();
+          return;
+        }
+        const onboarding = document.getElementById('eka-onboarding');
+        if (onboarding && !onboarding.classList.contains('hidden') && !document.documentElement.classList.contains('eka-onboarding-complete')) {
+          return;
+        }
         const visibleModal = Array.from(document.querySelectorAll('[role="dialog"]')).find((item) => !item.classList.contains('hidden'));
         if (visibleModal) { visibleModal.classList.add('hidden'); return; }
-        if (!document.getElementById('chat-view').classList.contains('hidden')) { leaveRoom(); return; }
-        if (!document.getElementById('entry-view').classList.contains('hidden')) showLandingView();
+        if (document.body.classList.contains('account-mode')) {
+          window.TempChatApp?.handleNativeBack?.();
+          return;
+        }
+        if (!document.getElementById('chat-view').classList.contains('hidden')) {
+          if (window.TempChatApp?.signedIn) window.TempChatApp.handleNativeBack();
+          else showLandingView();
+          return;
+        }
+        if (!document.getElementById('entry-view').classList.contains('hidden')) { showLandingView(); return; }
+        if (window.TempChatApp?.signedIn) window.TempChatApp.handleNativeBack();
+        else window.TempChatNative?.App?.exitApp?.();
       }).catch?.((error) => console.warn('Native back handling is unavailable:', error));
 
       // A shared room link only pre-fills the join form. It never admits a
@@ -3809,5 +4795,8 @@
     }
 
   </script>
+  <script src="assets/eka-onboarding.js" defer></script>
+  <script src="assets/tempchat-app.js" defer></script>
+  <script src="assets/eka.js" defer></script>
 </body>
 </html>

@@ -83,33 +83,47 @@ async function run() {
   const approved = waitFor(guest, 'join-request-approved');
   const users = waitFor(host, 'update-users');
   host.emit('join-request-approve', { requestId: requested.requestId });
-  assert.equal((await approved).roomCode, created.roomCode);
+  const approval = await approved;
+  assert.equal(approval.roomCode, created.roomCode);
   assert.ok((await users).some((user) => user.username === 'Guest'));
 
-  const receivedByGuest = waitFor(guest, 'chat-message');
+  guest.disconnect();
+  const reconnectedGuest = connect();
+  await waitFor(reconnectedGuest, 'connect');
+  const rejoinedUsers = waitFor(host, 'update-users');
+  const rejoined = await emitAck(reconnectedGuest, 'rejoin-room', {
+    username: 'Guest',
+    roomCode: created.roomCode,
+    token: approval.token
+  });
+  assert.equal(rejoined.success, true);
+  assert.equal(rejoined.roomCode, created.roomCode);
+  assert.ok((await rejoinedUsers).some((user) => user.id === reconnectedGuest.id && user.username === 'Guest'));
+
+  const receivedByGuest = waitFor(reconnectedGuest, 'chat-message');
   let receivedByOutsider = false;
   outsider.once('chat-message', () => { receivedByOutsider = true; });
   host.emit('chat-message', {
     v: 1,
     id: 'smoke-message-123456',
     from: host.id,
-    to: guest.id,
+    to: reconnectedGuest.id,
     ct: 'Y2lwaGVydGV4dA==',
     iv: 'bm9uY2U=',
     salt: 'c2FsdA=='
   });
   const message = await receivedByGuest;
-  assert.equal(message.to, guest.id);
+  assert.equal(message.to, reconnectedGuest.id);
   await new Promise((resolve) => setTimeout(resolve, 150));
   assert.equal(receivedByOutsider, false);
 
-  const fileReceivedByGuest = waitFor(guest, 'chat-message');
+  const fileReceivedByGuest = waitFor(reconnectedGuest, 'chat-message');
   const encryptedChunk = Buffer.alloc(1024 * 1024 + 16).toString('base64');
   host.emit('chat-message', {
     v: 1,
     id: 'file-message-123456',
     from: host.id,
-    to: guest.id,
+    to: reconnectedGuest.id,
     type: 'file',
     file: {
       v: 1,
@@ -125,12 +139,12 @@ async function run() {
   assert.equal(fileMessage.file.chunks[0].idx, 0);
 
   let invalidFileReceived = false;
-  guest.once('chat-message', () => { invalidFileReceived = true; });
+  reconnectedGuest.once('chat-message', () => { invalidFileReceived = true; });
   host.emit('chat-message', {
     v: 1,
     id: 'invalid-file-123456',
     from: host.id,
-    to: guest.id,
+    to: reconnectedGuest.id,
     type: 'file',
     file: {
       v: 1,
@@ -146,12 +160,12 @@ async function run() {
   assert.equal(invalidFileReceived, false);
 
   let forgedMessageReceived = false;
-  guest.once('chat-message', () => { forgedMessageReceived = true; });
+  reconnectedGuest.once('chat-message', () => { forgedMessageReceived = true; });
   host.emit('chat-message', {
     v: 1,
     id: 'forged-message-123456',
-    from: guest.id,
-    to: guest.id,
+    from: reconnectedGuest.id,
+    to: reconnectedGuest.id,
     ct: 'Y2lwaGVydGV4dA==',
     iv: 'bm9uY2U=',
     salt: 'c2FsdA=='
@@ -159,7 +173,7 @@ async function run() {
   await new Promise((resolve) => setTimeout(resolve, 150));
   assert.equal(forgedMessageReceived, false);
 
-  console.log('Socket smoke test passed: room creation, approval, presence, isolation, encrypted routing and file chunk validation.');
+  console.log('Socket smoke test passed: room creation, approval, reconnect/rejoin, presence, isolation, encrypted routing and file chunk validation.');
 }
 
 run()

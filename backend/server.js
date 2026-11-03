@@ -144,8 +144,8 @@ function cleanRateLimit(socketId) {
 // Host approval helpers
 // ---------------------------------------------------------------------------
 const MAX_PENDING_PER_ROOM = 20;
-const ROOM_EMPTY_GRACE_MS = 60 * 1000;   // keep an empty room briefly so a host refresh can rejoin
-const HOST_HANDOFF_GRACE_MS = 45 * 1000; // wait for the host to come back before promoting someone
+const ROOM_EMPTY_GRACE_MS = 10 * 60 * 1000; // tolerate backgrounding and temporary network loss
+const HOST_HANDOFF_GRACE_MS = 2 * 60 * 1000; // avoid changing hosts during a short mobile interruption
 
 function newToken() {
   return crypto.randomBytes(24).toString('hex');

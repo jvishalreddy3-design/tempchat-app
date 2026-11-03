@@ -9,11 +9,10 @@ const outputDir = path.join(root, 'www');
 const sourceIndex = path.join(sourceDir, 'index.html');
 const outputIndex = path.join(outputDir, 'index.html');
 const publicConfig = path.join(outputDir, 'app-config.js');
-const nativePlugins = path.join(outputDir, 'native-plugins.js');
 
 if (!fs.existsSync(sourceIndex)) throw new Error(`Missing frontend entry point: ${sourceIndex}`);
-if (!fs.existsSync(publicConfig) || !fs.existsSync(nativePlugins)) {
-  throw new Error('The existing www/app-config.js and www/native-plugins.js are required for the Android build.');
+if (!fs.existsSync(publicConfig)) {
+  throw new Error('The existing www/app-config.js is required for the Android build.');
 }
 
 execFileSync(process.execPath, [path.join(__dirname, 'build-native-plugins.js')], { cwd: root, stdio: 'inherit' });
@@ -24,7 +23,7 @@ if (!html.includes(tailwindTag)) throw new Error('Could not find the frontend sc
 
 html = html.replace(tailwindTag, `  <!-- TEMPCHAT ANDROID BOOTSTRAP -->
   <script src="app-config.js"></script>
-  <script>if (window.Capacitor?.isNativePlatform?.()) document.write('<script src="native-plugins.js"><\\/script>');</script>
+  <script src="native-plugins.js"></script>
 ${tailwindTag}`);
 
 const socketStart = html.indexOf('  <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>');
@@ -35,9 +34,9 @@ if (socketStart < 0 || fallbackStart < 0 || socketBlockEnd < fallbackStart) {
   throw new Error('Could not locate the Socket.IO CDN block for native-safe packaging.');
 }
 
-const nativeSafeSocketLoaders = `  <script>if (!window.Capacitor?.isNativePlatform?.()) document.write('<script src="https://cdn.socket.io/4.7.5/socket.io.min.js"><\\/script>');</script>
-  <script>if (!window.Capacitor?.isNativePlatform?.() && typeof window.io !== 'function') document.write('<script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.5/socket.io.min.js"><\\/script>');</script>
-  <script>if (!window.Capacitor?.isNativePlatform?.() && typeof window.io !== 'function') document.write('<script src="https://cdn.jsdelivr.net/npm/socket.io-client@4.7.5/dist/socket.io.min.js"><\\/script>');</script>`;
+const nativeSafeSocketLoaders = `  <script>if (typeof window.io !== 'function') document.write('<script src="https://cdn.socket.io/4.7.5/socket.io.min.js"><\\/script>');</script>
+  <script>if (typeof window.io !== 'function') document.write('<script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.5/socket.io.min.js"><\\/script>');</script>
+  <script>if (typeof window.io !== 'function') document.write('<script src="https://cdn.jsdelivr.net/npm/socket.io-client@4.7.5/dist/socket.io.min.js"><\\/script>');</script>`;
 html = html.slice(0, socketStart) + nativeSafeSocketLoaders + html.slice(socketBlockEnd);
 
 fs.mkdirSync(outputDir, { recursive: true });

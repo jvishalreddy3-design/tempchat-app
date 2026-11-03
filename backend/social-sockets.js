@@ -8,118 +8,65 @@ const PRIVATE_MAX_TEXT_LENGTH = 4000;
 const PRIVATE_MAX_BUFFERED_CHARS = 8 * 1024 * 1024;
 const PRIVATE_SEND_RATE_LIMIT = 30;
 const PRIVATE_SEND_RATE_WINDOW_MS = 10000;
+const PRIVATE_TTL_MS = 10 * 60 * 1000;
+
+// Deterministic, opaque conversation id for a friend pair. The id is stable
+// for the lifetime of the process but is never written to the database.
+function conversationIdFor(pairKey) {
+  return 'dm_' + crypto.createHash('sha256').update(pairKey).digest('hex').slice(0, 32);
+}
 
 function installSocialSockets(io, store, accountService, options = {}) {
   const activeSocketsByUser = new Map();
-  const conversations = new Map();       // conversationId -> { messages: [] } (active session cache)
-  const conversationByPair = new Map();       // pairKey -> conversationId (active sessions only)
-  const inactiveTimers = new Map();
+  const conversations = new Map();       // convId -> { id, pairKey, userIds, messages, seenIds, sockets }
+  const conversationByPair = new Map();  // pairKey -> convId (active sessions only)
   const privateRateLimits = new Map();
-  let totalBufferedChars = 0;
   const now = options.now || Date.now;
+  let totalBufferedChars = 0;
 
   const accountSockets = (userId) => activeSocketsByUser.get(userId) || new Set();
-  function emitPresence(userId, online) {
-    for (const socketId of accountSockets(userId)) io.to(socketId).emit('friends:presence', { userId, online, observedAt: new Date(now()).toISOString() });
-  }
-  async function publishPresenceToFriends(userId, online) {
-    const friends = await store.listFriends(userId);
-    for (const friend of friends) emitPresence(friend._id, online);
-  }
+  const isOnline = (userId) => accountSockets(userId).size > 0;
 
-  // Ensure a conversation exists in MongoDB for a friend pair, returning its doc.
-  async function ensureMongoConversation(pairKey, userIds) {
-    let doc = await store.getPrivateConversation(pairKey);
-    if (!doc) {
-      doc = await store.createPrivateConversation(userIds, pairKey);
-    }
-    return doc;
-  }
-
-  // Build the list result entry for a conversation from MongoDB docs.
-  async function buildListEntry(conversationDoc, userId) {
-    const friendId = conversationDoc.userIds.find((id) => id !== userId);
-    const friend = await store.findUserById(friendId);
-    if (!friend || !(await store.areFriends(userId, friendId))) return null;
-
-    const messages = await store.getPrivateMessages(conversationDoc._id, 1);
-    const last = messages[0] || null;
-
-    // Count messages not yet delivered to this user
-    const allMessages = await store.getPrivateMessages(conversationDoc._id, PRIVATE_MAX_MESSAGES_PER_CONVERSATION);
-    const unreadCount = allMessages.filter((m) => !Array.isArray(m.deliveredTo) || !m.deliveredTo.includes(userId)).length;
-
+  function presencePayload(userId, online, lastSeenAt) {
     return {
-      id: conversationDoc._id,
-      friendId,
-      friendName: friend.displayName || friend.username,
-      friendAvatar: friend.avatarUrl || null,
-      online: accountSockets(friendId).size > 0,
-      lastMessage: last ? { text: last.text, timestamp: last.timestamp.getTime ? last.timestamp.getTime() : new Date(last.timestamp).getTime() } : null,
-      unreadCount: Math.max(0, unreadCount)
+      userId,
+      online,
+      observedAt: new Date(now()).toISOString(),
+      lastSeenAt: lastSeenAt || null
     };
   }
 
-  // Deliver any messages that were stored while the recipient was offline.
-  async function deliverOfflineMessages(socket, userId) {
-    try {
-      const undelivered = await store.getUndeliveredMessagesForUser(userId);
-      if (!undelivered.length) return;
-
-      // Group by conversation so we only emit once per conversation
-      const byConv = new Map();
-      for (const m of undelivered) {
-        if (!byConv.has(m.conversationId)) byConv.set(m.conversationId, []);
-        byConv.get(m.conversationId).push(m);
-      }
-
-      for (const [conversationId, messages] of byConv.entries()) {
-        // Mark delivered in DB
-        await store.markConversationMessagesDelivered(conversationId, userId);
-        socket.emit('private:offline-messages', {
-          conversationId,
-          messages: messages.map((m) => ({
-            id: m._id,
-            conversationId: m.conversationId,
-            from: m.from,
-            sender: m.sender,
-            text: m.text,
-            timestamp: m.timestamp.getTime ? m.timestamp.getTime() : new Date(m.timestamp).getTime()
-          }))
-        });
-        io.to(`account:${userId}`).emit('private:list-updated');
-      }
-    } catch (_) {
-      // Offline delivery is best-effort; history can be fetched on demand.
+  // Notify the *friends of* userId about userId's state. This is the important
+  // direction: a user's own sockets must not receive their own presence.
+  async function publishPresenceToFriends(userId, online, lastSeenAt = null) {
+    const friends = await store.listFriends(userId);
+    for (const friend of friends) {
+      io.to('account:' + friend._id).emit('friends:presence', presencePayload(userId, online, lastSeenAt));
     }
   }
 
-  function maybeScheduleCleanup(conversationId) {
-    const oldTimer = inactiveTimers.get(conversationId);
-    if (oldTimer) clearTimeout(oldTimer);
-    inactiveTimers.delete(conversationId);
-    const timer = setTimeout(() => removeConversation(conversationId), options.privateTtlMs || PRIVATE_TTL_MS);
-    timer.unref?.();
-    inactiveTimers.set(conversationId, timer);
+  function destroyConversation(conversationId) {
+    const conversation = conversations.get(conversationId);
+    if (conversation) {
+      for (const message of conversation.messages) totalBufferedChars -= message.text.length;
+      for (const [pairKey, id] of conversationByPair) {
+        if (id === conversationId) conversationByPair.delete(pairKey);
+      }
+      conversations.delete(conversationId);
+    }
   }
-  function removeConversation(conversationId) {
-    const timer = inactiveTimers.get(conversationId);
-    if (timer) clearTimeout(timer);
-    inactiveTimers.delete(conversationId);
-    conversationByPair.delete(conversationId);
-    conversations.delete(conversationId);
-  }
-  function pruneOldInactive() {
-    // In-memory active-session cap only; MongoDB retains history forever.
-    if (conversationByPair.size < PRIVATE_MAX_CONVERSATIONS) return true;
-    // No in-memory conversation objects to prune; just return true so new convos can be created.
-    return true;
-  }
+
   function leaveConversation(socket, conversationId) {
     socket.privateConversationIds?.delete(conversationId);
     socket.leave(`private:${conversationId}`);
-    maybeScheduleCleanup(conversationId);
+    const conversation = conversations.get(conversationId);
+    if (conversation) {
+      conversation.sockets.delete(socket.id);
+      // Privacy: clear the conversation as soon as the last participant leaves.
+      if (conversation.sockets.size === 0) destroyConversation(conversationId);
+    }
   }
+
   function leaveAll(socket) {
     for (const id of [...(socket.privateConversationIds || [])]) leaveConversation(socket, id);
   }
@@ -139,55 +86,71 @@ function installSocialSockets(io, store, accountService, options = {}) {
       socket.once('disconnect', () => clearTimeout(timer));
     }
 
-    // Deliver any messages that arrived while this user was offline.
-    deliverOfflineMessages(socket, user.id).catch((error) => console.error('[social] offline delivery failed:', error.code || error.name));
-
     store.listFriends(user.id).then((friends) => {
       socket.emit('social:ready', {
-        user: { id: user.id, username: user.username, displayName: user.displayName, avatarUrl: user.avatarUrl },
-        friends: friends.map((friend) => ({ id: friend._id, username: friend.username, displayName: friend.displayName, avatarUrl: friend.avatarUrl || null, online: accountSockets(friend._id).size > 0 }))
+        user: { id: user.id, username: user.username, displayName: user.displayName, avatarUrl: user.avatarUrl, lastSeenAt: user.lastSeenAt || null },
+        friends: friends.map((friend) => ({
+          id: friend._id,
+          username: friend.username,
+          displayName: friend.displayName,
+          avatarUrl: friend.avatarUrl || null,
+          online: isOnline(friend._id),
+          lastSeenAt: friend.lastSeenAt || null
+        }))
       });
-      if (!wasOnline) return publishPresenceToFriends(user.id, true);
-    }).catch((error) => console.error('[social] presence initialization failed:', error.code || error.name));
+    }).catch((error) => {
+      console.error('[social] presence initialization failed:', error.code || error.name);
+    }).finally(() => {
+      // Re-check online state: the socket may have disconnected while the
+      // friend list was loading, in which case the offline event must win.
+      if (!wasOnline && isOnline(user.id)) {
+        publishPresenceToFriends(user.id, true)
+          .catch((error) => console.error('[social] presence publish failed:', error.code || error.name));
+      }
+    });
 
     socket.on('private:open', async (payload, acknowledge) => {
       if (typeof acknowledge !== 'function') return;
       try {
-        if (!socket.accountUser || typeof payload?.friendId !== 'string' || payload.friendId === socket.accountUser.id) throw new Error('A valid friend is required.');
-        if (!(await store.areFriends(socket.accountUser.id, payload.friendId))) throw new Error('Private chats are available only between accepted friends.');
+        if (!socket.accountUser || typeof payload?.friendId !== 'string' || payload.friendId === socket.accountUser.id) {
+          throw new Error('A valid friend is required.');
+        }
+        if (!(await store.areFriends(socket.accountUser.id, payload.friendId))) {
+          throw new Error('Private chats are available only between accepted friends.');
+        }
+
         const pairKey = store.pairKey(socket.accountUser.id, payload.friendId);
-        const doc = await ensureMongoConversation(pairKey, [socket.accountUser.id, payload.friendId]);
+        const conversationId = conversationIdFor(pairKey);
+        let conversation = conversations.get(conversationId);
+        if (!conversation) {
+          if (conversations.size >= PRIVATE_MAX_CONVERSATIONS) {
+            throw new Error('The private chat service is at capacity. Try again shortly.');
+          }
+          conversation = {
+            id: conversationId,
+            pairKey,
+            userIds: [socket.accountUser.id, payload.friendId],
+            messages: [],
+            seenIds: new Set(),
+            sockets: new Set()
+          };
+          conversations.set(conversationId, conversation);
+        }
 
-        // Track active session for this conversation
-        conversationByPair.set(pairKey, doc._id);
-
-        const pending = inactiveTimers.get(doc._id);
-        if (pending) clearTimeout(pending);
-        inactiveTimers.delete(doc._id);
-
+        conversationByPair.set(pairKey, conversationId);
         socket.privateConversationIds ||= new Set();
-        socket.privateConversationIds.add(doc._id);
-        socket.join(`private:${doc._id}`);
+        socket.privateConversationIds.add(conversationId);
+        socket.join(`private:${conversationId}`);
+        conversation.sockets.add(socket.id);
 
-        const history = await store.getPrivateMessages(doc._id, PRIVATE_MAX_MESSAGES_PER_CONVERSATION);
-
-        // Mark messages in this conversation as delivered to this user now that they're online.
-        await store.markConversationMessagesDelivered(doc._id, socket.accountUser.id);
-
+        // No history: a reopened conversation always starts empty.
         acknowledge({
           success: true,
           conversation: {
-            id: doc._id,
+            id: conversationId,
             peerId: payload.friendId,
-            peerOnline: accountSockets(payload.friendId).size > 0,
-            messages: history.map((m) => ({
-              id: m._id,
-              conversationId: m.conversationId,
-              from: m.from,
-              sender: m.sender,
-              text: m.text,
-              timestamp: m.timestamp.getTime ? m.timestamp.getTime() : new Date(m.timestamp).getTime()
-            }))
+            peerOnline: isOnline(payload.friendId),
+            messages: []
           }
         });
       } catch (error) {
@@ -199,19 +162,30 @@ function installSocialSockets(io, store, accountService, options = {}) {
       if (typeof payload?.conversationId === 'string') leaveConversation(socket, payload.conversationId);
     });
 
+    socket.on('private:typing', (payload) => {
+      if (typeof payload?.conversationId !== 'string' || typeof payload?.isTyping !== 'boolean') return;
+      const conversation = conversations.get(payload.conversationId);
+      if (!conversation || !conversation.sockets.has(socket.id)) return;
+      socket.to(`private:${payload.conversationId}`).emit('private:typing', {
+        conversationId: payload.conversationId,
+        userId: user.id,
+        isTyping: payload.isTyping
+      });
+    });
+
     socket.on('private:list', async (_payload, acknowledge) => {
       if (typeof acknowledge !== 'function') return;
       try {
-        const conversations = await store.getPrivateConversationsForUser(user.id);
-        const entries = [];
-        for (const doc of conversations) {
-          const entry = await buildListEntry(doc, user.id);
-          if (entry) entries.push(entry);
-        }
-        entries.sort((a, b) => (b.lastMessage?.timestamp || 0) - (a.lastMessage?.timestamp || 0));
+        const entries = [...conversations.values()]
+          .filter((conversation) => conversation.userIds.includes(user.id))
+          .map((conversation) => {
+            const friendId = conversation.userIds.find((id) => id !== user.id);
+            return { id: conversation.id, friendId, online: isOnline(friendId) };
+          });
+        // Deliberately no lastMessage/history in this response.
         acknowledge({ success: true, conversations: entries });
       } catch (_) {
-        acknowledge({ success: false, conversations: [], message: 'Unable to load active conversations.' });
+        acknowledge({ success: false, conversations: [] });
       }
     });
 
@@ -221,6 +195,11 @@ function installSocialSockets(io, store, accountService, options = {}) {
 
       try {
         if (typeof payload?.conversationId !== 'string' || !socket.privateConversationIds?.has(payload.conversationId)) {
+          acknowledge({ success: false, delivered: false, reason: 'unauthorized' });
+          return;
+        }
+        const conversation = conversations.get(payload.conversationId);
+        if (!conversation || !conversation.sockets.has(socket.id)) {
           acknowledge({ success: false, delivered: false, reason: 'unauthorized' });
           return;
         }
@@ -234,22 +213,27 @@ function installSocialSockets(io, store, accountService, options = {}) {
         if (!rate || timestamp - rate.startedAt >= PRIVATE_SEND_RATE_WINDOW_MS) privateRateLimits.set(senderId, { startedAt: timestamp, count: 1 });
         else if (++rate.count > PRIVATE_SEND_RATE_LIMIT) { acknowledge({ success: false, delivered: false, reason: 'rate_limited' }); return; }
 
-        const conversationDoc = await store.getPrivateConversationById(payload.conversationId);
-        if (!conversationDoc || !conversationDoc.userIds.includes(senderId)) {
-          acknowledge({ success: false, delivered: false, reason: 'unauthorized' });
-          return;
-        }
-        const peerId = conversationDoc.userIds.find((id) => id !== senderId);
+        const peerId = conversation.userIds.find((id) => id !== senderId);
         if (!(await store.areFriends(senderId, peerId))) {
           leaveConversation(socket, payload.conversationId);
           acknowledge({ success: false, delivered: false, reason: 'friendship_required' });
           return;
         }
 
-        // Prevent duplicate message id
-        const existing = await store.findPrivateMessageById(payload.id);
-        if (existing) {
+        if (conversation.seenIds.has(payload.id)) {
           acknowledge({ success: true, delivered: true, duplicate: true, id: payload.id });
+          return;
+        }
+
+        const recipients = [...conversation.sockets].filter((socketId) => {
+          if (socketId === socket.id) return false;
+          return io.sockets.sockets.get(socketId)?.accountUser?.id === peerId;
+        });
+        if (!recipients.length) {
+          // Do not retain text that had no possible recipient. A different
+          // device owned by the sender must never count as peer delivery.
+          const reason = isOnline(peerId) ? 'recipient_not_in_chat' : 'recipient_offline';
+          acknowledge({ success: true, delivered: false, reason, id: payload.id });
           return;
         }
 
@@ -259,58 +243,41 @@ function installSocialSockets(io, store, accountService, options = {}) {
           from: senderId,
           sender: user.displayName || user.username,
           text: payload.text.trim(),
-          timestamp: timestamp
+          timestamp
         };
 
-        // Capacity guard
         if (totalBufferedChars + message.text.length > PRIVATE_MAX_BUFFERED_CHARS) {
           acknowledge({ success: false, delivered: false, reason: 'memory_capacity' });
           return;
         }
 
-        // Persist to PostgreSQL first
-        await store.savePrivateMessage(payload.conversationId, message);
+        // Ephemeral only: the message lives in this process memory while the
+        // conversation is active. It is never written to PostgreSQL or logs.
+        conversation.seenIds.add(message.id);
+        conversation.messages.push(message);
         totalBufferedChars += message.text.length;
-
-        // Cache in active session map for test compatibility
-        let convCache = conversations.get(payload.conversationId);
-        if (!convCache) {
-          convCache = { messages: [] };
-          conversations.set(payload.conversationId, convCache);
-        }
-        convCache.messages.push(message);
-        while (convCache.messages.length > PRIVATE_MAX_MESSAGES_PER_CONVERSATION) {
-          convCache.messages.shift();
+        while (conversation.messages.length > PRIVATE_MAX_MESSAGES_PER_CONVERSATION) {
+          const removed = conversation.messages.shift();
+          conversation.seenIds.delete(removed.id);
+          totalBufferedChars -= removed.text.length;
         }
 
-        const recipientSockets = [...accountSockets(peerId)];
-        if (!recipientSockets.length) {
-          // Stored for later delivery; acknowledge as not delivered yet but stored.
-          acknowledge({ success: true, delivered: false, reason: 'recipient_offline', stored: true, id: payload.id });
-          io.to(`account:${senderId}`).emit('private:list-updated');
-          return;
-        }
-
-        let remaining = recipientSockets.length;
+        let remaining = recipients.length;
         let delivered = false;
         let settled = false;
         const finish = () => {
           if (settled || --remaining > 0) return;
           settled = true;
-          acknowledge({ success: delivered, delivered, reason: delivered ? undefined : 'recipient_unavailable', id: payload.id });
-          if (delivered) {
-            io.to(`account:${senderId}`).emit('private:list-updated');
-            io.to(`account:${peerId}`).emit('private:list-updated');
-          }
+          acknowledge({ success: true, delivered, id: payload.id, reason: delivered ? undefined : 'recipient_unavailable' });
         };
-        for (const recipientSocketId of recipientSockets) {
+        for (const recipientSocketId of recipients) {
           io.to(recipientSocketId).timeout(5000).emit('private:message', message, (error, responses) => {
             if (!error && Array.isArray(responses) && responses.some((response) => response?.received === true)) delivered = true;
             finish();
           });
         }
-      } catch (error) {
-        acknowledge({ success: false, delivered: false, reason: 'server_error', message: 'Unable to send message.' });
+      } catch (_) {
+        acknowledge({ success: false, delivered: false, reason: 'server_error' });
       }
     });
 
@@ -322,7 +289,12 @@ function installSocialSockets(io, store, accountService, options = {}) {
       if (current.size === 0) {
         activeSocketsByUser.delete(user.id);
         privateRateLimits.delete(user.id);
-        publishPresenceToFriends(user.id, false).catch((error) => console.error('[social] presence update failed:', error.code || error.name));
+        const lastSeenAt = new Date(now()).toISOString();
+        const update = typeof store.setLastSeen === 'function' ? store.setLastSeen(user.id, new Date(now())) : Promise.resolve();
+        Promise.resolve(update)
+          .catch(() => {})
+          .then(() => publishPresenceToFriends(user.id, false, lastSeenAt))
+          .catch((error) => console.error('[social] presence update failed:', error.code || error.name));
       }
     });
   });
@@ -330,8 +302,20 @@ function installSocialSockets(io, store, accountService, options = {}) {
   return {
     activeSocketsByUser,
     conversations,
-    dispose: () => { for (const timer of inactiveTimers.values()) clearTimeout(timer); inactiveTimers.clear(); conversationByPair.clear(); conversations.clear(); activeSocketsByUser.clear(); privateRateLimits.clear(); totalBufferedChars = 0; }
+    dispose: () => {
+      conversationByPair.clear();
+      conversations.clear();
+      activeSocketsByUser.clear();
+      privateRateLimits.clear();
+      totalBufferedChars = 0;
+    }
   };
 }
 
-module.exports = { installSocialSockets, PRIVATE_MAX_CONVERSATIONS, PRIVATE_MAX_MESSAGES_PER_CONVERSATION };
+module.exports = {
+  installSocialSockets,
+  PRIVATE_MAX_CONVERSATIONS,
+  PRIVATE_MAX_MESSAGES_PER_CONVERSATION,
+  PRIVATE_MAX_TEXT_LENGTH,
+  PRIVATE_TTL_MS
+};

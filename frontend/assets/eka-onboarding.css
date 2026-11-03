@@ -1,0 +1,1130 @@
+/* ==========================================================================
+   EKA onboarding, consent and permission UI
+   Kept separate from the application shell so existing flows remain untouched.
+   ========================================================================== */
+
+html.eka-onboarding-complete .eka-onb {
+  display: none !important;
+}
+
+.eka-onb {
+  position: fixed;
+  inset: 0;
+  z-index: 5500;
+  display: grid;
+  overflow: hidden;
+  color: var(--text-main);
+  font-family: 'Manrope', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  background:
+    radial-gradient(ellipse 84% 62% at 8% -8%, rgba(255, 143, 190, 0.5), transparent 62%),
+    radial-gradient(ellipse 72% 58% at 104% 8%, rgba(178, 145, 255, 0.38), transparent 62%),
+    radial-gradient(ellipse 88% 58% at 48% 112%, rgba(255, 170, 194, 0.36), transparent 68%),
+    linear-gradient(158deg, #fffafd 0%, #fff0f8 48%, #f8f0ff 100%);
+  isolation: isolate;
+  animation: eka-onb-fade 420ms var(--eka-ease, cubic-bezier(0.22, 1, 0.36, 1)) both;
+  transition: opacity 300ms ease, transform 360ms var(--eka-ease, cubic-bezier(0.22, 1, 0.36, 1));
+}
+
+.eka-onb.hidden,
+.eka-onb-step.hidden,
+.eka-onb-button.hidden,
+.eka-legal-backdrop.hidden {
+  display: none !important;
+}
+
+.eka-onb.eka-onb-leaving {
+  opacity: 0;
+  pointer-events: none;
+  transform: scale(1.012);
+}
+
+.eka-onb-canvas {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.eka-onb-glow {
+  position: absolute;
+  display: block;
+  border-radius: 50%;
+  filter: blur(28px);
+  opacity: 0.72;
+  animation: eka-onb-drift 18s ease-in-out infinite alternate;
+}
+
+.eka-onb-glow-a {
+  width: min(72vw, 540px);
+  height: min(72vw, 540px);
+  top: -19%;
+  left: -26%;
+  background: radial-gradient(circle, rgba(255, 79, 154, 0.28), transparent 68%);
+}
+
+.eka-onb-glow-b {
+  width: min(80vw, 620px);
+  height: min(80vw, 620px);
+  right: -33%;
+  bottom: -26%;
+  background: radial-gradient(circle, rgba(139, 92, 246, 0.25), transparent 68%);
+  animation-delay: -7s;
+}
+
+.eka-onb-grid {
+  position: absolute;
+  inset: 0;
+  opacity: 0.42;
+  background-image:
+    linear-gradient(rgba(143, 74, 123, 0.055) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(143, 74, 123, 0.055) 1px, transparent 1px);
+  background-size: 44px 44px;
+  mask-image: radial-gradient(ellipse at 50% 42%, #000 8%, transparent 74%);
+  -webkit-mask-image: radial-gradient(ellipse at 50% 42%, #000 8%, transparent 74%);
+}
+
+.eka-onb-scroll {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  min-height: 100%;
+  padding: calc(26px + env(safe-area-inset-top)) 18px calc(22px + env(safe-area-inset-bottom));
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+
+.eka-onb-scroll::-webkit-scrollbar {
+  display: none;
+}
+
+.eka-onb-shell {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  width: min(100%, 472px);
+  margin: auto;
+}
+
+.eka-onb-brand {
+  display: inline-flex;
+  align-items: center;
+  align-self: center;
+  gap: 11px;
+  padding: 6px 14px 6px 7px;
+  border: 1px solid rgba(255, 255, 255, 0.74);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.46);
+  box-shadow: 0 12px 34px rgba(123, 51, 99, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.82);
+  backdrop-filter: blur(18px) saturate(1.25);
+  -webkit-backdrop-filter: blur(18px) saturate(1.25);
+  animation: eka-onb-rise 640ms var(--eka-ease, cubic-bezier(0.22, 1, 0.36, 1)) both;
+}
+
+.eka-onb-logo {
+  display: grid;
+  width: 38px;
+  height: 38px;
+  flex: 0 0 auto;
+  place-items: center;
+  overflow: hidden;
+  border-radius: 13px;
+  background: var(--eka-gradient, linear-gradient(135deg, #ff5fa2, #7a5cf6));
+  box-shadow: 0 7px 18px rgba(255, 79, 154, 0.25);
+}
+
+.eka-onb-logo img {
+  width: 27px;
+  height: 27px;
+  object-fit: contain;
+}
+
+.eka-onb-wordmark {
+  display: flex;
+  flex-direction: column;
+  color: var(--text-main);
+  font-family: 'Sora', 'Manrope', sans-serif;
+  font-size: 0.97rem;
+  font-weight: 800;
+  line-height: 1.05;
+  letter-spacing: 0.16em;
+}
+
+.eka-onb-wordmark small {
+  margin-top: 3px;
+  color: var(--text-muted);
+  font-family: 'DM Mono', monospace;
+  font-size: 0.48rem;
+  font-weight: 500;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+
+.eka-onb-card {
+  position: relative;
+  padding: 31px 28px 25px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.82);
+  border-radius: 32px;
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.91), rgba(255, 247, 252, 0.76));
+  box-shadow:
+    0 34px 80px rgba(103, 37, 84, 0.16),
+    0 8px 24px rgba(103, 37, 84, 0.06),
+    inset 0 1px 0 rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(30px) saturate(1.28);
+  -webkit-backdrop-filter: blur(30px) saturate(1.28);
+  animation: eka-onb-rise 720ms 60ms var(--eka-ease, cubic-bezier(0.22, 1, 0.36, 1)) both;
+}
+
+.eka-onb-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 8%;
+  width: 84%;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.98), transparent);
+}
+
+.eka-onb-card::after {
+  content: '';
+  position: absolute;
+  top: -140px;
+  right: -150px;
+  width: 280px;
+  height: 280px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(255, 126, 182, 0.14), transparent 68%);
+  pointer-events: none;
+}
+
+.eka-onb-step {
+  position: relative;
+  z-index: 1;
+}
+
+.eka-onb-step.eka-onb-step-in {
+  animation: eka-onb-step-in 420ms var(--eka-ease, cubic-bezier(0.22, 1, 0.36, 1)) both;
+}
+
+.eka-onb-kicker {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 13px;
+  color: var(--eka-pink, #ff4f9a);
+  font-family: 'Sora', 'Manrope', sans-serif;
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+}
+
+.eka-onb-kicker span {
+  display: inline-block;
+  width: 18px;
+  height: 2px;
+  border-radius: 999px;
+  background: var(--eka-gradient, linear-gradient(135deg, #ff5fa2, #7a5cf6));
+  box-shadow: 0 0 10px rgba(255, 79, 154, 0.35);
+}
+
+.eka-onb-title {
+  margin: 0;
+  color: var(--text-main);
+  font-family: 'Sora', 'Manrope', sans-serif;
+  font-size: clamp(1.85rem, 7.4vw, 2.42rem);
+  font-weight: 700;
+  line-height: 1.06;
+  letter-spacing: -0.055em;
+}
+
+.eka-onb-title:focus {
+  outline: none;
+}
+
+.eka-onb-title em {
+  color: transparent;
+  font-style: normal;
+  background: var(--eka-gradient, linear-gradient(135deg, #ff5fa2, #7a5cf6));
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.eka-onb-copy {
+  margin: 15px 0 0;
+  color: var(--text-muted);
+  font-size: 0.88rem;
+  line-height: 1.68;
+  letter-spacing: -0.006em;
+}
+
+.eka-onb-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 17px;
+}
+
+.eka-onb-pills span {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 11px;
+  border: 1px solid rgba(255, 79, 154, 0.12);
+  border-radius: 999px;
+  color: var(--text-muted);
+  background: rgba(255, 255, 255, 0.46);
+  font-size: 0.63rem;
+  font-weight: 600;
+  letter-spacing: 0.015em;
+}
+
+.eka-onb-pills i {
+  color: var(--eka-pink, #ff4f9a);
+  font-size: 0.62rem;
+}
+
+.eka-onb-consent {
+  display: flex;
+  align-items: flex-start;
+  gap: 13px;
+  margin-top: 22px;
+  padding: 15px;
+  border: 1px solid rgba(183, 82, 143, 0.16);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.46);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7);
+  cursor: pointer;
+  transition: border-color 180ms ease, background 180ms ease, box-shadow 180ms ease;
+}
+
+.eka-onb-consent:hover {
+  border-color: rgba(255, 79, 154, 0.3);
+  background: rgba(255, 255, 255, 0.62);
+}
+
+.eka-onb-checkbox {
+  position: relative;
+  width: 25px;
+  height: 25px;
+  flex: 0 0 auto;
+  margin: 1px 0 0;
+  border: 1.5px solid var(--border-strong, rgba(183, 82, 143, 0.3));
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.85);
+  box-shadow: 0 2px 7px rgba(95, 35, 78, 0.06);
+  appearance: none;
+  -webkit-appearance: none;
+  cursor: pointer;
+  transition: transform 150ms ease, border-color 150ms ease, background 150ms ease;
+}
+
+.eka-onb-checkbox:active {
+  transform: scale(0.92);
+}
+
+.eka-onb-checkbox:checked {
+  border-color: transparent;
+  background: var(--eka-gradient, linear-gradient(135deg, #ff5fa2, #7a5cf6));
+  box-shadow: 0 6px 14px rgba(255, 79, 154, 0.3);
+}
+
+.eka-onb-checkbox:checked::after {
+  content: '';
+  position: absolute;
+  top: 4px;
+  left: 8px;
+  width: 6px;
+  height: 11px;
+  border-right: 2px solid #fff;
+  border-bottom: 2px solid #fff;
+  transform: rotate(42deg);
+}
+
+.eka-onb-checkbox:focus-visible {
+  outline: 3px solid rgba(255, 79, 154, 0.27);
+  outline-offset: 3px;
+}
+
+.eka-onb-consent-body {
+  min-width: 0;
+}
+
+.eka-onb-consent-body p {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 0.76rem;
+  line-height: 1.58;
+}
+
+.eka-onb-consent-note {
+  display: block;
+  margin-top: 5px;
+  color: var(--text-faint);
+  font-family: 'DM Mono', monospace;
+  font-size: 0.55rem;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+.eka-legal-link {
+  padding: 0;
+  border: 0;
+  color: var(--text-main);
+  background: transparent;
+  font-weight: 700;
+  text-decoration: underline;
+  text-decoration-color: rgba(255, 79, 154, 0.45);
+  text-underline-offset: 3px;
+  transition: color 150ms ease, text-decoration-color 150ms ease;
+}
+
+.eka-legal-link:hover {
+  color: var(--eka-pink, #ff4f9a);
+  text-decoration-color: currentColor;
+}
+
+.eka-onb-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 52px;
+  margin-top: 16px;
+  padding: 13px 18px;
+  border: 0;
+  border-radius: 16px;
+  font-family: 'Sora', 'Manrope', sans-serif;
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  transition: transform 160ms var(--eka-ease, cubic-bezier(0.22, 1, 0.36, 1)), filter 160ms ease, box-shadow 160ms ease, background 160ms ease;
+}
+
+.eka-onb-button i {
+  font-size: 0.76rem;
+}
+
+.eka-onb-button-primary {
+  color: #fff;
+  background: var(--eka-gradient, linear-gradient(135deg, #ff5fa2, #7a5cf6));
+  box-shadow:
+    0 15px 30px rgba(255, 79, 154, 0.26),
+    inset 0 1px 0 rgba(255, 255, 255, 0.32);
+}
+
+.eka-onb-button-primary:hover:not(:disabled) {
+  filter: saturate(1.08) brightness(1.02);
+  transform: translateY(-1px);
+  box-shadow: 0 19px 38px rgba(255, 79, 154, 0.32), inset 0 1px 0 rgba(255, 255, 255, 0.32);
+}
+
+.eka-onb-button-primary:active:not(:disabled) {
+  transform: scale(0.985);
+}
+
+.eka-onb-button-primary:disabled {
+  color: var(--text-faint, #a98aa2);
+  cursor: not-allowed;
+  opacity: 1;
+  background: var(--bg-soft, #ffeef6);
+  box-shadow: inset 0 0 0 1px var(--border-color, rgba(183, 82, 143, 0.14));
+  filter: none;
+}
+
+.eka-onb-button-quiet {
+  min-height: 42px;
+  margin-top: 7px;
+  color: var(--text-muted);
+  background: transparent;
+  font-family: 'Manrope', sans-serif;
+  font-size: 0.72rem;
+  font-weight: 600;
+}
+
+.eka-onb-button-quiet:hover {
+  color: var(--text-main);
+  background: rgba(255, 255, 255, 0.44);
+}
+
+.eka-onb-button:focus-visible {
+  outline: 3px solid rgba(255, 79, 154, 0.3);
+  outline-offset: 3px;
+}
+
+.eka-onb-fine {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  margin: 12px 0 0;
+  color: var(--text-faint);
+  font-size: 0.57rem;
+  line-height: 1.4;
+  text-align: center;
+}
+
+.eka-onb-fine i {
+  font-size: 0.55rem;
+}
+
+.eka-onb-footer {
+  margin: 0;
+  color: var(--text-faint);
+  font-family: 'DM Mono', monospace;
+  font-size: 0.54rem;
+  letter-spacing: 0.1em;
+  text-align: center;
+  text-transform: uppercase;
+  animation: eka-onb-rise 700ms 160ms var(--eka-ease, cubic-bezier(0.22, 1, 0.36, 1)) both;
+}
+
+/* Notification step ------------------------------------------------------- */
+
+.eka-onb-bell {
+  position: relative;
+  display: grid;
+  width: 96px;
+  height: 96px;
+  margin: -6px auto 20px;
+  place-items: center;
+}
+
+.eka-onb-bell-core {
+  position: relative;
+  z-index: 2;
+  display: grid;
+  width: 58px;
+  height: 58px;
+  place-items: center;
+  border: 1px solid rgba(255, 255, 255, 0.8);
+  border-radius: 20px;
+  color: #fff;
+  background: var(--eka-gradient, linear-gradient(135deg, #ff5fa2, #7a5cf6));
+  box-shadow:
+    0 14px 30px rgba(255, 79, 154, 0.28),
+    inset 0 1px 0 rgba(255, 255, 255, 0.34);
+  transform: rotate(-5deg);
+}
+
+.eka-onb-bell-core i {
+  font-size: 1.2rem;
+  transform: rotate(5deg);
+}
+
+.eka-onb-bell-ring {
+  position: absolute;
+  inset: 5px;
+  border: 1px solid rgba(255, 79, 154, 0.2);
+  border-radius: 26px;
+  animation: eka-onb-bell-pulse 3.2s ease-out infinite;
+}
+
+.eka-onb-bell-ring-b {
+  inset: -10px;
+  border-color: rgba(139, 92, 246, 0.13);
+  animation-delay: -1.6s;
+}
+
+.eka-onb-notification-points {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  margin: 18px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.eka-onb-notification-points li {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid rgba(183, 82, 143, 0.11);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.4);
+}
+
+.eka-onb-notification-points > li > i {
+  display: grid;
+  width: 33px;
+  height: 33px;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 11px;
+  color: var(--eka-pink, #ff4f9a);
+  background: rgba(255, 79, 154, 0.09);
+  font-size: 0.72rem;
+}
+
+.eka-onb-notification-points span {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.eka-onb-notification-points strong {
+  color: var(--text-main);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.eka-onb-notification-points small {
+  color: var(--text-faint);
+  font-size: 0.61rem;
+  line-height: 1.35;
+}
+
+.eka-onb-status {
+  margin-top: 16px;
+  padding: 10px 13px;
+  border: 1px solid rgba(183, 82, 143, 0.12);
+  border-radius: 12px;
+  color: var(--text-muted);
+  background: rgba(255, 255, 255, 0.42);
+  font-size: 0.64rem;
+  line-height: 1.5;
+  text-align: center;
+}
+
+.eka-onb-status[data-tone='success'] {
+  border-color: rgba(34, 197, 94, 0.2);
+  color: #15803d;
+  background: rgba(34, 197, 94, 0.07);
+}
+
+/* Legal reader ------------------------------------------------------------ */
+
+.eka-legal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 6500;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: calc(18px + env(safe-area-inset-top)) 16px calc(18px + env(safe-area-inset-bottom));
+  background: rgba(35, 11, 28, 0.52);
+  backdrop-filter: blur(9px) saturate(1.1);
+  -webkit-backdrop-filter: blur(9px) saturate(1.1);
+  animation: eka-onb-fade 220ms ease both;
+}
+
+.eka-legal-backdrop-fill {
+  position: absolute;
+  inset: 0;
+}
+
+.eka-legal-panel {
+  position: relative;
+  display: flex;
+  width: min(100%, 700px);
+  max-height: min(88dvh, 820px);
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.72);
+  border-radius: 26px;
+  color: var(--text-main);
+  background: var(--bg-surface, #fff);
+  box-shadow: 0 36px 90px rgba(30, 6, 23, 0.32), inset 0 1px 0 rgba(255, 255, 255, 0.8);
+  animation: eka-onb-rise 320ms var(--eka-ease, cubic-bezier(0.22, 1, 0.36, 1)) both;
+}
+
+.eka-legal-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 22px 24px 17px;
+  border-bottom: 1px solid var(--border-color, rgba(183, 82, 143, 0.14));
+  background: var(--bg-surface, #fff);
+}
+
+.eka-legal-kicker {
+  margin: 0 0 5px;
+  color: var(--eka-pink, #ff4f9a);
+  font-family: 'Sora', 'Manrope', sans-serif;
+  font-size: 0.54rem;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+}
+
+.eka-legal-header h2 {
+  margin: 0;
+  color: var(--text-main);
+  font-family: 'Sora', 'Manrope', sans-serif;
+  font-size: 1.18rem;
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: -0.035em;
+}
+
+.eka-legal-close {
+  display: grid;
+  width: 38px;
+  height: 38px;
+  flex: 0 0 auto;
+  place-items: center;
+  border: 1px solid var(--border-color, rgba(183, 82, 143, 0.14));
+  border-radius: 12px;
+  color: var(--text-muted);
+  background: var(--bg-soft, #ffeef6);
+  transition: color 150ms ease, transform 150ms ease, background 150ms ease;
+}
+
+.eka-legal-close:hover {
+  color: var(--text-main);
+  background: var(--bg-surface, #fff);
+  transform: rotate(4deg);
+}
+
+.eka-legal-close:focus-visible {
+  outline: 3px solid rgba(255, 79, 154, 0.3);
+  outline-offset: 2px;
+}
+
+.eka-legal-body {
+  padding: 21px 25px 26px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  line-height: 1.72;
+  scrollbar-width: thin;
+}
+
+.eka-legal-body:focus-visible {
+  outline: 2px solid rgba(255, 79, 154, 0.22);
+  outline-offset: -2px;
+}
+
+.eka-legal-body p {
+  margin: 0 0 13px;
+}
+
+.eka-legal-body h3 {
+  margin: 22px 0 7px;
+  color: var(--text-main);
+  font-family: 'Sora', 'Manrope', sans-serif;
+  font-size: 0.85rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.eka-legal-body h3:first-of-type {
+  margin-top: 16px;
+}
+
+.eka-legal-body .eka-legal-meta {
+  margin-bottom: 17px;
+  color: var(--text-faint);
+  font-family: 'DM Mono', monospace;
+  font-size: 0.57rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.eka-legal-footer {
+  display: flex;
+  justify-content: flex-end;
+  padding: 13px 24px calc(13px + env(safe-area-inset-bottom));
+  border-top: 1px solid var(--border-color, rgba(183, 82, 143, 0.14));
+  background: var(--bg-surface, #fff);
+}
+
+.eka-legal-footer .eka-onb-button {
+  width: auto;
+  min-width: 120px;
+  min-height: 42px;
+  margin: 0;
+  border: 1px solid var(--border-color, rgba(183, 82, 143, 0.14));
+  color: var(--text-main);
+  background: var(--bg-soft, #ffeef6);
+}
+
+/* Settings additions ------------------------------------------------------ */
+
+.eka-settings-card-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.eka-settings-card-head h3 {
+  margin: 0;
+  color: var(--text-main);
+  font-family: 'Sora', 'Manrope', sans-serif;
+  font-size: 0.86rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.eka-settings-card-head p {
+  margin: 4px 0 0;
+  color: var(--text-muted);
+  font-size: 0.68rem;
+  line-height: 1.45;
+}
+
+.eka-settings-card-icon {
+  display: grid;
+  width: 38px;
+  height: 38px;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 12px;
+  color: var(--eka-pink, #ff4f9a);
+  background: rgba(255, 79, 154, 0.09);
+  font-size: 0.8rem;
+}
+
+.eka-settings-notification-card .tc-btn {
+  margin-top: 13px;
+}
+
+.eka-settings-legal-links {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 12px;
+}
+
+.eka-settings-legal-links button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  width: 100%;
+  min-height: 42px;
+  padding: 9px 3px;
+  border: 0;
+  border-bottom: 1px solid var(--border-color, rgba(183, 82, 143, 0.14));
+  color: var(--text-main);
+  background: transparent;
+  font-size: 0.73rem;
+  font-weight: 600;
+  text-align: left;
+  transition: color 150ms ease, padding 150ms ease;
+}
+
+.eka-settings-legal-links button:last-child {
+  border-bottom: 0;
+}
+
+.eka-settings-legal-links button:hover {
+  padding-left: 7px;
+  color: var(--eka-pink, #ff4f9a);
+}
+
+.eka-settings-legal-links button > span {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.eka-settings-legal-links button > span i {
+  width: 16px;
+  color: var(--eka-pink, #ff4f9a);
+  font-size: 0.7rem;
+  text-align: center;
+}
+
+.eka-settings-legal-links button > i {
+  color: var(--text-faint);
+  font-size: 0.58rem;
+}
+
+.eka-settings-legal-links button:focus-visible {
+  outline: 3px solid rgba(255, 79, 154, 0.25);
+  outline-offset: 2px;
+}
+
+.eka-settings-legal-version {
+  margin: 12px 0 0;
+  color: var(--text-faint);
+  font-family: 'DM Mono', monospace;
+  font-size: 0.54rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.eka-theme-legal {
+  padding-top: 3px;
+  border-top: 1px solid var(--border-color, rgba(183, 82, 143, 0.14));
+}
+
+.eka-theme-legal .eka-settings-legal-links {
+  padding: 0 12px;
+  border: 1px solid var(--border-color, rgba(183, 82, 143, 0.14));
+  border-radius: 14px;
+  background: var(--bg-surface, #fff);
+}
+
+/* Dark atmosphere --------------------------------------------------------- */
+
+:root[data-atmosphere='dark'] .eka-onb {
+  background:
+    radial-gradient(ellipse 84% 62% at 8% -8%, rgba(255, 79, 154, 0.2), transparent 62%),
+    radial-gradient(ellipse 72% 58% at 104% 8%, rgba(139, 92, 246, 0.19), transparent 62%),
+    radial-gradient(ellipse 88% 58% at 48% 112%, rgba(255, 126, 182, 0.12), transparent 68%),
+    linear-gradient(158deg, #160a12 0%, #1d0b17 48%, #140b20 100%);
+}
+
+:root[data-atmosphere='dark'] .eka-onb-grid {
+  opacity: 0.34;
+  background-image:
+    linear-gradient(rgba(255, 210, 232, 0.045) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 210, 232, 0.045) 1px, transparent 1px);
+}
+
+:root[data-atmosphere='dark'] .eka-onb-brand {
+  border-color: rgba(255, 255, 255, 0.11);
+  background: rgba(255, 255, 255, 0.055);
+  box-shadow: 0 14px 38px rgba(0, 0, 0, 0.26), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+:root[data-atmosphere='dark'] .eka-onb-card {
+  border-color: rgba(255, 255, 255, 0.11);
+  background: linear-gradient(145deg, rgba(47, 23, 39, 0.94), rgba(29, 14, 27, 0.88));
+  box-shadow:
+    0 34px 86px rgba(0, 0, 0, 0.45),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+:root[data-atmosphere='dark'] .eka-onb-card::before {
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.22), transparent);
+}
+
+:root[data-atmosphere='dark'] .eka-onb-pills span,
+:root[data-atmosphere='dark'] .eka-onb-consent,
+:root[data-atmosphere='dark'] .eka-onb-notification-points li,
+:root[data-atmosphere='dark'] .eka-onb-status {
+  border-color: rgba(255, 160, 196, 0.15);
+  background: rgba(255, 255, 255, 0.045);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+:root[data-atmosphere='dark'] .eka-onb-consent:hover {
+  border-color: rgba(255, 126, 182, 0.3);
+  background: rgba(255, 255, 255, 0.075);
+}
+
+:root[data-atmosphere='dark'] .eka-onb-checkbox {
+  border-color: rgba(255, 160, 196, 0.36);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+:root[data-atmosphere='dark'] .eka-onb-checkbox:checked {
+  border-color: transparent;
+  background: var(--eka-gradient, linear-gradient(135deg, #ff5fa2, #7a5cf6));
+}
+
+:root[data-atmosphere='dark'] .eka-onb-status[data-tone='success'] {
+  border-color: rgba(74, 222, 128, 0.22);
+  color: #86efac;
+  background: rgba(34, 197, 94, 0.09);
+}
+
+:root[data-atmosphere='dark'] .eka-legal-panel,
+:root[data-atmosphere='dark'] .eka-legal-header,
+:root[data-atmosphere='dark'] .eka-legal-footer {
+  border-color: rgba(255, 160, 196, 0.16);
+  background: #21101b;
+}
+
+:root[data-atmosphere='dark'] .eka-legal-backdrop {
+  background: rgba(8, 3, 6, 0.7);
+}
+
+:root[data-atmosphere='dark'] .eka-legal-close,
+:root[data-atmosphere='dark'] .eka-legal-footer .eka-onb-button {
+  border-color: rgba(255, 160, 196, 0.16);
+  background: rgba(255, 255, 255, 0.06);
+}
+
+:root[data-atmosphere='dark'] .eka-settings-legal-links button {
+  border-color: rgba(255, 160, 196, 0.15);
+}
+
+:root[data-atmosphere='dark'] .eka-settings-card-icon {
+  background: rgba(255, 126, 182, 0.12);
+}
+
+:root[data-atmosphere='dark'] .eka-onb-button-quiet:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+/* Motion ------------------------------------------------------------------ */
+
+@keyframes eka-onb-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes eka-onb-rise {
+  from { opacity: 0; transform: translate3d(0, 16px, 0) scale(0.985); }
+  to { opacity: 1; transform: translate3d(0, 0, 0) scale(1); }
+}
+
+@keyframes eka-onb-step-in {
+  from { opacity: 0; transform: translate3d(14px, 0, 0); }
+  to { opacity: 1; transform: translate3d(0, 0, 0); }
+}
+
+@keyframes eka-onb-drift {
+  from { transform: translate3d(0, 0, 0) scale(1); }
+  to { transform: translate3d(24px, -18px, 0) scale(1.06); }
+}
+
+@keyframes eka-onb-bell-pulse {
+  0% { opacity: 0.9; transform: scale(0.82); }
+  72%, 100% { opacity: 0; transform: scale(1.12); }
+}
+
+/* Responsive and accessibility ------------------------------------------- */
+
+@media (max-width: 420px) {
+  .eka-onb-scroll {
+    padding-right: 13px;
+    padding-left: 13px;
+  }
+
+  .eka-onb-card {
+    padding: 26px 21px 21px;
+    border-radius: 27px;
+  }
+
+  .eka-onb-title {
+    font-size: clamp(1.72rem, 8vw, 2.1rem);
+  }
+
+  .eka-onb-copy {
+    font-size: 0.82rem;
+  }
+
+  .eka-onb-consent {
+    padding: 13px;
+  }
+
+  .eka-onb-notification-points li {
+    padding: 9px 10px;
+  }
+
+  .eka-onb-bell {
+    width: 82px;
+    height: 82px;
+    margin-bottom: 16px;
+  }
+
+  .eka-onb-bell-core {
+    width: 52px;
+    height: 52px;
+    border-radius: 17px;
+  }
+
+  .eka-legal-header {
+    padding: 18px 18px 14px;
+  }
+
+  .eka-legal-body {
+    padding: 17px 19px 21px;
+    font-size: 0.76rem;
+  }
+
+  .eka-legal-footer {
+    padding-right: 18px;
+    padding-left: 18px;
+  }
+}
+
+@media (max-height: 880px) {
+  #eka-onboarding[data-onboarding-step='notifications'] .eka-onb-footer {
+    display: none;
+  }
+}
+
+@media (max-height: 700px) {
+  .eka-onb-scroll {
+    align-items: flex-start;
+    padding-top: calc(18px + env(safe-area-inset-top));
+  }
+
+  .eka-onb-shell {
+    gap: 15px;
+    margin-top: 0;
+    margin-bottom: 0;
+  }
+
+  .eka-onb-card {
+    padding-top: 24px;
+    padding-bottom: 20px;
+  }
+
+  .eka-onb-pills {
+    display: none;
+  }
+
+  .eka-onb-bell {
+    width: 70px;
+    height: 70px;
+    margin: -2px auto 12px;
+  }
+
+  .eka-onb-bell-core {
+    width: 48px;
+    height: 48px;
+    border-radius: 16px;
+  }
+
+  .eka-onb-notification-points li:nth-child(2) {
+    display: none;
+  }
+}
+
+@media (min-width: 900px) {
+  .eka-onb-shell {
+    width: min(100%, 500px);
+  }
+
+  .eka-onb-card {
+    padding: 36px 34px 29px;
+  }
+}
+
+@media (hover: none) {
+  .eka-onb-button-primary:hover:not(:disabled),
+  .eka-settings-legal-links button:hover {
+    filter: none;
+    padding-left: 3px;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .eka-onb,
+  .eka-onb-brand,
+  .eka-onb-card,
+  .eka-onb-step,
+  .eka-onb-footer,
+  .eka-legal-panel,
+  .eka-legal-backdrop {
+    animation: none !important;
+    transition-duration: 0.01ms !important;
+  }
+
+  .eka-onb-glow,
+  .eka-onb-bell-ring {
+    animation: none !important;
+  }
+}

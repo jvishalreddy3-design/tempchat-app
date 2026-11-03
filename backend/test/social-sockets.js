@@ -21,9 +21,10 @@ const store = {
   createPrivateConversation: async (userIds, pairKey) => ({ _id: 'conv-test', id: 'conv-test', pair_key: pairKey, userIds: userIds.sort() }),
   getPrivateConversationById: async () => ({ _id: 'conv-test', id: 'conv-test', pair_key: friendship, userIds: ['alice-id', 'bob-id'] }),
   findPrivateMessageById: async (id) => store._messages?.find((m) => m.id === id) || null,
-  savePrivateMessage: async (convId, message) => { store._messages = store._messages || []; store._messages.push(message); return { _id: message.id, id: message.id, conversationId: convId, from: message.from, sender: message.sender, text: message.text, timestamp: message.timestamp, deliveredTo: [], createdAt: new Date() }; },
+  savePrivateMessage: async (convId, message) => { store.savedMessages++; store._messages = store._messages || []; store._messages.push(message); return { _id: message.id, id: message.id, conversationId: convId, from: message.from, sender: message.sender, text: message.text, timestamp: message.timestamp, deliveredTo: [], createdAt: new Date() }; },
   getPrivateMessages: async () => [],
-  markConversationMessagesDelivered: async () => {}
+  markConversationMessagesDelivered: async () => {},
+  savedMessages: 0
 };
 
 function waitFor(socket, event, timeout = 3000) {
@@ -42,7 +43,7 @@ async function run() {
     const profile = profiles.get(socket.handshake.auth?.testUserId);
     if (!profile) return next(new Error('not authenticated'));
     socket.accountUser = { id: profile._id, username: profile.username, displayName: profile.displayName };
-    socket.accountAuthExpiresAt = Date.now() + 60000;
+    socket.accountAuthExpiresAt = Date.now() + Number(socket.handshake.auth?.expiresInMs || 60000);
     next();
   });
   const social = installSocialSockets(io, store, {}, { privateTtlMs: 40 });
@@ -69,6 +70,7 @@ async function run() {
     const lastDeviceOffline = waitFor(alice, 'friends:presence');
     await lastDeviceOffline;
     assert.equal(alicePresence.at(-1).online, false, 'last device disconnect must mark a friend offline');
+    assert.equal(alicePresence.at(-1).userId, 'bob-id', 'presence updates must describe the friend, not the recipient');
 
     const bob = connect(url, 'bob-id'); clients.push(bob);
     const bobReady = waitFor(bob, 'social:ready');
@@ -78,9 +80,11 @@ async function run() {
     const aliceOpen = await emitAck(alice, 'private:open', { friendId: 'bob-id' });
     assert.equal(aliceOpen.success, true);
     assert.equal(aliceOpen.conversation.peerOnline, true);
+    assert.deepEqual(aliceOpen.conversation.messages, [], 'opening a conversation must never return history');
     const bobOpen = await emitAck(bob, 'private:open', { friendId: 'alice-id' });
     assert.equal(bobOpen.success, true);
     assert.equal(bobOpen.conversation.id, aliceOpen.conversation.id);
+    assert.deepEqual(bobOpen.conversation.messages, [], 'opening a conversation must never return history');
 
     const message = { conversationId: aliceOpen.conversation.id, id: 'message-test-0001', text: 'temporary, in-memory only' };
     const delivered = await emitAck(alice, 'private:send', message);
@@ -90,6 +94,13 @@ async function run() {
     assert.equal(duplicate.duplicate, true);
     assert.equal(received, 1, 'duplicate IDs must not be delivered twice');
     assert.equal(social.conversations.get(aliceOpen.conversation.id).messages[0].text, message.text);
+    assert.equal(store.savedMessages, 0, 'private messages must never be persisted to the database');
+
+    const aliceSecond = connect(url, 'alice-id'); clients.push(aliceSecond);
+    const aliceSecondReady = waitFor(aliceSecond, 'social:ready');
+    await waitFor(aliceSecond, 'connect'); await aliceSecondReady;
+    const aliceSecondOpen = await emitAck(aliceSecond, 'private:open', { friendId: 'bob-id' });
+    assert.equal(aliceSecondOpen.success, true);
 
     const outsider = connect(url, 'outsider-id'); clients.push(outsider);
     const outsiderReady = waitFor(outsider, 'social:ready');
@@ -101,12 +112,29 @@ async function run() {
 
     bob.disconnect();
     await new Promise((resolve) => setTimeout(resolve, 30));
+    let senderDeviceReceived = 0;
+    aliceSecond.on('private:message', (_message, acknowledge) => { senderDeviceReceived++; acknowledge({ received: true }); });
     const offline = await emitAck(alice, 'private:send', { ...message, id: 'message-test-0002' });
     assert.equal(offline.reason, 'recipient_offline', 'no offline queue or false delivery receipt');
+    assert.equal(offline.delivered, false, 'another sender device must not count as peer delivery');
+    assert.equal(senderDeviceReceived, 0, 'private messages must only be routed to the friend');
+    assert.equal(social.conversations.get(aliceOpen.conversation.id).messages.length, 1, 'undeliverable text must not remain buffered on the server');
+    aliceSecond.emit('private:leave', { conversationId: aliceOpen.conversation.id });
     alice.emit('private:leave', { conversationId: aliceOpen.conversation.id });
     await new Promise((resolve) => setTimeout(resolve, 75));
     assert.equal(social.conversations.size, 0, 'inactive conversation memory must expire');
-    console.log('Social socket tests passed: authenticated presence, multi-device online accounting, accepted-friend authorization, in-memory private delivery, duplicate suppression, offline rejection, and abandoned-chat cleanup.');
+
+    const shortLived = connectSocket(url, {
+      auth: { testUserId: 'alice-id', expiresInMs: 200 },
+      transports: ['websocket'],
+      forceNew: true,
+      reconnection: false
+    });
+    clients.push(shortLived);
+    const expired = waitFor(shortLived, 'disconnect', 2000);
+    await waitFor(shortLived, 'connect');
+    assert.equal(await expired, 'io server disconnect', 'an expired access token must trigger a server disconnect so the client can refresh');
+    console.log('Social socket tests passed: authenticated presence, multi-device online accounting, accepted-friend authorization, in-memory private delivery, duplicate suppression, offline rejection, expired-token disconnect, and abandoned-chat cleanup.');
   } finally {
     for (const client of clients) client.disconnect();
     social.dispose();

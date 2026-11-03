@@ -102,7 +102,8 @@ class PgStore {
           avatar_url TEXT DEFAULT NULL,
           email_verified BOOLEAN NOT NULL DEFAULT TRUE,
           created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-          updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+          updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+          last_seen_at TIMESTAMPTZ DEFAULT NULL
         );
 
         CREATE TABLE IF NOT EXISTS auth_sessions (
@@ -151,6 +152,25 @@ class PgStore {
           created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
         );
       `);
+
+      // Existing installations need the column added in place.
+      await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS last_seen_at TIMESTAMPTZ DEFAULT NULL;`);
+
+      // Defense in depth: the frontend never talks to Supabase tables directly.
+      // The backend connects as the table owner (postgres), which bypasses RLS,
+      // while anon/authenticated Supabase clients are denied all direct access.
+      try {
+        await client.query(`
+          ALTER TABLE users ENABLE ROW LEVEL SECURITY;
+          ALTER TABLE auth_sessions ENABLE ROW LEVEL SECURITY;
+          ALTER TABLE friend_requests ENABLE ROW LEVEL SECURITY;
+          ALTER TABLE friendships ENABLE ROW LEVEL SECURITY;
+          ALTER TABLE private_conversations ENABLE ROW LEVEL SECURITY;
+          ALTER TABLE private_messages ENABLE ROW LEVEL SECURITY;
+        `);
+      } catch (error) {
+        console.warn('[pg] Row Level Security could not be enabled:', error.code || error.name);
+      }
     } finally {
       client.release();
     }
@@ -162,6 +182,7 @@ class PgStore {
       await client.query(`
         CREATE INDEX IF NOT EXISTS users_username_unique ON users(username);
         CREATE INDEX IF NOT EXISTS users_username_key_unique ON users(username_key);
+        CREATE INDEX IF NOT EXISTS users_last_seen ON users(last_seen_at DESC);
         CREATE INDEX IF NOT EXISTS auth_sessions_refresh_hash_unique ON auth_sessions(refresh_hash);
         CREATE INDEX IF NOT EXISTS auth_sessions_user_active ON auth_sessions(user_id, revoked_at);
         CREATE INDEX IF NOT EXISTS auth_sessions_ttl ON auth_sessions(expires_at);
@@ -265,6 +286,60 @@ class PgStore {
     return result.rows[0] ? this._rowToUser(result.rows[0]) : null;
   }
 
+  async updatePassword(userId, passwordHash) {
+    const result = await this.pool.query(
+      `UPDATE users SET password_hash = $1, updated_at = NOW() WHERE id = $2 RETURNING *`,
+      [passwordHash, userId]
+    );
+    return result.rows[0] ? this._rowToUser(result.rows[0]) : null;
+  }
+
+  async setLastSeen(userId, date = new Date()) {
+    await this.pool.query(`UPDATE users SET last_seen_at = $1 WHERE id = $2`, [date, userId]);
+  }
+
+  async countFriends(userId) {
+    const result = await this.pool.query(
+      `SELECT COUNT(*)::int AS count FROM friendships WHERE user_ids @> ARRAY[$1::UUID]`,
+      [userId]
+    );
+    return result.rows[0]?.count || 0;
+  }
+
+  async findPublicUser(userId) {
+    const result = await this.pool.query(
+      `SELECT id, username, display_name, avatar_url, created_at, last_seen_at FROM users WHERE id = $1`,
+      [userId]
+    );
+    const row = result.rows[0];
+    if (!row) return null;
+    return {
+      id: row.id,
+      username: row.username,
+      displayName: row.display_name,
+      avatarUrl: row.avatar_url || null,
+      createdAt: row.created_at,
+      lastSeenAt: row.last_seen_at || null,
+    };
+  }
+
+  async deleteUser(userId) {
+    const client = await this.pool.connect();
+    try {
+      await client.query('BEGIN');
+      await client.query(`DELETE FROM friendships WHERE user_ids @> ARRAY[$1::UUID]`, [userId]);
+      await client.query(`DELETE FROM friend_requests WHERE sender_id = $1 OR recipient_id = $1`, [userId]);
+      await client.query(`DELETE FROM private_conversations WHERE user_ids @> ARRAY[$1::UUID]`, [userId]);
+      await client.query(`DELETE FROM users WHERE id = $1`, [userId]);
+      await client.query('COMMIT');
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
   _rowToUser(row) {
     if (!row) return null;
     return {
@@ -279,6 +354,7 @@ class PgStore {
       emailVerified: row.email_verified,
       createdAt: row.created_at,
       updatedAt: row.updated_at,
+      lastSeenAt: row.last_seen_at || null,
     };
   }
 
@@ -304,11 +380,26 @@ class PgStore {
     return session;
   }
 
+  _rowToSession(row) {
+    if (!row) return null;
+    return {
+      _id: row.id,
+      id: row.id,
+      userId: row.user_id,
+      refreshHash: row.refresh_hash,
+      createdAt: row.created_at,
+      expiresAt: row.expires_at,
+      revokedAt: row.revoked_at,
+      userAgent: row.user_agent,
+      replacedBy: row.replaced_by,
+    };
+  }
+
   findActiveSession(sid, userId) {
     return this.pool.query(
       `SELECT * FROM auth_sessions WHERE id = $1 AND user_id = $2 AND revoked_at IS NULL AND expires_at > NOW()`,
       [sid, userId]
-    ).then((result) => result.rows[0] || null);
+    ).then((result) => this._rowToSession(result.rows[0]));
   }
 
   async rotateSession(oldHash, replacement) {
@@ -342,7 +433,7 @@ class PgStore {
         ]
       );
       await client.query('COMMIT');
-      return previous.rows[0];
+      return this._rowToSession(previous.rows[0]);
     } catch (error) {
       await client.query('ROLLBACK');
       throw error;
@@ -355,7 +446,7 @@ class PgStore {
     return this.pool.query(
       `SELECT * FROM auth_sessions WHERE refresh_hash = $1 AND revoked_at IS NULL AND expires_at > NOW()`,
       [refreshHash]
-    ).then((result) => result.rows[0] || null);
+    ).then((result) => this._rowToSession(result.rows[0]));
   }
 
   async revokeSession(sid, userId) {
@@ -553,7 +644,7 @@ class PgStore {
       .filter(Boolean);
     if (friendIds.length === 0) return [];
     const result = await this.pool.query(
-      `SELECT id, username, display_name, avatar_url, email_verified FROM users WHERE id = ANY($1::UUID[])`,
+      `SELECT id, username, display_name, avatar_url, email_verified, created_at, last_seen_at FROM users WHERE id = ANY($1::UUID[])`,
       [friendIds]
     );
     return result.rows.map((r) => this._rowToUser(r));
@@ -572,7 +663,7 @@ class PgStore {
   async findUsersByIds(ids) {
     if (!ids || ids.length === 0) return [];
     const result = await this.pool.query(
-      `SELECT id, username, display_name, avatar_url, email_verified FROM users WHERE id = ANY($1::UUID[])`,
+      `SELECT id, username, display_name, avatar_url, email_verified, created_at, last_seen_at FROM users WHERE id = ANY($1::UUID[])`,
       [ids]
     );
     return result.rows.map((r) => this._rowToUser(r));

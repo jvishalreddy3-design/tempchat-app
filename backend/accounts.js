@@ -16,7 +16,7 @@ function sha256(value) { return crypto.createHash('sha256').update(value).digest
 function randomToken() { return crypto.randomBytes(32).toString('base64url'); }
 function safeUser(user) {
   if (!user) return null;
-  return { id: user._id, username: user.username, displayName: user.displayName, avatarUrl: user.avatarUrl || null, emailVerified: Boolean(user.emailVerified), createdAt: user.createdAt };
+  return { id: user._id, username: user.username, displayName: user.displayName, avatarUrl: user.avatarUrl || null, emailVerified: Boolean(user.emailVerified), createdAt: user.createdAt, lastSeenAt: user.lastSeenAt || null };
 }
 function authError(status, code, message) { return Object.assign(new Error(message), { status, code }); }
 
@@ -64,6 +64,16 @@ function createAccountService({ store, config, io }) {
       io.to('account:' + secondId).emit('friends:presence', { userId: firstId, online: firstOnline, observedAt: new Date().toISOString() });
     } catch (_) { /* Presence is refreshed when either account reconnects. */ }
   }
+  router.get('/username-available', async (req, res, next) => {
+    try {
+      const username = String(req.query?.username || '').trim();
+      if (!USERNAME_RE.test(username)) {
+        return res.status(400).json({ available: false, error: { code: 'invalid_username', message: 'Username must be 3–24 characters using letters, numbers, or underscores.' } });
+      }
+      const existing = await store.findUserByUsername(username.toLowerCase());
+      res.json({ available: !existing, username });
+    } catch (error) { next(error); }
+  });
   router.post('/register', async (req, res, next) => {
     try {
       const username = String(req.body?.username || '').trim();
@@ -101,7 +111,7 @@ function createAccountService({ store, config, io }) {
       if (!user) throw authError(401, 'account_unavailable', 'Sign in again to continue.');
       const refreshToken = randomToken();
       const replacementId = crypto.randomUUID();
-      const rotated = await store.rotateSession(sha256(oldToken), { _id: replacementId, refreshHash: sha256(refreshToken), createdAt: new Date(), expiresAt: new Date(Date.now() + SESSION_TTL_MS), revokedAt: null, userAgent: String(req.get('user-agent') || '').slice(0, 256) });
+      const rotated = await store.rotateSession(sha256(oldToken), { _id: replacementId, userId: session.userId, refreshHash: sha256(refreshToken), createdAt: new Date(), expiresAt: new Date(Date.now() + SESSION_TTL_MS), revokedAt: null, userAgent: String(req.get('user-agent') || '').slice(0, 256) });
       if (!rotated) throw authError(401, 'refresh_reused', 'Your session expired. Sign in again.');
       if (!native) res.cookie('tempchat_refresh', refreshToken, { httpOnly: true, secure: true, sameSite: 'lax', path: '/api/auth', maxAge: SESSION_TTL_MS });
       res.json({ accessToken: issueAccess(user._id, replacementId), expiresIn: ACCESS_TTL_SECONDS, ...(native ? { refreshToken } : {}), user: safeUser(user) });
@@ -132,7 +142,21 @@ function createAccountService({ store, config, io }) {
         return res.status(400).json({ error: { code: 'invalid_query', message: 'Enter at least 2 characters to search.' } });
       }
       const users = await store.searchUsers(q, 20);
-      res.json({ users });
+      res.json({ users: users.filter((user) => user.id !== req.user._id) });
+    } catch (error) { next(error); }
+  });
+  router.get('/users/:id', middleware({ verified: true }), async (req, res, next) => {
+    try {
+      const userId = String(req.params.id || '');
+      if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(userId)) throw authError(400, 'invalid_user', 'That user could not be found.');
+      const profile = await store.findPublicUser(userId);
+      if (!profile) throw authError(404, 'user_not_found', 'That user could not be found.');
+      const [friendsCount, isFriend] = await Promise.all([
+        store.countFriends(userId),
+        store.areFriends(req.user._id, userId)
+      ]);
+      const online = io ? (await io.in('account:' + userId).fetchSockets()).length > 0 : false;
+      res.json({ user: { ...profile, online }, friendsCount, isFriend });
     } catch (error) { next(error); }
   });
   router.patch('/me', middleware({ verified: true }), async (req, res, next) => {
@@ -143,6 +167,35 @@ function createAccountService({ store, config, io }) {
       if (avatarUrl && (!/^https:\/\//i.test(avatarUrl) || avatarUrl.length > 2048)) throw authError(400, 'invalid_avatar', 'Avatar must be an HTTPS URL under 2048 characters.');
       const updated = await store.updateUser(req.user._id, { displayName, avatarUrl, updatedAt: new Date() });
       res.json({ user: safeUser(updated) });
+    } catch (error) { next(error); }
+  });
+  router.post('/change-password', middleware({ verified: true }), async (req, res, next) => {
+    try {
+      const currentPassword = String(req.body?.currentPassword || '');
+      const newPassword = String(req.body?.newPassword || '');
+      if (!req.user.passwordHash || !(await argon2.verify(req.user.passwordHash, currentPassword))) {
+        throw authError(401, 'invalid_password', 'Current password is incorrect.');
+      }
+      if (newPassword.length < PASSWORD_MIN_LENGTH || newPassword.length > PASSWORD_MAX_LENGTH) {
+        throw authError(400, 'weak_password', `Use a password between ${PASSWORD_MIN_LENGTH} and ${PASSWORD_MAX_LENGTH} characters.`);
+      }
+      if (newPassword === currentPassword) throw authError(400, 'same_password', 'Choose a password different from your current one.');
+      await store.updatePassword(req.user._id, await argon2.hash(newPassword, HASH_OPTIONS));
+      await store.revokeAllSessions(req.user._id);
+      const user = await store.findUserById(req.user._id);
+      res.json(await makeSession(user, req, res));
+    } catch (error) { next(error); }
+  });
+  router.delete('/me', middleware({ verified: true }), async (req, res, next) => {
+    try {
+      const password = String(req.body?.password || '');
+      if (!req.user.passwordHash || !(await argon2.verify(req.user.passwordHash, password))) {
+        throw authError(401, 'invalid_password', 'Password is incorrect.');
+      }
+      await store.deleteUser(req.user._id);
+      io?.in('account:' + req.user._id).disconnectSockets(true);
+      res.clearCookie('tempchat_refresh', { httpOnly: true, secure: true, sameSite: 'lax', path: '/api/auth' });
+      res.json({ success: true });
     } catch (error) { next(error); }
   });
 
@@ -166,6 +219,13 @@ function createAccountService({ store, config, io }) {
       const result = await store.requestFriend(req.user._id, target._id);
       const status = result.state === 'pending' ? 'pending' : result.state;
       if (status === 'pending' || status === 'accepted') {
+        if (status === 'pending') {
+          io?.to('account:' + target._id).emit('friends:request', {
+            requestId: result.request?._id || null,
+            sender: safeUser(req.user),
+            createdAt: result.request?.createdAt || new Date().toISOString()
+          });
+        }
         io?.to('account:' + target._id).emit('social:changed');
         if (status === 'accepted') io?.to('account:' + req.user._id).emit('social:changed');
       }

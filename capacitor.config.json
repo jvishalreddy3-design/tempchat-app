@@ -1,6 +1,6 @@
 {
   "appId": "com.tempchat.app",
-  "appName": "TempChat",
+  "appName": "EKA",
   "webDir": "www",
   "bundledWebRuntime": false,
   "server": {
@@ -9,11 +9,11 @@
   "plugins": {
     "StatusBar": {
       "style": "LIGHT",
-      "backgroundColor": "#FFF5FA"
+      "backgroundColor": "#FFF7FB"
     },
     "SplashScreen": {
       "launchShowDuration": 0,
-      "backgroundColor": "#FFF5FA"
+      "backgroundColor": "#FFF7FB"
     }
   }
 }

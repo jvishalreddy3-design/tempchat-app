@@ -17,7 +17,7 @@ const root = path.resolve(__dirname, '..');
   });
   await bundle.write({ file: path.join(root, 'www', 'native-plugins.js'), format: 'iife', name: 'TempChatPlugins', inlineDynamicImports: true });
   await bundle.close();
-  console.log('Bundled Capacitor app, network, status-bar, and secure-storage plugins.');
+  console.log('Bundled Capacitor app, network, status-bar, secure-storage, and EKA permission plugins.');
 })().catch((error) => {
   console.error(`Capacitor plugin bundle failed: ${error.message}`);
   process.exitCode = 1;
