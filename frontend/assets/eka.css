@@ -1623,7 +1623,7 @@ img { max-width: 100%; }
   box-shadow: 0 8px 18px rgba(197, 55, 150, 0.24) !important;
 }
 #chat-view .people-popover,
-#chat-view .join-requests-popover,
+.join-requests-panel,
 .share-room-sheet {
   border: 1px solid rgba(255, 255, 255, 0.94) !important;
   border-radius: 18px;
@@ -1633,7 +1633,24 @@ img { max-width: 100%; }
   backdrop-filter: blur(24px) saturate(1.3);
 }
 #chat-view .people-popover { width: min(270px, calc(100vw - 28px)) !important; right: 8px !important; }
-#chat-view .join-requests-popover { right: 8px !important; top: 62px !important; }
+#chat-view .join-requests-panel {
+  display: flex;
+  flex: 0 0 auto;
+  flex-direction: column;
+  gap: 8px;
+  max-height: min(34vh, 260px);
+  margin: 8px 8px 0;
+  padding: 10px 12px;
+  overflow: hidden;
+}
+#chat-view .join-requests-panel.hidden { display: none !important; }
+#chat-view .join-requests-panel.collapsed .join-requests-list { display: none; }
+#chat-view .join-requests-panel-head { display: flex; flex: 0 0 auto; align-items: center; justify-content: space-between; gap: 10px; }
+#chat-view .join-requests-list { display: flex; min-height: 0; flex-direction: column; gap: 8px; overflow-y: auto; overscroll-behavior: contain; padding-right: 2px; }
+#chat-view .join-requests-collapse { width: 32px !important; height: 32px !important; min-width: 32px !important; }
+#chat-view .join-requests-panel.collapsed .join-requests-collapse i { transform: rotate(180deg); }
+#chat-view .message-stage { min-height: 0; flex: 1 1 auto; overscroll-behavior: contain; }
+#chat-view .chat-header, #chat-view .composer-dock { flex: 0 0 auto; }
 .room-empty-notice {
   width: min(100%, 720px);
   margin: 0 auto 6px;

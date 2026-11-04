@@ -7,10 +7,13 @@
     "build": "node scripts/build-android-web.js",
     "android:sync": "cap sync android",
     "android:debug": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-android-debug.ps1",
+    "test": "npm run test:backend && npm run test:private-rooms && npm run test:accounts && npm run test:session-refresh && npm run test:social && npm run test:friend-chat && npm run test:room-session",
     "test:backend": "node backend/test/socket-smoke.js",
+    "test:private-rooms": "node backend/test/private-rooms.js",
     "test:room-session": "node scripts/test-room-session.js",
     "check:frontend": "node scripts/check-frontend.js",
     "test:accounts": "node backend/test/account-security.js",
+    "test:session-refresh": "node backend/test/session-refresh.js",
     "test:social": "node backend/test/social-sockets.js",
     "test:friend-chat": "node backend/test/friend-chat-flow.js"
   },

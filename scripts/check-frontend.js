@@ -71,6 +71,51 @@ const backHandler = nativeHtml.match(/addListener\?\.\('backButton',[\s\S]*?Nati
 if (backHandler.includes('leaveRoom()')) throw new Error('Android system back must not explicitly leave an active room.');
 console.log('EKA home structure, exact four-item bottom navigation, secure room restoration, and non-destructive Android back handling validated.');
 
+// Secure one-to-one temporary rooms and the join-requests layout guard.
+for (const [file, html] of [['frontend/index.html', fs.readFileSync('frontend/index.html', 'utf8')], ['www/index.html', nativeHtml]]) {
+  for (const required of [
+    'id="join-requests-popover"',
+    'join-requests-panel',
+    'join-requests-list',
+    'private-room:create',
+    'private-room:accept',
+    'private-room:notification',
+    'private-room:closed',
+    'private-room:expired'
+  ]) {
+    if (!html.includes(required)) throw new Error(`${file} is missing private-room marker: ${required}`);
+  }
+  const joinRequestsTag = html.match(/<section id="join-requests-popover"[^>]*>/)?.[0] || '';
+  if (!joinRequestsTag || /\babsolute\b/.test(joinRequestsTag)) {
+    throw new Error(`${file} join requests must be an in-flow section, not an absolutely positioned overlay.`);
+  }
+  const headerEnd = html.indexOf('</header>');
+  const joinRequestsStart = html.indexOf('id="join-requests-popover"');
+  const messageStart = html.indexOf('id="message-container"');
+  if (!(headerEnd !== -1 && joinRequestsStart > headerEnd && messageStart > joinRequestsStart)) {
+    throw new Error(`${file} join requests must sit between the room header and the message stage.`);
+  }
+  if (!/id="message-container"[^>]*\bmin-h-0\b/.test(html)) {
+    throw new Error(`${file} message stage must shrink inside the flex column (min-h-0).`);
+  }
+}
+for (const file of ['frontend/assets/tempchat-app.js', 'www/assets/tempchat-app.js']) {
+  const source = fs.readFileSync(file, 'utf8');
+  for (const marker of [
+    'createPrivateRoom',
+    'acceptPrivateInvitation',
+    'onPrivateInvitation',
+    'onPrivateInvitationConsumed',
+    'onPrivateInvitationExpired',
+    'onPrivateRoomExit',
+    'data-join-private-room',
+    'notifyPrivateInvitation'
+  ]) {
+    if (!source.includes(marker)) throw new Error(`${file} is missing private-room chat marker: ${marker}`);
+  }
+}
+console.log('Private temporary room flow and non-overlapping join-requests layout validated in frontend and Android bundle.');
+
 const frontendHtml = fs.readFileSync('frontend/index.html', 'utf8');
 for (const [file, html] of [['frontend/index.html', frontendHtml], ['www/index.html', nativeHtml]]) {
   for (const required of [

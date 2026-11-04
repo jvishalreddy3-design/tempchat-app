@@ -5,7 +5,7 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "test": "node test/account-security.js && node test/session-refresh.js && node test/social-sockets.js && node test/friend-chat-flow.js && node test/socket-smoke.js"
+    "test": "node test/account-security.js && node test/session-refresh.js && node test/social-sockets.js && node test/friend-chat-flow.js && node test/private-rooms.js && node test/socket-smoke.js"
   },
   "engines": {
     "node": ">=18"

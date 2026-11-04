@@ -281,6 +281,21 @@
     });
   }
 
+  function notifyPrivateInvitation(invitation) {
+    if (!invitation?.invitationId) return;
+    const sender = invitation.from || { username: 'A friend', displayName: 'A friend' };
+    const name = displayNameOf(sender);
+    showEkaNotification({
+      key: `private-room:${invitation.invitationId}`,
+      variant: 'eka-notify-room',
+      user: sender,
+      title: name,
+      body: `${name} wants to chat with you`,
+      actionsHtml: `<button type="button" class="eka-notify-accept" data-join-private-room="${esc(invitation.invitationId)}">Join Chat</button>`,
+      timeout: 0
+    });
+  }
+
   function notifyFriendRequest(request) {
     if (!request?.id || state.notifiedRequests.has(request.id)) return;
     state.notifiedRequests.add(request.id);
@@ -322,6 +337,15 @@
       const id = decline.getAttribute('data-notify-decline');
       dismissEkaNotification(`request:${id}`);
       await respondRequest(id, false);
+      return;
+    }
+
+    const joinRoom = event.target.closest('[data-join-private-room]');
+    if (joinRoom) {
+      event.preventDefault();
+      const invitationId = joinRoom.getAttribute('data-join-private-room');
+      dismissEkaNotification(`private-room:${invitationId}`);
+      joinPrivateRoom(invitationId, joinRoom);
       return;
     }
 
@@ -1130,6 +1154,45 @@
     }
   }
 
+  async function startPrivateRoom(friendId, trigger) {
+    const friend = state.friends.find((entry) => entry.id === friendId);
+    if (!friend) { toast('That friend is no longer in your list.', 'error'); return; }
+    const api = window.TempChatRoom;
+    if (!api?.createPrivateRoom) { toast('Private chat is unavailable. Refresh the app.', 'error'); return; }
+    setBusy(trigger, true, 'Opening…');
+    try {
+      const result = await api.createPrivateRoom(friend.id, {
+        username: state.user?.username || state.user?.displayName
+      });
+      if (!result?.ok) { toast(result?.message || 'Unable to open a private chat.', 'error'); return; }
+      setAccountMode(false);
+    } finally {
+      setBusy(trigger, false);
+    }
+  }
+
+  async function joinPrivateRoom(invitationId, trigger) {
+    const api = window.TempChatRoom;
+    if (!api?.acceptPrivateInvitation) { toast('Private chat is unavailable. Refresh the app.', 'error'); return; }
+    setBusy(trigger, true, 'Joining…');
+    try {
+      const result = await api.acceptPrivateInvitation(invitationId, {
+        username: state.user?.username || state.user?.displayName
+      });
+      if (!result?.ok) {
+        if (result?.code === 'expired' || result?.code === 'not_found') {
+          dismissEkaNotification(`private-room:${invitationId}`);
+        }
+        toast(result?.message || 'Unable to join this private chat.', 'error');
+        return;
+      }
+      dismissEkaNotification(`private-room:${invitationId}`);
+      setAccountMode(false);
+    } finally {
+      setBusy(trigger, false);
+    }
+  }
+
   async function openChat(friendId) {
     let friend = state.friends.find((entry) => entry.id === friendId);
     if (!friend) {
@@ -1673,6 +1736,9 @@
   }
 
   async function logout() {
+    if (window.TempChatRoom?.isInPrivateRoom?.()) {
+      try { window.leaveRoom?.(); } catch (_) { /* room cleanup is best effort */ }
+    }
     try {
       await apiFetch('/api/auth/logout', { method: 'POST', body: isNative ? { refreshToken: state.refreshToken } : undefined });
     } catch (_) { /* local sign-out still proceeds */ }
@@ -1770,7 +1836,7 @@
       }
 
       const chat = event.target.closest('[data-chat-user]');
-      if (chat) { event.preventDefault(); openChat(chat.getAttribute('data-chat-user')); return; }
+      if (chat) { event.preventDefault(); startPrivateRoom(chat.getAttribute('data-chat-user'), chat); return; }
 
       const profile = event.target.closest('[data-profile-user]');
       if (profile) { event.preventDefault(); openProfile(profile.getAttribute('data-profile-user')); return; }
@@ -1854,6 +1920,24 @@
     state.booted = true;
     accountApp = byId('account-app');
     backButton = byId('tc-back-to-account');
+
+    // Private one-to-one room invitations are delivered by the room socket.
+    // Registering here means a notification received during session restore is
+    // replayed from the room client's buffer instead of being lost.
+    window.TempChatRoom?.onPrivateInvitation?.((invitation) => notifyPrivateInvitation(invitation));
+    window.TempChatRoom?.onPrivateInvitationConsumed?.((invitationId) => {
+      dismissEkaNotification(`private-room:${invitationId}`);
+    });
+    window.TempChatRoom?.onPrivateInvitationExpired?.((invitation) => {
+      if (!invitation?.invitationId) return;
+      dismissEkaNotification(`private-room:${invitation.invitationId}`);
+      toast('A private chat invitation expired.', 'info');
+    });
+    window.TempChatRoom?.onPrivateRoomExit?.(() => {
+      if (!state.user) return;
+      setAccountMode(true);
+      showScreen('friends', { reset: true });
+    });
 
     const openingRoomLink = Boolean(new URLSearchParams(window.location.search).get('room'));
     if (openingRoomLink) setAccountMode(false);

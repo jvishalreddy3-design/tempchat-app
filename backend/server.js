@@ -7,6 +7,7 @@ const { readConfig } = require('./config');
 const { PgStore } = require('./pg-store');
 const { createAccountService, errorHandler: accountErrorHandler } = require('./accounts');
 const { installSocialSockets } = require('./social-sockets');
+const { installPrivateRooms, isPrivateRoom } = require('./private-rooms');
 
 const app = express();
 const server = http.createServer(app);
@@ -112,6 +113,7 @@ io.use(async (socket, next) => {
 
 const rooms = new Map();
 const rateLimits = new Map();
+let privateRoomService = null;
 
 function generateRoomCode() {
   return crypto.randomInt(100000, 1000000).toString();
@@ -234,6 +236,7 @@ io.on('connection', (socket) => {
       const hostToken = newToken();
       const room = {
         code: roomId,
+        private: false,
         users: new Map(),
         game: null,
         hostId: socket.id,
@@ -278,6 +281,7 @@ io.on('connection', (socket) => {
 
       const room = rooms.get(roomId);
       if (!room) return callback({ success: false, message: 'Room not found' });
+      if (isPrivateRoom(room)) return callback({ success: false, message: 'This room is private.' });
       if (room.users.has(socket.id)) return callback({ success: false, message: 'You are already in this room' });
 
       if (socket.roomId) handleLeave(true);
@@ -374,6 +378,12 @@ io.on('connection', (socket) => {
       const room = rooms.get(roomId);
       if (!room) return callback({ success: false, message: 'Room not found' });
 
+      // Private rooms are never discoverable. Only one of the two authorized
+      // accounts may restore a session, even with a leaked room code.
+      if (room.private && (!socket.accountUser?.id || !room.participantAccountIds.includes(socket.accountUser.id))) {
+        return callback({ success: false, message: 'This private chat is no longer available.' });
+      }
+
       const token = String(data.token);
       let username;
       let host = false;
@@ -381,7 +391,11 @@ io.on('connection', (socket) => {
         host = true;
         username = cleanName(data.username) || 'Host';
       } else if (room.members.has(token)) {
-        username = room.members.get(token).username;
+        const member = room.members.get(token);
+        if (room.private && member.accountId !== socket.accountUser?.id) {
+          return callback({ success: false, message: 'This private chat is no longer available.' });
+        }
+        username = member.username;
       } else {
         return callback({ success: false, message: 'Please request to join again.' });
       }
@@ -418,6 +432,8 @@ io.on('connection', (socket) => {
         isHost: host,
         username,
         token,
+        private: Boolean(room.private),
+        invitationId: room.invitationId || null,
         pending: host ? pendingList(room) : undefined
       });
 
@@ -629,41 +645,7 @@ io.on('connection', (socket) => {
   });
 
   function handleLeave(explicit) {
-    const roomId = socket.roomId;
-    if (!roomId || !rooms.has(roomId)) { socket.roomId = null; return; }
-
-    const room = rooms.get(roomId);
-    const user = room.users.get(socket.id);
-
-    if (user) {
-      io.to(roomId).emit('user-disconnected', { username: user.username, socketId: socket.id });
-
-      room.users.delete(socket.id);
-      socket.leave(roomId);
-
-      const wasHost = room.hostId === socket.id;
-      if (wasHost) room.hostId = null;
-
-      if (room.users.size === 0) {
-        if (explicit) {
-          closeRoom(room, 'This room was closed.');
-        } else {
-          // Keep it briefly so a refresh / reconnect can get back in.
-          clearTimeout(room.emptyTimer);
-          room.emptyTimer = setTimeout(() => closeRoom(room, 'This room is no longer available.'), ROOM_EMPTY_GRACE_MS);
-        }
-      } else {
-        if (wasHost) {
-          if (explicit) promoteNewHost(room);
-          else {
-            clearTimeout(room.handoffTimer);
-            room.handoffTimer = setTimeout(() => promoteNewHost(room), HOST_HANDOFF_GRACE_MS);
-          }
-        }
-        broadcastUserList(roomId);
-      }
-    }
-    socket.roomId = null;
+    leaveRoomForSocket(socket, explicit);
   }
 
   socket.on('leave-room', () => {
@@ -683,6 +665,55 @@ io.on('connection', (socket) => {
 // ---------------------------------------------------------------------------
 // Room-level helpers (module scope)
 // ---------------------------------------------------------------------------
+
+function leaveRoomForSocket(socket, explicit) {
+  const roomId = socket.roomId;
+  if (!roomId || !rooms.has(roomId)) { socket.roomId = null; return; }
+
+  const room = rooms.get(roomId);
+  const user = room.users.get(socket.id);
+
+  if (user) {
+    io.to(roomId).emit('user-disconnected', { username: user.username, socketId: socket.id });
+
+    room.users.delete(socket.id);
+    socket.leave(roomId);
+
+    const wasHost = room.hostId === socket.id;
+    if (wasHost) room.hostId = null;
+
+    if (room.private && explicit) {
+      // A one-to-one room has no meaning once either participant leaves on
+      // purpose. The remaining participant is told to close the conversation.
+      closeRoom(room, 'The private chat ended.');
+    } else if (room.users.size === 0) {
+      if (explicit) {
+        closeRoom(room, 'This room was closed.');
+      } else {
+        // Keep it briefly so a refresh / reconnect can get back in.
+        clearTimeout(room.emptyTimer);
+        room.emptyTimer = setTimeout(() => closeRoom(room, 'This room is no longer available.'), ROOM_EMPTY_GRACE_MS);
+      }
+    } else {
+      if (wasHost && !room.private) {
+        if (explicit) promoteNewHost(room);
+        else {
+          clearTimeout(room.handoffTimer);
+          room.handoffTimer = setTimeout(() => promoteNewHost(room), HOST_HANDOFF_GRACE_MS);
+        }
+      }
+      broadcastUserList(roomId);
+      if (room.private) {
+        io.to(roomId).emit('private-room:ready', {
+          roomCode: roomId,
+          invitationId: room.invitationId || null,
+          ready: false
+        });
+      }
+    }
+  }
+  socket.roomId = null;
+}
 
 function broadcastUserList(roomId) {
   if (!rooms.has(roomId)) return;
@@ -730,6 +761,7 @@ function promoteNewHost(room) {
   clearTimeout(room.handoffTimer);
   room.handoffTimer = null;
   if (!rooms.has(room.code)) return;
+  if (room.private) return; // private rooms have no host and never hand off
   if (room.hostId && room.users.has(room.hostId)) return; // host is back
   const next = room.users.values().next().value;
   if (!next) return;
@@ -754,6 +786,20 @@ function closeRoom(room, message) {
     }
   }
   room.pending.clear();
+  if (room.private) {
+    io.to(room.code).emit('private-room:closed', {
+      roomCode: room.code,
+      invitationId: room.invitationId || null,
+      message
+    });
+    for (const socketId of room.users.keys()) {
+      const member = io.sockets.sockets.get(socketId);
+      if (!member) continue;
+      member.leave(room.code);
+      if (member.roomId === room.code) member.roomId = null;
+    }
+    privateRoomService?.onRoomClosed?.(room);
+  }
   rooms.delete(room.code);
 }
 
@@ -765,6 +811,16 @@ async function start() {
     app.use('/api/auth', accountService.router);
     app.use(accountErrorHandler);
     installSocialSockets(io, pgStore, accountService);
+    privateRoomService = installPrivateRooms(io, {
+      rooms,
+      store: pgStore,
+      generateRoomCode,
+      newToken,
+      cleanName,
+      broadcastUserList,
+      closeRoom,
+      leaveRoom: leaveRoomForSocket
+    });
     console.log('✅ PostgreSQL connected; account and social features ready.');
   } else {
     console.warn('⚠️ TEMPCHAT_TEST_MODE enabled: account features are disabled; only isolated room tests are available.');
