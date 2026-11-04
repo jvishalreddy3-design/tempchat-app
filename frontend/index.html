@@ -2601,7 +2601,8 @@
           to: peerId,
           ct: arrayBufferToBase64(ciphertext),
           iv: arrayBufferToBase64(nonce),
-          salt: session.salt
+          salt: session.salt,
+          timestamp: Date.now()
         };
       }
 
@@ -3984,7 +3985,18 @@
           ? 'Waiting for another participant'
           : !ready ? 'Waiting for secure setup with everyone in the room' : 'Send message';
       const emptyNotice = document.getElementById('room-empty-notice');
-      if (emptyNotice) emptyNotice.classList.toggle('hidden', !AppState.room.code || peers.length > 0);
+      if (emptyNotice) {
+        emptyNotice.classList.toggle('hidden', !AppState.room.code || peers.length > 0);
+        const isPrivate = Boolean(AppState.room.private);
+        const noticeTitle = emptyNotice.querySelector('strong');
+        const noticeText = emptyNotice.querySelector('p');
+        const shareButton = emptyNotice.querySelector('button');
+        if (noticeTitle) noticeTitle.textContent = isPrivate ? 'Waiting for your friend' : 'You’re the only one here';
+        if (noticeText) noticeText.textContent = isPrivate
+          ? 'Your invitation was sent. Messages unlock when they join.'
+          : 'Share the room link or code. Messages can be sent after someone joins.';
+        if (shareButton) shareButton.classList.toggle('hidden', isPrivate);
+      }
     }
 
     function updateMessageDelivery(receipt, delivered) {

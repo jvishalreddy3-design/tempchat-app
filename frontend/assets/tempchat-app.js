@@ -1783,7 +1783,7 @@
     byId('tc-restore-retry')?.addEventListener('click', retryRestore);
     byId('tc-restore-signin')?.addEventListener('click', restoreSignIn);
 
-    const retryWhenOnline = () => { handleForeground(); };
+    const retryWhenOnline = () => { window.TempChatApp?.handleForeground?.(); };
     window.addEventListener('online', retryWhenOnline);
     document.addEventListener('visibilitychange', () => {
       if (document.visibilityState === 'visible') retryWhenOnline();
