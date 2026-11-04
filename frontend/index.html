@@ -3311,6 +3311,7 @@
     function handleRoomLeftLocally() {
       const users = AppState.room.users;
       const wasPrivate = Boolean(AppState.room.private);
+      resetPeerKeyRetry();
       void clearRoomSession();
       AppState.room = { code: '', users: [], token: '', isHost: false, pending: [], private: false };
       joinRequestsManuallyOpen = false;
@@ -3534,6 +3535,7 @@
         AppState.room.users = users;
         updatePresenceUI();
         updateComposerAvailability();
+        ensurePeerKeys();
       });
 
       socket.on('message:delivered', (receipt) => updateMessageDelivery(receipt, true));
@@ -3827,6 +3829,7 @@
       window.history.replaceState({}, '', roomUrl);
       document.getElementById('header-room-code').innerText = roomCode;
       showChatView();
+      resetPeerKeyRetry();
       updateComposerAvailability();
       if (!options.reconnect) {
         showToast(`Joined Room ${roomCode}`, 'success');
@@ -3956,6 +3959,7 @@
 
     function leaveRoom() {
       stopTyping();
+      resetPeerKeyRetry();
       const wasPrivate = Boolean(AppState.room.private);
       void clearRoomSession();
       const landingUrl = new URL(window.location.href);
@@ -3997,6 +4001,33 @@
           : 'Share the room link or code. Messages can be sent after someone joins.';
         if (shareButton) shareButton.classList.toggle('hidden', isPrivate);
       }
+    }
+
+    // Key exchange normally happens when a participant joins (user-connected).
+    // If two people reconnect at almost the same time both "join" events can be
+    // missed, leaving the composer locked. Re-broadcasting our public key while
+    // a peer has no session key makes the handshake converge again.
+    let peerKeyRetryTimer = null;
+    let peerKeyRetryAttempts = 0;
+
+    function resetPeerKeyRetry() {
+      clearTimeout(peerKeyRetryTimer);
+      peerKeyRetryTimer = null;
+      peerKeyRetryAttempts = 0;
+    }
+
+    function ensurePeerKeys() {
+      if (!socket?.connected || !AppState.room.code || !AppState.user.publicKey) return;
+      const missing = AppState.room.users.filter((user) => user.id !== socket.id && !Crypto.hasSessionKey(user.id));
+      if (!missing.length) {
+        resetPeerKeyRetry();
+        return;
+      }
+      if (peerKeyRetryAttempts >= 5) return;
+      socket.emit('e2ee:public-key', { publicKey: AppState.user.publicKey });
+      peerKeyRetryAttempts += 1;
+      clearTimeout(peerKeyRetryTimer);
+      peerKeyRetryTimer = setTimeout(ensurePeerKeys, 1500);
     }
 
     function updateMessageDelivery(receipt, delivered) {

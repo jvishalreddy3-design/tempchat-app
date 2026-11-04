@@ -382,7 +382,14 @@ function installPrivateRooms(io, deps) {
         }
 
         const result = await withPairLock(pairKey(user.id, friendId), async () => {
-          const friend = await store.findUserById(friendId);
+          // A malformed id cannot belong to an account. Treat the lookup
+          // failure as "not found" instead of leaking a database error.
+          let friend = null;
+          try {
+            friend = await store.findUserById(friendId);
+          } catch (_) {
+            return fail('not_found', 'That account no longer exists.');
+          }
           if (!friend) return fail('not_found', 'That account no longer exists.');
           if (!(await store.areFriends(user.id, friendId))) {
             return fail('not_friends', 'Private chat is only available with accepted friends.');
