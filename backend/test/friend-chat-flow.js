@@ -424,6 +424,64 @@ async function run() {
       assert.equal(countId(aliceMessagesAfterReconnect, bobMessageId), 1);
     }
 
+    // M. Ephemeral message controls: reply metadata, read receipts, edit,
+    // reactions and delete are authorized and relayed without persistence.
+    const controlId = 'friend-flow-control-0001';
+    const replyPromise = waitFor(bob, 'private:message');
+    const withReply = await emitAck(alice, 'private:send', {
+      conversationId,
+      id: controlId,
+      text: 'reply text',
+      replyTo: { id: 'friend-flow-a-0001', sender: 'Alice', excerpt: 'hello one' },
+      forwarded: false
+    });
+    assert.equal(withReply.delivered, true);
+    const receivedReply = await replyPromise;
+    assert.equal(receivedReply.id, controlId);
+    assert.equal(receivedReply.replyTo.id, 'friend-flow-a-0001');
+    assert.equal(receivedReply.replyTo.excerpt, 'hello one');
+
+    const seenPromise = waitFor(alice, 'private:seen');
+    const seenAck = await emitAck(bob, 'private:seen', { conversationId, messageIds: [controlId] });
+    assert.equal(seenAck.success, true);
+    const seenEvent = await seenPromise;
+    assert.equal(seenEvent.by, bobId);
+    assert.equal(seenEvent.messageIds.includes(controlId), true, 'read receipts must reach the author');
+
+    const editedPromise = waitFor(bob, 'private:edited');
+    const editAck = await emitAck(alice, 'private:edit', { conversationId, id: controlId, text: 'edited text' });
+    assert.equal(editAck.success, true);
+    assert.equal(editAck.text, 'edited text');
+    const editedEvent = await editedPromise;
+    assert.equal(editedEvent.text, 'edited text');
+
+    const forbiddenEdit = await emitAck(bob, 'private:edit', { conversationId, id: controlId, text: 'hijacked' });
+    assert.equal(forbiddenEdit.success, false);
+    assert.equal(forbiddenEdit.reason, 'forbidden', 'only the author may edit a message');
+
+    const reactionPromise = waitFor(alice, 'private:reaction');
+    const reactAck = await emitAck(bob, 'private:react', { conversationId, id: controlId, emoji: '👍' });
+    assert.equal(reactAck.success, true);
+    const reactionEvent = await reactionPromise;
+    assert.equal(Array.isArray(reactionEvent.reactions['👍']), true);
+    assert.equal(reactionEvent.reactions['👍'].includes(bobId), true);
+
+    const badReaction = await emitAck(bob, 'private:react', { conversationId, id: controlId, emoji: 'not-an-emoji' });
+    assert.equal(badReaction.success, false);
+    assert.equal(badReaction.reason, 'invalid_reaction');
+
+    const unauthorizedEdit = await emitAck(mallory, 'private:edit', { conversationId, id: controlId, text: 'nope' });
+    assert.equal(unauthorizedEdit.success, false);
+    assert.equal(unauthorizedEdit.reason, 'unauthorized');
+
+    const deletedPromise = waitFor(bob, 'private:deleted');
+    const deleteAck = await emitAck(alice, 'private:delete', { conversationId, id: controlId });
+    assert.equal(deleteAck.success, true);
+    await deletedPromise;
+    const editAfterDelete = await emitAck(alice, 'private:edit', { conversationId, id: controlId, text: 'too late' });
+    assert.equal(editAfterDelete.success, false);
+    assert.equal(editAfterDelete.reason, 'deleted');
+
     // K. Cleanup must not destroy a conversation while another participant is
     // still active, and must destroy it once the last participant leaves.
     const storedConversation = social.conversations.get(conversationId);

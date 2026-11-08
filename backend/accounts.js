@@ -49,12 +49,41 @@ function createAccountService({ store, config, io }) {
         const token = value.startsWith('Bearer ') ? value.slice(7) : '';
         if (!token) throw authError(401, 'authentication_required', 'Sign in to continue.');
         req.user = await authenticateAccessToken(token);
+        try { req.sessionId = jwt.decode(token)?.sid || null; } catch (_) { req.sessionId = null; }
         next();
       } catch (error) { next(error); }
     };
   }
 
   const router = Router();
+
+  // Lightweight in-memory throttle for credential endpoints. It complements
+  // (and does not replace) edge-level rate limiting, and needs no dependency.
+  const authAttempts = new Map();
+  function allowAttempt(key, limit, windowMs) {
+    const now = Date.now();
+    if (authAttempts.size > 10000) {
+      for (const [entryKey, entry] of authAttempts) {
+        if (now - entry.startedAt >= windowMs) authAttempts.delete(entryKey);
+      }
+    }
+    const entry = authAttempts.get(key);
+    if (!entry || now - entry.startedAt >= windowMs) {
+      authAttempts.set(key, { startedAt: now, count: 1 });
+      return true;
+    }
+    entry.count += 1;
+    return entry.count <= limit;
+  }
+  function throttle(limit, windowMs) {
+    return (req, _res, next) => {
+      const key = `${req.ip || 'unknown'}:${req.method}:${req.path}`;
+      if (!allowAttempt(key, limit, windowMs)) {
+        return next(authError(429, 'rate_limited', 'Too many attempts. Wait a moment and try again.'));
+      }
+      next();
+    };
+  }
   async function notifyFriendPresence(firstId, secondId) {
     if (!io) return;
     try {
@@ -74,7 +103,7 @@ function createAccountService({ store, config, io }) {
       res.json({ available: !existing, username });
     } catch (error) { next(error); }
   });
-  router.post('/register', async (req, res, next) => {
+  router.post('/register', throttle(10, 60 * 60 * 1000), async (req, res, next) => {
     try {
       const username = String(req.body?.username || '').trim();
       const usernameKey = username.toLowerCase();
@@ -91,7 +120,7 @@ function createAccountService({ store, config, io }) {
       res.status(201).json({ success: true, message: 'Account created. Sign in with your username and password.' });
     } catch (error) { next(error.code === '23505' ? authError(409, 'account_exists', 'That username is already registered.') : error); }
   });
-  router.post('/login', async (req, res, next) => {
+  router.post('/login', throttle(20, 10 * 60 * 1000), async (req, res, next) => {
     try {
       const usernameKey = String(req.body?.username || '').trim().toLowerCase();
       const user = await store.findUserByUsername(usernameKey);
@@ -100,7 +129,7 @@ function createAccountService({ store, config, io }) {
       res.json(await makeSession(user, req, res));
     } catch (error) { next(error); }
   });
-  router.post('/refresh', async (req, res, next) => {
+  router.post('/refresh', throttle(120, 10 * 60 * 1000), async (req, res, next) => {
     try {
       const native = req.get('x-tempchat-client') === 'native';
       const oldToken = native ? String(req.body?.refreshToken || '') : String(req.cookies?.tempchat_refresh || '');
@@ -135,6 +164,122 @@ function createAccountService({ store, config, io }) {
     } catch (error) { next(error); }
   });
   router.get('/me', middleware(), (req, res) => res.json({ user: safeUser(req.user) }));
+
+  // -------------------------------------------------------------------------
+  // Sessions and login activity
+  // -------------------------------------------------------------------------
+  router.get('/sessions', middleware({ verified: true }), async (req, res, next) => {
+    try {
+      const sessions = await store.listActiveSessions(req.user._id);
+      res.json({
+        sessions: sessions.map((session) => ({
+          id: session.id,
+          createdAt: session.createdAt,
+          expiresAt: session.expiresAt,
+          userAgent: session.userAgent,
+          current: session.id === req.sessionId
+        }))
+      });
+    } catch (error) { next(error); }
+  });
+  router.delete('/sessions/:id', middleware({ verified: true }), async (req, res, next) => {
+    try {
+      const sessionId = String(req.params.id || '');
+      if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(sessionId)) {
+        throw authError(400, 'invalid_session', 'That session could not be found.');
+      }
+      await store.revokeSession(sessionId, req.user._id);
+      if (sessionId === req.sessionId) {
+        res.clearCookie('tempchat_refresh', { httpOnly: true, secure: true, sameSite: 'lax', path: '/api/auth' });
+      }
+      res.json({ success: true, current: sessionId === req.sessionId });
+    } catch (error) { next(error); }
+  });
+  router.post('/sessions/logout-all', middleware({ verified: true }), async (req, res, next) => {
+    try {
+      await store.revokeAllSessions(req.user._id);
+      io?.in('account:' + req.user._id).disconnectSockets(true);
+      res.clearCookie('tempchat_refresh', { httpOnly: true, secure: true, sameSite: 'lax', path: '/api/auth' });
+      res.json({ success: true });
+    } catch (error) { next(error); }
+  });
+
+  // -------------------------------------------------------------------------
+  // Privacy settings
+  // -------------------------------------------------------------------------
+  const ONLINE_VISIBILITY = new Set(['everyone', 'friends', 'nobody']);
+  const REQUEST_POLICY = new Set(['everyone', 'nobody']);
+  router.get('/privacy', middleware({ verified: true }), async (req, res, next) => {
+    try { res.json({ privacy: await store.getPrivacySettings(req.user._id) }); } catch (error) { next(error); }
+  });
+  router.patch('/privacy', middleware({ verified: true }), async (req, res, next) => {
+    try {
+      const update = {};
+      if (req.body?.onlineStatusVisibility !== undefined) {
+        const value = String(req.body.onlineStatusVisibility);
+        if (!ONLINE_VISIBILITY.has(value)) throw authError(400, 'invalid_privacy', 'Choose who can see your online status.');
+        update.onlineStatusVisibility = value;
+      }
+      if (req.body?.friendRequestPolicy !== undefined) {
+        const value = String(req.body.friendRequestPolicy);
+        if (!REQUEST_POLICY.has(value)) throw authError(400, 'invalid_privacy', 'Choose who can send you friend requests.');
+        update.friendRequestPolicy = value;
+      }
+      res.json({ privacy: await store.updatePrivacySettings(req.user._id, update) });
+    } catch (error) { next(error); }
+  });
+
+  // -------------------------------------------------------------------------
+  // Blocks and reports
+  // -------------------------------------------------------------------------
+  const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  const REPORT_REASONS = new Set(['spam', 'harassment', 'impersonation', 'inappropriate', 'other']);
+  router.get('/blocks', middleware({ verified: true }), async (req, res, next) => {
+    try { res.json({ blocked: await store.listBlockedUsers(req.user._id) }); } catch (error) { next(error); }
+  });
+  router.post('/users/:id/block', middleware({ verified: true }), async (req, res, next) => {
+    try {
+      const userId = String(req.params.id || '');
+      if (!UUID_RE.test(userId) || userId === req.user._id) throw authError(400, 'invalid_user', 'That account cannot be blocked.');
+      const target = await store.findUserById(userId);
+      if (!target) throw authError(404, 'user_not_found', 'That user could not be found.');
+      await store.blockUser(req.user._id, userId);
+      // PgStore removes the friendship and pending request atomically inside
+      // blockUser, so a partial failure cannot leave friends-only access.
+      io?.to('account:' + req.user._id).emit('social:changed');
+      io?.to('account:' + userId).emit('social:changed');
+      res.json({ success: true });
+    } catch (error) { next(error); }
+  });
+  router.delete('/users/:id/block', middleware({ verified: true }), async (req, res, next) => {
+    try {
+      const userId = String(req.params.id || '');
+      if (!UUID_RE.test(userId)) throw authError(400, 'invalid_user', 'That account could not be found.');
+      await store.unblockUser(req.user._id, userId);
+      io?.to('account:' + req.user._id).emit('social:changed');
+      res.json({ success: true });
+    } catch (error) { next(error); }
+  });
+  router.post('/users/:id/report', middleware({ verified: true }), async (req, res, next) => {
+    try {
+      // Reports are persisted in the database, so throttle both the reporting
+      // account and the source address to protect the moderation queue.
+      if (!allowAttempt(`report:${req.user._id}`, 20, 60 * 60 * 1000)
+        || !allowAttempt(`report-ip:${req.ip || 'unknown'}`, 40, 60 * 60 * 1000)) {
+        throw authError(429, 'rate_limited', 'Too many reports. Wait a moment and try again.');
+      }
+      const userId = String(req.params.id || '');
+      if (!UUID_RE.test(userId) || userId === req.user._id) throw authError(400, 'invalid_user', 'That account cannot be reported.');
+      const reason = String(req.body?.reason || 'other');
+      if (!REPORT_REASONS.has(reason)) throw authError(400, 'invalid_reason', 'Choose a valid report reason.');
+      const details = req.body?.details == null ? null : String(req.body.details).slice(0, 1000);
+      const target = await store.findUserById(userId);
+      if (!target) throw authError(404, 'user_not_found', 'That user could not be found.');
+      const report = await store.createReport(req.user._id, userId, reason, details);
+      res.status(201).json({ success: true, report });
+    } catch (error) { next(error); }
+  });
+
   router.get('/users/search', middleware({ verified: true }), async (req, res, next) => {
     try {
       const q = String(req.query?.q || '').trim().toLowerCase();
@@ -151,12 +296,26 @@ function createAccountService({ store, config, io }) {
       if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(userId)) throw authError(400, 'invalid_user', 'That user could not be found.');
       const profile = await store.findPublicUser(userId);
       if (!profile) throw authError(404, 'user_not_found', 'That user could not be found.');
-      const [friendsCount, isFriend] = await Promise.all([
+      const [friendsCount, isFriend, blocked] = await Promise.all([
         store.countFriends(userId),
-        store.areFriends(req.user._id, userId)
+        store.areFriends(req.user._id, userId),
+        typeof store.isBlocked === 'function' ? store.isBlocked(req.user._id, userId) : Promise.resolve(false)
       ]);
-      const online = io ? (await io.in('account:' + userId).fetchSockets()).length > 0 : false;
-      res.json({ user: { ...profile, online }, friendsCount, isFriend });
+      // Online status and last-seen follow the profile owner's privacy choice.
+      const visibility = profile.onlineStatusVisibility || 'friends';
+      const canSeePresence = visibility === 'everyone' || (visibility === 'friends' && isFriend);
+      const online = canSeePresence && io ? (await io.in('account:' + userId).fetchSockets()).length > 0 : false;
+      const publicProfile = {
+        id: profile.id,
+        username: profile.username,
+        displayName: profile.displayName,
+        avatarUrl: profile.avatarUrl,
+        createdAt: profile.createdAt,
+        lastSeenAt: canSeePresence ? profile.lastSeenAt : null,
+        online,
+        presenceVisible: canSeePresence
+      };
+      res.json({ user: publicProfile, friendsCount, isFriend, blocked });
     } catch (error) { next(error); }
   });
   router.patch('/me', middleware({ verified: true }), async (req, res, next) => {
@@ -216,6 +375,8 @@ function createAccountService({ store, config, io }) {
       const target = await store.findUserByUsername(usernameKey);
       if (!target) throw authError(404, 'user_not_found', 'No account matches that username.');
       if (target._id === req.user._id) throw authError(400, 'self_friendship', 'You cannot add yourself as a friend.');
+      if (typeof store.isBlocked === 'function' && await store.isBlocked(req.user._id, target._id)) throw authError(403, 'blocked', 'You cannot send a friend request to this account.');
+      if ((target.friendRequestPolicy || 'everyone') === 'nobody') throw authError(403, 'requests_disabled', 'This account is not accepting friend requests.');
       const result = await store.requestFriend(req.user._id, target._id);
       const status = result.state === 'pending' ? 'pending' : result.state;
       if (status === 'pending' || status === 'accepted') {

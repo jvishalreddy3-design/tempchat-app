@@ -45,6 +45,46 @@ const io = new Server(server, {
 
 app.disable('x-powered-by');
 app.set('trust proxy', 1);
+
+// Security headers. The CSP keeps the existing CDN frontend (Tailwind,
+// Socket.IO, Font Awesome, Google Fonts) and the inline bootstrap working,
+// while blocking unexpected script origins and framing.
+const cspConnectSources = new Set(["'self'"]);
+for (const origin of allowedOrigins) {
+  try {
+    const parsed = new URL(origin);
+    if (parsed.origin && parsed.origin !== 'null') cspConnectSources.add(parsed.origin);
+    if (parsed.protocol === 'https:') cspConnectSources.add(`wss://${parsed.host}`);
+    if (parsed.protocol === 'http:') cspConnectSources.add(`ws://${parsed.host}`);
+  } catch (_) { /* ignore non-URL origins */ }
+}
+const CONTENT_SECURITY_POLICY = [
+  "default-src 'self'",
+  "base-uri 'self'",
+  "object-src 'none'",
+  "frame-ancestors 'none'",
+  "form-action 'self'",
+  "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.tailwindcss.com https://cdn.socket.io https://cdnjs.cloudflare.com https://cdn.jsdelivr.net",
+  "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdnjs.cloudflare.com https://cdn.tailwindcss.com",
+  "font-src 'self' data: https://fonts.gstatic.com https://cdnjs.cloudflare.com",
+  "img-src 'self' data: blob: https:",
+  "media-src 'self' blob: data:",
+  `connect-src ${[...cspConnectSources].join(' ')}`,
+  "worker-src 'self' blob:",
+  "manifest-src 'self'"
+].join('; ');
+
+app.use((req, res, next) => {
+  res.set({
+    'Content-Security-Policy': CONTENT_SECURITY_POLICY,
+    'X-Content-Type-Options': 'nosniff',
+    'X-Frame-Options': 'DENY',
+    'Referrer-Policy': 'strict-origin-when-cross-origin',
+    'Strict-Transport-Security': 'max-age=31536000; includeSubDomains'
+  });
+  next();
+});
+
 app.use((req, res, next) => {
   const origin = req.get('origin');
   if (!origin) return next();
@@ -149,6 +189,89 @@ const MAX_PENDING_PER_ROOM = 20;
 const ROOM_EMPTY_GRACE_MS = 10 * 60 * 1000; // tolerate backgrounding and temporary network loss
 const HOST_HANDOFF_GRACE_MS = 2 * 60 * 1000; // avoid changing hosts during a short mobile interruption
 
+// Room governance. All rooms are ephemeral and live only in this process, so
+// these limits protect a single Node instance rather than a database row.
+const ROOM_MAX_MEMBERS_MIN = 2;
+const ROOM_MAX_MEMBERS_LIMIT = 50;
+const ROOM_DEFAULT_MAX_MEMBERS = 8;
+const ROOM_MIN_TTL_MINUTES = 15;
+const ROOM_DEFAULT_TTL_MINUTES = 24 * 60;
+const ROOM_MAX_TTL_MINUTES = 24 * 60;
+const ROOM_MESSAGE_TTL_MAX_MINUTES = 24 * 60;
+const ROOM_MESSAGE_SWEEP_MS = 30 * 1000;
+const ROOM_MESSAGE_EDIT_WINDOW_MS = 15 * 60 * 1000;
+
+function clampInteger(value, min, max, fallback) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return fallback;
+  return Math.min(max, Math.max(min, Math.round(number)));
+}
+
+function parseRoomSettings(input = {}) {
+  return {
+    maxMembers: clampInteger(input.maxMembers, ROOM_MAX_MEMBERS_MIN, ROOM_MAX_MEMBERS_LIMIT, ROOM_DEFAULT_MAX_MEMBERS),
+    expiresInMinutes: clampInteger(input.expiresInMinutes, ROOM_MIN_TTL_MINUTES, ROOM_MAX_TTL_MINUTES, ROOM_DEFAULT_TTL_MINUTES),
+    messageTtlMinutes: clampInteger(input.messageTtlMinutes, 0, ROOM_MESSAGE_TTL_MAX_MINUTES, 0)
+  };
+}
+
+function roomSettingsPayload(room) {
+  return {
+    locked: Boolean(room.locked),
+    maxMembers: room.maxMembers || ROOM_DEFAULT_MAX_MEMBERS,
+    memberCount: room.users?.size || 0,
+    expiresAt: room.expiresAt || null,
+    messageTtlMinutes: room.messageTtlMs ? Math.round(room.messageTtlMs / 60000) : 0
+  };
+}
+
+function roomMemberRole(room, token) {
+  if (!room || !token) return 'member';
+  if (room.hostToken && token === room.hostToken) return 'host';
+  if (room.admins && room.admins.has(token)) return 'admin';
+  return 'member';
+}
+
+function canModerate(room, socket, targetSocketId) {
+  const actor = room?.users.get(socket.id);
+  const target = room?.users.get(targetSocketId);
+  if (!actor || !target) return false;
+  const actorRole = actor.role || 'member';
+  const targetRole = target.role || 'member';
+  if (actorRole === 'host') return targetRole !== 'host';
+  if (actorRole === 'admin') return targetRole === 'member';
+  return false;
+}
+
+function scheduleRoomExpiry(room) {
+  clearTimeout(room.expiryTimer);
+  room.expiryTimer = null;
+  if (!room.expiresAt) return;
+  const delay = room.expiresAt - Date.now();
+  if (delay <= 0) { closeRoom(room, 'This room expired.'); return; }
+  room.expiryTimer = setTimeout(() => closeRoom(room, 'This room expired.'), Math.min(delay, 2147483647));
+  room.expiryTimer.unref?.();
+}
+
+function scheduleMessageExpiry(room) {
+  clearInterval(room.messageSweepTimer);
+  room.messageSweepTimer = null;
+  if (!room.messageTtlMs) return;
+  room.messageSweepTimer = setInterval(() => {
+    if (!rooms.has(room.code) || !room.messageIndex) return;
+    const cutoff = Date.now() - room.messageTtlMs;
+    const expired = [];
+    for (const [id, meta] of room.messageIndex) {
+      if (meta.timestamp <= cutoff) {
+        expired.push(id);
+        room.messageIndex.delete(id);
+      }
+    }
+    if (expired.length) io.to(room.code).emit('message:expired', { ids: expired });
+  }, ROOM_MESSAGE_SWEEP_MS);
+  room.messageSweepTimer.unref?.();
+}
+
 function newToken() {
   return crypto.randomBytes(24).toString('hex');
 }
@@ -200,8 +323,39 @@ function isValidEncryptedPayload(payload, socket, room) {
   if (!payload || typeof payload !== 'object' || payload.v !== 1) return false;
   if (!isValidId(payload.id) || payload.from !== socket.id || typeof payload.to !== 'string') return false;
   if (!room.users.has(payload.to) || payload.to === socket.id) return false;
+  if (payload.replyToId != null && !isValidId(payload.replyToId)) return false;
+  if (payload.forwarded != null && typeof payload.forwarded !== 'boolean') return false;
   if (payload.file) return isValidFilePayload(payload.file);
   return isBase64(payload.ct) && isBase64(payload.iv, 256) && isBase64(payload.salt, 256);
+}
+
+const ROOM_MESSAGE_INDEX_LIMIT = 2000;
+const ROOM_REACTION_EMOJIS = new Set(['👍', '❤️', '😂', '😮', '😢', '🙏']);
+
+function rememberRoomMessage(room, payload, socket) {
+  if (!room.messageIndex) room.messageIndex = new Map();
+  room.messageIndex.set(payload.id, {
+    from: socket.id,
+    accountId: socket.accountUser?.id || null,
+    sender: room.users.get(socket.id)?.username || 'Member',
+    timestamp: Date.now(),
+    file: Boolean(payload.file)
+  });
+  while (room.messageIndex.size > ROOM_MESSAGE_INDEX_LIMIT) {
+    room.messageIndex.delete(room.messageIndex.keys().next().value);
+  }
+}
+
+function roomMessageOwner(room, id) {
+  return room?.messageIndex?.get(id) || null;
+}
+
+// Authorship survives a reconnect: authenticated members are compared by
+// account id, while guests fall back to their current socket id.
+function ownsRoomMessage(meta, socket) {
+  if (!meta || !socket) return false;
+  if (meta.accountId) return socket.accountUser?.id === meta.accountId;
+  return meta.from === socket.id;
 }
 
 function pendingList(room) {
@@ -234,6 +388,7 @@ io.on('connection', (socket) => {
       }
 
       const hostToken = newToken();
+      const settings = parseRoomSettings(data?.settings || data || {});
       const room = {
         code: roomId,
         private: false,
@@ -241,21 +396,31 @@ io.on('connection', (socket) => {
         game: null,
         hostId: socket.id,
         hostToken,
-        members: new Map(),   // token -> { username } for every admitted participant
+        admins: new Set(),     // member tokens with moderator rights
+        locked: false,         // locked rooms stop accepting new requests
+        maxMembers: settings.maxMembers,
+        expiresAt: Date.now() + settings.expiresInMinutes * 60 * 1000,
+        expiryTimer: null,
+        messageTtlMs: settings.messageTtlMinutes * 60 * 1000,
+        messageSweepTimer: null,
+        messageIndex: new Map(),
+        members: new Map(),   // token -> { username, accountId, role } for every admitted participant
         pending: new Map(),   // requesterSocketId -> { requestId, username }
         emptyTimer: null,
         handoffTimer: null
       };
       rooms.set(roomId, room);
+      scheduleRoomExpiry(room);
+      scheduleMessageExpiry(room);
 
-      room.users.set(socket.id, { id: socket.id, username, token: hostToken, accountId: socket.accountUser?.id || null });
+      room.users.set(socket.id, { id: socket.id, username, token: hostToken, role: 'host', accountId: socket.accountUser?.id || null });
 
       socket.join(roomId);
       socket.roomId = roomId;
 
       console.log(`[ROOM CREATED] room=${roomId} hostSocket=${socket.id} hostName="${username}"`);
 
-      callback({ success: true, roomCode: roomId, isHost: true, token: hostToken });
+      callback({ success: true, roomCode: roomId, isHost: true, token: hostToken, role: 'host', settings: roomSettingsPayload(room) });
 
       broadcastUserList(roomId);
     } catch (err) {
@@ -283,6 +448,14 @@ io.on('connection', (socket) => {
       if (!room) return callback({ success: false, message: 'Room not found' });
       if (isPrivateRoom(room)) return callback({ success: false, message: 'This room is private.' });
       if (room.users.has(socket.id)) return callback({ success: false, message: 'You are already in this room' });
+      if (room.locked) return callback({ success: false, message: 'This room is locked. Ask the host to unlock it.' });
+      if (room.expiresAt && room.expiresAt <= Date.now()) {
+        closeRoom(room, 'This room expired.');
+        return callback({ success: false, message: 'This room has expired.' });
+      }
+      if (room.users.size >= (room.maxMembers || ROOM_DEFAULT_MAX_MEMBERS)) {
+        return callback({ success: false, message: 'This room is full.' });
+      }
 
       if (socket.roomId) handleLeave(true);
       if (socket.pendingRoomId) cancelPending(socket);
@@ -387,8 +560,10 @@ io.on('connection', (socket) => {
       const token = String(data.token);
       let username;
       let host = false;
+      let role = 'member';
       if (token === room.hostToken) {
         host = true;
+        role = 'host';
         username = cleanName(data.username) || 'Host';
       } else if (room.members.has(token)) {
         const member = room.members.get(token);
@@ -396,6 +571,7 @@ io.on('connection', (socket) => {
           return callback({ success: false, message: 'This private chat is no longer available.' });
         }
         username = member.username;
+        role = roomMemberRole(room, token);
       } else {
         return callback({ success: false, message: 'Please request to join again.' });
       }
@@ -416,7 +592,7 @@ io.on('connection', (socket) => {
       clearTimeout(room.emptyTimer);
       room.emptyTimer = null;
 
-      room.users.set(socket.id, { id: socket.id, username, token, accountId: socket.accountUser?.id || null });
+      room.users.set(socket.id, { id: socket.id, username, token, role, accountId: socket.accountUser?.id || null });
       socket.join(roomId);
       socket.roomId = roomId;
 
@@ -425,15 +601,18 @@ io.on('connection', (socket) => {
         clearTimeout(room.handoffTimer);
         room.handoffTimer = null;
       }
+      if (!room.private && room.expiresAt) scheduleRoomExpiry(room);
 
       callback({
         success: true,
         roomCode: roomId,
         isHost: host,
+        role,
         username,
         token,
         private: Boolean(room.private),
         invitationId: room.invitationId || null,
+        settings: room.private ? undefined : roomSettingsPayload(room),
         pending: host ? pendingList(room) : undefined
       });
 
@@ -443,6 +622,109 @@ io.on('connection', (socket) => {
     } catch (err) {
       callback({ success: false, message: 'Server error rejoining room.' });
     }
+  });
+
+  // -------------------------------------------------------------------------
+  // Room governance: settings, locking, roles and moderation
+  // -------------------------------------------------------------------------
+  socket.on('room:update-settings', (data, callback) => {
+    const reply = typeof callback === 'function' ? callback : () => {};
+    const room = socket.roomId ? rooms.get(socket.roomId) : null;
+    if (!room || room.private) return reply({ success: false, message: 'Room settings are unavailable.' });
+    if (!isHost(room, socket)) return reply({ success: false, message: 'Only the host can change room settings.' });
+
+    const update = data && typeof data === 'object' ? data : {};
+    if (update.maxMembers !== undefined) {
+      const nextMax = clampInteger(update.maxMembers, ROOM_MAX_MEMBERS_MIN, ROOM_MAX_MEMBERS_LIMIT, room.maxMembers || ROOM_DEFAULT_MAX_MEMBERS);
+      if (nextMax < room.users.size) {
+        return reply({ success: false, message: `This room already has ${room.users.size} people. Choose a limit at least that high.` });
+      }
+      room.maxMembers = nextMax;
+    }
+    if (update.locked !== undefined) room.locked = Boolean(update.locked);
+    if (update.messageTtlMinutes !== undefined) {
+      const minutes = clampInteger(update.messageTtlMinutes, 0, ROOM_MESSAGE_TTL_MAX_MINUTES, room.messageTtlMs ? Math.round(room.messageTtlMs / 60000) : 0);
+      room.messageTtlMs = minutes * 60 * 1000;
+      scheduleMessageExpiry(room);
+    }
+    if (update.expiresInMinutes !== undefined) {
+      const minutes = clampInteger(update.expiresInMinutes, ROOM_MIN_TTL_MINUTES, ROOM_MAX_TTL_MINUTES, ROOM_DEFAULT_TTL_MINUTES);
+      room.expiresAt = Date.now() + minutes * 60 * 1000;
+      scheduleRoomExpiry(room);
+    }
+
+    const settings = roomSettingsPayload(room);
+    io.to(room.code).emit('room:settings', settings);
+    reply({ success: true, settings });
+  });
+
+  // Convenience event for the lock button. Same authorization as settings.
+  socket.on('room:lock', (data, callback) => {
+    const reply = typeof callback === 'function' ? callback : () => {};
+    const room = socket.roomId ? rooms.get(socket.roomId) : null;
+    if (!room || room.private) return reply({ success: false, message: 'This room cannot be locked.' });
+    if (!isHost(room, socket)) return reply({ success: false, message: 'Only the host can lock the room.' });
+    room.locked = Boolean(data?.locked);
+    const settings = roomSettingsPayload(room);
+    io.to(room.code).emit('room:settings', settings);
+    io.to(room.code).emit('system-message', room.locked ? 'The host locked the room' : 'The host unlocked the room');
+    reply({ success: true, settings });
+  });
+
+  socket.on('room:kick', (data, callback) => {
+    const reply = typeof callback === 'function' ? callback : () => {};
+    const room = socket.roomId ? rooms.get(socket.roomId) : null;
+    if (!room || room.private) return reply({ success: false, message: 'This room cannot be moderated.' });
+    const targetId = typeof data?.socketId === 'string' ? data.socketId : '';
+    if (!targetId || targetId === socket.id) return reply({ success: false, message: 'Choose another member to remove.' });
+    if (!canModerate(room, socket, targetId)) return reply({ success: false, message: 'You do not have permission to remove that member.' });
+    const target = room.users.get(targetId);
+    const targetSocket = io.sockets.sockets.get(targetId);
+    if (!target) return reply({ success: false, message: 'That member is no longer in the room.' });
+
+    if (target.token && room.admins) room.admins.delete(target.token);
+    if (target.token) room.members.delete(target.token);
+    room.users.delete(targetId);
+    if (targetSocket) {
+      targetSocket.emit('room:kicked', { roomCode: room.code, message: 'You were removed from the room.' });
+      targetSocket.leave(room.code);
+      if (targetSocket.roomId === room.code) targetSocket.roomId = null;
+    }
+    io.to(room.code).emit('user-disconnected', { username: target.username, socketId: targetId });
+    io.to(room.code).emit('system-message', `${target.username} was removed from the room`);
+    broadcastUserList(room.code);
+    reply({ success: true });
+  });
+
+  socket.on('room:promote', (data, callback) => {
+    const reply = typeof callback === 'function' ? callback : () => {};
+    const room = socket.roomId ? rooms.get(socket.roomId) : null;
+    if (!room || room.private) return reply({ success: false, message: 'Roles are unavailable in this room.' });
+    if (!isHost(room, socket)) return reply({ success: false, message: 'Only the host can make someone an admin.' });
+    const targetId = typeof data?.socketId === 'string' ? data.socketId : '';
+    const target = room.users.get(targetId);
+    if (!target || targetId === socket.id) return reply({ success: false, message: 'Choose another member.' });
+    if (!target.token) return reply({ success: false, message: 'That member cannot be promoted.' });
+    room.admins.add(target.token);
+    target.role = 'admin';
+    io.to(room.code).emit('system-message', `${target.username} is now an admin`);
+    broadcastUserList(room.code);
+    reply({ success: true });
+  });
+
+  socket.on('room:demote', (data, callback) => {
+    const reply = typeof callback === 'function' ? callback : () => {};
+    const room = socket.roomId ? rooms.get(socket.roomId) : null;
+    if (!room || room.private) return reply({ success: false, message: 'Roles are unavailable in this room.' });
+    if (!isHost(room, socket)) return reply({ success: false, message: 'Only the host can remove admin rights.' });
+    const targetId = typeof data?.socketId === 'string' ? data.socketId : '';
+    const target = room.users.get(targetId);
+    if (!target || target.role !== 'admin') return reply({ success: false, message: 'That member is not an admin.' });
+    if (target.token) room.admins.delete(target.token);
+    target.role = 'member';
+    io.to(room.code).emit('system-message', `${target.username} is no longer an admin`);
+    broadcastUserList(room.code);
+    reply({ success: true });
   });
 
   socket.on('chat-message', (payload) => {
@@ -456,6 +738,8 @@ io.on('connection', (socket) => {
 
     if (!isValidEncryptedPayload(payload, socket, room)) return;
     if (JSON.stringify(payload).length > MAX_SOCKET_PAYLOAD_BYTES) return;
+
+    rememberRoomMessage(room, payload, socket);
 
     const recipient = io.sockets.sockets.get(payload.to);
     if (!recipient || recipient.roomId !== socket.roomId || !room.users.has(recipient.id)) {
@@ -477,8 +761,69 @@ io.on('connection', (socket) => {
   });
 
   socket.on('message:seen', (payload) => {
-    if (!socket.roomId || !payload || !isValidId(payload.id)) return;
-    socket.to(socket.roomId).emit('message:seen', { id: payload.id });
+    const room = socket.roomId ? rooms.get(socket.roomId) : null;
+    if (!room || !payload || !isValidId(payload.id)) return;
+    const owner = roomMessageOwner(room, payload.id);
+    if (!owner || ownsRoomMessage(owner, socket)) return;
+    const targets = owner.accountId
+      ? [...room.users.values()].filter((user) => user.accountId === owner.accountId).map((user) => user.id)
+      : [owner.from];
+    for (const targetId of new Set(targets)) {
+      io.to(targetId).emit('message:seen', { id: payload.id, by: socket.id });
+    }
+  });
+
+  socket.on('message:edit', (payload) => {
+    const room = socket.roomId ? rooms.get(socket.roomId) : null;
+    if (!room || !payload || !isValidId(payload.id)) return;
+    const owner = roomMessageOwner(room, payload.id);
+    if (!owner || !ownsRoomMessage(owner, socket)) {
+      socket.emit('message:edit-failed', { id: payload.id, reason: 'forbidden' });
+      return;
+    }
+    if (Date.now() - owner.timestamp > ROOM_MESSAGE_EDIT_WINDOW_MS) {
+      socket.emit('message:edit-failed', { id: payload.id, reason: 'edit_window' });
+      return;
+    }
+    if (!checkRateLimit(socket)) { socket.emit('rate-limited'); return; }
+    if (!isValidEncryptedPayload(payload, socket, room)) return;
+    const recipient = io.sockets.sockets.get(payload.to);
+    if (!recipient || recipient.roomId !== socket.roomId || !room.users.has(recipient.id)) {
+      socket.emit('message:edit-failed', { id: payload.id, reason: 'recipient_unavailable' });
+      return;
+    }
+    io.to(recipient.id).emit('message:edited', payload);
+  });
+
+  socket.on('message:delete', (payload) => {
+    const room = socket.roomId ? rooms.get(socket.roomId) : null;
+    if (!room || !payload || !isValidId(payload.id)) return;
+    const owner = roomMessageOwner(room, payload.id);
+    if (!owner || !ownsRoomMessage(owner, socket)) {
+      socket.emit('message:delete-failed', { id: payload.id, reason: 'forbidden' });
+      return;
+    }
+    if (!checkRateLimit(socket)) { socket.emit('rate-limited'); return; }
+    room.messageIndex.delete(payload.id);
+    socket.to(socket.roomId).emit('message:deleted', { id: payload.id, by: socket.id });
+  });
+
+  socket.on('message:react', (payload) => {
+    const room = socket.roomId ? rooms.get(socket.roomId) : null;
+    if (!room || !payload || !isValidId(payload.id)) return;
+    if (!roomMessageOwner(room, payload.id)) return;
+    const emoji = typeof payload.emoji === 'string' ? payload.emoji : '';
+    if (!ROOM_REACTION_EMOJIS.has(emoji)) return;
+    if (!checkRateLimit(socket)) { socket.emit('rate-limited'); return; }
+    const user = room.users.get(socket.id);
+    if (!user) return;
+    socket.to(socket.roomId).emit('message:reaction', {
+      id: payload.id,
+      emoji,
+      from: socket.id,
+      sender: user.username,
+      remove: payload.remove === true
+    });
   });
 
   socket.on('e2ee:public-key', (payload) => {
@@ -682,6 +1027,20 @@ function leaveRoomForSocket(socket, explicit) {
     const wasHost = room.hostId === socket.id;
     if (wasHost) room.hostId = null;
 
+    // An explicit leave ends that member's ability to rejoin with the old
+    // token. A dropped connection keeps the token so a refresh can recover.
+    if (explicit && user.token && user.role !== 'host') {
+      room.members?.delete(user.token);
+      room.admins?.delete(user.token);
+    }
+    // Only an intentional leave is announced. A dropped connection keeps the
+    // member's token so a refresh/reconnect can recover; the existing
+    // `user-disconnected` event already updates the member list without
+    // claiming the person deliberately left.
+    if (!room.private && explicit) {
+      io.to(roomId).emit('system-message', `${user.username} left the room`);
+    }
+
     if (room.private && explicit) {
       // A one-to-one room has no meaning once either participant leaves on
       // purpose. The remaining participant is told to close the conversation.
@@ -723,7 +1082,8 @@ function broadcastUserList(roomId) {
     id: user.id,
     username: user.username,
     isHost: user.id === room.hostId,
-    accountId: user.accountId || null
+    isAdmin: user.role === 'admin' || Boolean(room.admins?.has(user.token)),
+    role: user.role || (user.id === room.hostId ? 'host' : 'member')
   }));
 
   io.to(roomId).emit('update-users', userList);
@@ -731,9 +1091,13 @@ function broadcastUserList(roomId) {
 
 // Put an approved requester into the room. Only ever called from the host-checked path.
 function admitUser(room, target, username) {
+  if (room.users.size >= (room.maxMembers || ROOM_DEFAULT_MAX_MEMBERS)) {
+    target.emit('join-request-rejected', { roomCode: room.code, message: 'This room is now full.' });
+    return false;
+  }
   const token = newToken();
-  room.members.set(token, { username });
-  room.users.set(target.id, { id: target.id, username, token, accountId: target.accountUser?.id || null });
+  room.members.set(token, { username, accountId: target.accountUser?.id || null, role: 'member' });
+  room.users.set(target.id, { id: target.id, username, token, role: 'member', accountId: target.accountUser?.id || null });
 
   target.join(room.code);
   target.roomId = room.code;
@@ -741,7 +1105,9 @@ function admitUser(room, target, username) {
   target.emit('join-request-approved', { roomCode: room.code, token });
   console.log(`[JOINER ADMITTED] room=${room.code} socket=${target.id} name="${username}"`);
   target.to(room.code).emit('user-connected', { username, socketId: target.id });
+  io.to(room.code).emit('system-message', `${username} joined the room`);
   broadcastUserList(room.code);
+  return true;
 }
 
 // Withdraw a socket's pending request (user cancelled, disconnected, or re-requested).
@@ -766,10 +1132,17 @@ function promoteNewHost(room) {
   const next = room.users.values().next().value;
   if (!next) return;
 
+  const previousToken = next.token;
   room.hostToken = newToken();
   room.hostId = next.id;
   next.token = room.hostToken;
-  io.to(next.id).emit('host-changed', { token: room.hostToken, pending: pendingList(room) });
+  next.role = 'host';
+  if (previousToken) {
+    // The promoted member's old member token must stop working immediately.
+    room.members?.delete(previousToken);
+    room.admins?.delete(previousToken);
+  }
+  io.to(next.id).emit('host-changed', { token: room.hostToken, pending: pendingList(room), role: 'host', settings: roomSettingsPayload(room) });
   io.to(room.code).emit('system-message', `${next.username} is now the host`);
   broadcastUserList(room.code);
 }
@@ -778,6 +1151,10 @@ function promoteNewHost(room) {
 function closeRoom(room, message) {
   clearTimeout(room.emptyTimer);
   clearTimeout(room.handoffTimer);
+  clearTimeout(room.expiryTimer);
+  clearInterval(room.messageSweepTimer);
+  room.expiryTimer = null;
+  room.messageSweepTimer = null;
   for (const requestId of room.pending.keys()) {
     const waiting = io.sockets.sockets.get(requestId);
     if (waiting) {
@@ -792,14 +1169,16 @@ function closeRoom(room, message) {
       invitationId: room.invitationId || null,
       message
     });
-    for (const socketId of room.users.keys()) {
-      const member = io.sockets.sockets.get(socketId);
-      if (!member) continue;
-      member.leave(room.code);
-      if (member.roomId === room.code) member.roomId = null;
-    }
-    privateRoomService?.onRoomClosed?.(room);
+  } else {
+    io.to(room.code).emit('room:closed', { roomCode: room.code, message });
   }
+  for (const socketId of room.users.keys()) {
+    const member = io.sockets.sockets.get(socketId);
+    if (!member) continue;
+    member.leave(room.code);
+    if (member.roomId === room.code) member.roomId = null;
+  }
+  privateRoomService?.onRoomClosed?.(room);
   rooms.delete(room.code);
 }
 

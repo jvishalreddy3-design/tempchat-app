@@ -34,8 +34,21 @@ async function run() {
     areFriends: async (a, b) => a === user._id && b === user._id,
     updatePassword: async (_id, passwordHash) => { user.passwordHash = passwordHash; return user; },
     revokeAllSessions: async () => { store.revoked += 1; },
+    revokeSession: async (sid) => { store.revokedSession = sid; },
+    listActiveSessions: async () => [{ id: 'session-test-123', createdAt: new Date('2026-01-02T00:00:00Z'), expiresAt: new Date('2026-02-01T00:00:00Z'), userAgent: 'test-agent' }],
+    getPrivacySettings: async () => ({ ...store.privacy }),
+    updatePrivacySettings: async (_id, update) => { store.privacy = { ...store.privacy, ...update }; return { ...store.privacy }; },
+    blockUser: async (a, b) => { store.blocks.add(`${a}:${b}`); },
+    unblockUser: async (a, b) => { store.blocks.delete(`${a}:${b}`); },
+    listBlockedUsers: async () => [...store.blocks].map((pair) => ({ id: pair.split(':')[1], username: 'blocked', displayName: 'Blocked User', avatarUrl: null, blockedAt: new Date() })),
+    isBlocked: async (a, b) => store.blocks.has(`${a}:${b}`) || store.blocks.has(`${b}:${a}`),
+    createReport: async (a, b, reason, details) => { store.reports.push({ a, b, reason, details }); return { id: 'report-1', createdAt: new Date() }; },
+    removeFriend: async () => {},
     deleteUser: async () => { store.deleted = true; },
   };
+  store.privacy = { onlineStatusVisibility: 'friends', friendRequestPolicy: 'everyone' };
+  store.blocks = new Set();
+  store.reports = [];
   const config = { jwtSecret: 'test-only-secret-that-is-long-enough-1234567890', webOrigin: 'https://example.invalid', email: {} };
   const service = createAccountService({ store, config });
   const valid = service.issueAccess(user._id, 'session-test-123');
@@ -114,6 +127,57 @@ async function run() {
     assert.equal(typeof rotated.accessToken, 'string');
     assert.equal(store.revoked, 1, 'changing a password must revoke existing sessions');
 
+    // Privacy settings.
+    response = await fetch(`${base}/privacy`, { headers: authHeaders });
+    assert.equal(response.status, 200);
+    assert.deepEqual((await response.json()).privacy, { onlineStatusVisibility: 'friends', friendRequestPolicy: 'everyone' });
+
+    response = await fetch(`${base}/privacy`, { method: 'PATCH', headers: authHeaders, body: JSON.stringify({ onlineStatusVisibility: 'everyone-please' }) });
+    assert.equal(response.status, 400, 'invalid privacy values must be rejected');
+
+    response = await fetch(`${base}/privacy`, { method: 'PATCH', headers: authHeaders, body: JSON.stringify({ onlineStatusVisibility: 'nobody', friendRequestPolicy: 'nobody' }) });
+    assert.equal(response.status, 200);
+    const privacy = (await response.json()).privacy;
+    assert.equal(privacy.onlineStatusVisibility, 'nobody');
+    assert.equal(privacy.friendRequestPolicy, 'nobody');
+
+    // Session management and login activity.
+    response = await fetch(`${base}/sessions`, { headers: authHeaders });
+    assert.equal(response.status, 200);
+    const sessions = (await response.json()).sessions;
+    assert.equal(sessions.length, 1);
+    assert.equal(sessions[0].current, true);
+    assert.equal(sessions[0].userAgent, 'test-agent');
+
+    response = await fetch(`${base}/sessions/22222222-2222-2222-2222-222222222222`, { method: 'DELETE', headers: authHeaders });
+    assert.equal(response.status, 200);
+    assert.equal(store.revokedSession, '22222222-2222-2222-2222-222222222222');
+
+    response = await fetch(`${base}/sessions/logout-all`, { method: 'POST', headers: authHeaders });
+    assert.equal(response.status, 200);
+    assert.equal(store.revoked, 2, 'logout-all must revoke every active session');
+
+    // Blocking and reporting.
+    const otherId = '33333333-3333-3333-3333-333333333333';
+    response = await fetch(`${base}/users/${otherId}/block`, { method: 'POST', headers: authHeaders });
+    assert.equal(response.status, 200);
+    assert.equal(store.blocks.has(`${user._id}:${otherId}`), true);
+
+    response = await fetch(`${base}/blocks`, { headers: authHeaders });
+    assert.equal(response.status, 200);
+    assert.equal((await response.json()).blocked.length, 1);
+
+    response = await fetch(`${base}/users/${otherId}/report`, { method: 'POST', headers: authHeaders, body: JSON.stringify({ reason: 'spam', details: 'unsolicited messages' }) });
+    assert.equal(response.status, 201);
+    assert.equal(store.reports[0].reason, 'spam');
+
+    response = await fetch(`${base}/users/${otherId}/report`, { method: 'POST', headers: authHeaders, body: JSON.stringify({ reason: 'not-a-reason' }) });
+    assert.equal(response.status, 400, 'invalid report reasons must be rejected');
+
+    response = await fetch(`${base}/users/${otherId}/block`, { method: 'DELETE', headers: authHeaders });
+    assert.equal(response.status, 200);
+    assert.equal(store.blocks.size, 0);
+
     response = await fetch(`${base}/me`, { method: 'DELETE', headers: authHeaders, body: JSON.stringify({ password: 'wrong password' }) });
     assert.equal(response.status, 401, 'account deletion must verify the password');
 
@@ -121,7 +185,7 @@ async function run() {
     assert.equal(response.status, 200, 'a verified account deletion must succeed');
     assert.equal(store.deleted, true);
   } finally { await new Promise((resolve) => server.close(resolve)); }
-  console.log('Account security tests passed: Argon2id hashing, 8–128 character password policy, username/password registration, duplicate handling, immediate login, incorrect-password rejection, username availability, public profile filtering, password-change session rotation, verified account deletion, revoked sessions, and removed Google route.');
+  console.log('Account security tests passed: Argon2id hashing, 8–128 character password policy, username/password registration, duplicate handling, immediate login, incorrect-password rejection, username availability, public profile filtering, password-change session rotation, session listing and logout-all, privacy settings, blocking, reporting, verified account deletion, revoked sessions, and removed Google route.');
 }
 
 run().catch((error) => { console.error(error); process.exitCode = 1; });

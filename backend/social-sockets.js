@@ -9,6 +9,11 @@ const PRIVATE_MAX_BUFFERED_CHARS = 8 * 1024 * 1024;
 const PRIVATE_SEND_RATE_LIMIT = 30;
 const PRIVATE_SEND_RATE_WINDOW_MS = 10000;
 const PRIVATE_TTL_MS = 10 * 60 * 1000;
+const PRIVATE_EDIT_WINDOW_MS = 15 * 60 * 1000;
+const PRIVATE_MAX_REPLY_EXCERPT = 180;
+const PRIVATE_REACTION_EMOJIS = new Set(['👍', '❤️', '😂', '😮', '😢', '🙏']);
+
+const MESSAGE_ID_RE = /^[A-Za-z0-9_-]{8,96}$/;
 
 // Deterministic, opaque conversation id for a friend pair. The id is stable
 // for the lifetime of the process but is never written to the database.
@@ -34,6 +39,37 @@ function installSocialSockets(io, store, accountService, options = {}) {
     .map((socketId) => io.sockets.sockets.get(socketId))
     .filter(Boolean);
 
+  // Deliver a conversation event to every authenticated device of both
+  // participants. Clients ignore events for conversations they do not have
+  // open, so this keeps a second device in sync without storing anything.
+  function emitToConversationUsers(conversation, event, payload) {
+    for (const userId of new Set(conversation.userIds)) {
+      io.to('account:' + userId).emit(event, payload);
+    }
+  }
+
+  function memberConversation(socket, conversationId) {
+    if (typeof conversationId !== 'string' || !socket.privateConversationIds?.has(conversationId)) return null;
+    const conversation = conversations.get(conversationId);
+    if (!conversation || !conversation.sockets.has(socket.id)) return null;
+    if (!conversation.userIds.includes(socket.accountUser.id)) return null;
+    return conversation;
+  }
+
+  // A block applies in both directions and must keep applying to a
+  // conversation that was already open when the block happened. Conversation
+  // membership alone is not enough authorization for message mutations.
+  async function conversationBlocked(conversation) {
+    if (typeof store.isBlocked !== 'function') return false;
+    const [firstId, secondId] = conversation.userIds || [];
+    if (!firstId || !secondId) return false;
+    try {
+      return await store.isBlocked(firstId, secondId);
+    } catch (_) {
+      return false;
+    }
+  }
+
   function presencePayload(userId, online, lastSeenAt) {
     return {
       userId,
@@ -43,9 +79,32 @@ function installSocialSockets(io, store, accountService, options = {}) {
     };
   }
 
+  // Honor each account's online-status visibility setting. `friends` is the
+  // default and matches the existing behaviour; `nobody` hides presence
+  // entirely; `everyone` is explicit.
+  async function presenceVisibleTo(targetId, viewerId) {
+    if (typeof store.getPrivacySettings !== 'function') return true;
+    try {
+      const settings = await store.getPrivacySettings(targetId);
+      if (settings.onlineStatusVisibility === 'nobody') return false;
+      if (settings.onlineStatusVisibility === 'friends') {
+        return typeof store.areFriends === 'function' ? store.areFriends(targetId, viewerId) : true;
+      }
+      return true;
+    } catch (_) {
+      return true;
+    }
+  }
+
   // Notify the *friends of* userId about userId's state. This is the important
   // direction: a user's own sockets must not receive their own presence.
   async function publishPresenceToFriends(userId, online, lastSeenAt = null) {
+    if (typeof store.getPrivacySettings === 'function') {
+      try {
+        const settings = await store.getPrivacySettings(userId);
+        if (settings.onlineStatusVisibility === 'nobody') return;
+      } catch (_) { /* Fall back to notifying friends. */ }
+    }
     const friends = await store.listFriends(userId);
     for (const friend of friends) {
       io.to('account:' + friend._id).emit('friends:presence', presencePayload(userId, online, lastSeenAt));
@@ -96,14 +155,17 @@ function installSocialSockets(io, store, accountService, options = {}) {
     store.listFriends(user.id).then((friends) => {
       socket.emit('social:ready', {
         user: { id: user.id, username: user.username, displayName: user.displayName, avatarUrl: user.avatarUrl, lastSeenAt: user.lastSeenAt || null },
-        friends: friends.map((friend) => ({
-          id: friend._id,
-          username: friend.username,
-          displayName: friend.displayName,
-          avatarUrl: friend.avatarUrl || null,
-          online: isOnline(friend._id),
-          lastSeenAt: friend.lastSeenAt || null
-        }))
+        friends: friends.map((friend) => {
+          const canSee = (friend.onlineStatusVisibility || 'friends') !== 'nobody';
+          return {
+            id: friend._id,
+            username: friend.username,
+            displayName: friend.displayName,
+            avatarUrl: friend.avatarUrl || null,
+            online: canSee && isOnline(friend._id),
+            lastSeenAt: canSee ? friend.lastSeenAt || null : null
+          };
+        })
       });
     }).catch((error) => {
       console.error('[social] presence initialization failed:', error.code || error.name);
@@ -124,6 +186,9 @@ function installSocialSockets(io, store, accountService, options = {}) {
         }
         if (!(await store.areFriends(socket.accountUser.id, payload.friendId))) {
           throw new Error('Private chats are available only between accepted friends.');
+        }
+        if (typeof store.isBlocked === 'function' && await store.isBlocked(socket.accountUser.id, payload.friendId)) {
+          throw new Error('This conversation is unavailable.');
         }
 
         const pairKey = store.pairKey(socket.accountUser.id, payload.friendId);
@@ -163,7 +228,7 @@ function installSocialSockets(io, store, accountService, options = {}) {
           conversation: {
             id: conversationId,
             peerId: payload.friendId,
-            peerOnline: isOnline(payload.friendId),
+            peerOnline: await presenceVisibleTo(payload.friendId, socket.accountUser.id) ? isOnline(payload.friendId) : false,
             messages: []
           }
         });
@@ -190,12 +255,15 @@ function installSocialSockets(io, store, accountService, options = {}) {
     socket.on('private:list', async (_payload, acknowledge) => {
       if (typeof acknowledge !== 'function') return;
       try {
-        const entries = [...conversations.values()]
+        const entries = await Promise.all([...conversations.values()]
           .filter((conversation) => conversation.userIds.includes(user.id))
-          .map((conversation) => {
+          .map(async (conversation) => {
             const friendId = conversation.userIds.find((id) => id !== user.id);
-            return { id: conversation.id, friendId, online: isOnline(friendId) };
-          });
+            // Honor the friend's online-status visibility setting even for a
+            // conversation that is already open.
+            const canSeePresence = await presenceVisibleTo(friendId, user.id);
+            return { id: conversation.id, friendId, online: canSeePresence && isOnline(friendId) };
+          }));
         // Deliberately no lastMessage/history in this response.
         acknowledge({ success: true, conversations: entries });
       } catch (_) {
@@ -217,9 +285,24 @@ function installSocialSockets(io, store, accountService, options = {}) {
           acknowledge({ success: false, delivered: false, reason: 'unauthorized' });
           return;
         }
-        if (typeof payload?.id !== 'string' || !/^[A-Za-z0-9_-]{12,96}$/.test(payload.id) || typeof payload.text !== 'string' || !payload.text.trim() || payload.text.length > PRIVATE_MAX_TEXT_LENGTH) {
+        if (typeof payload?.id !== 'string' || !MESSAGE_ID_RE.test(payload.id) || typeof payload.text !== 'string' || !payload.text.trim() || payload.text.length > PRIVATE_MAX_TEXT_LENGTH) {
           acknowledge({ success: false, delivered: false, reason: 'invalid_message' });
           return;
+        }
+        if (payload.forwarded != null && typeof payload.forwarded !== 'boolean') {
+          acknowledge({ success: false, delivered: false, reason: 'invalid_message' });
+          return;
+        }
+        if (payload.replyTo != null) {
+          const reply = payload.replyTo;
+          if (typeof reply !== 'object'
+            || typeof reply.id !== 'string'
+            || !MESSAGE_ID_RE.test(reply.id)
+            || (reply.sender != null && (typeof reply.sender !== 'string' || reply.sender.length > 64))
+            || (reply.excerpt != null && (typeof reply.excerpt !== 'string' || reply.excerpt.length > PRIVATE_MAX_REPLY_EXCERPT))) {
+            acknowledge({ success: false, delivered: false, reason: 'invalid_message' });
+            return;
+          }
         }
 
         const rate = privateRateLimits.get(senderId);
@@ -235,6 +318,11 @@ function installSocialSockets(io, store, accountService, options = {}) {
         if (!(await store.areFriends(senderId, peerId))) {
           leaveConversation(socket, payload.conversationId);
           acknowledge({ success: false, delivered: false, reason: 'friendship_required' });
+          return;
+        }
+        if (typeof store.isBlocked === 'function' && await store.isBlocked(senderId, peerId)) {
+          leaveConversation(socket, payload.conversationId);
+          acknowledge({ success: false, delivered: false, reason: 'blocked' });
           return;
         }
 
@@ -264,7 +352,17 @@ function installSocialSockets(io, store, accountService, options = {}) {
           from: senderId,
           sender: user.displayName || user.username,
           text: payload.text.trim(),
-          timestamp
+          timestamp,
+          replyTo: payload.replyTo ? {
+            id: payload.replyTo.id,
+            sender: payload.replyTo.sender ? String(payload.replyTo.sender).slice(0, 64) : null,
+            excerpt: payload.replyTo.excerpt ? String(payload.replyTo.excerpt).slice(0, PRIVATE_MAX_REPLY_EXCERPT) : null
+          } : null,
+          forwarded: Boolean(payload.forwarded),
+          editedAt: null,
+          deletedAt: null,
+          reactions: {},
+          seenBy: []
         };
 
         if (totalBufferedChars + message.text.length > PRIVATE_MAX_BUFFERED_CHARS) {
@@ -311,6 +409,118 @@ function installSocialSockets(io, store, accountService, options = {}) {
       } catch (_) {
         acknowledge({ success: false, delivered: false, reason: 'server_error' });
       }
+    });
+
+    // -----------------------------------------------------------------------
+    // Ephemeral message operations
+    // Every operation is authorized against the in-memory conversation, so the
+    // server never trusts a client-provided author. Content stays RAM-only.
+    // -----------------------------------------------------------------------
+
+    socket.on('private:seen', async (payload, acknowledge) => {
+      const done = typeof acknowledge === 'function' ? acknowledge : () => {};
+      const conversation = memberConversation(socket, payload?.conversationId);
+      if (!conversation) return done({ success: false, reason: 'unauthorized' });
+      if (await conversationBlocked(conversation)) return done({ success: false, reason: 'blocked' });
+      const ids = Array.isArray(payload?.messageIds) ? [...new Set(payload.messageIds)] : [];
+      if (!ids.length || ids.length > 100 || ids.some((id) => typeof id !== 'string' || !MESSAGE_ID_RE.test(id))) {
+        return done({ success: false, reason: 'invalid_message' });
+      }
+      const peerId = conversation.userIds.find((id) => id !== user.id);
+      const seen = [];
+      for (const id of ids) {
+        const message = conversation.messages.find((entry) => entry.id === id);
+        if (!message || message.from !== peerId || message.deletedAt) continue;
+        if (!message.seenBy.includes(user.id)) message.seenBy.push(user.id);
+        seen.push(id);
+      }
+      if (seen.length) {
+        emitToConversationUsers(conversation, 'private:seen', {
+          conversationId: conversation.id,
+          messageIds: seen,
+          by: user.id
+        });
+      }
+      done({ success: true, seen });
+    });
+
+    socket.on('private:edit', async (payload, acknowledge) => {
+      const done = typeof acknowledge === 'function' ? acknowledge : () => {};
+      const conversation = memberConversation(socket, payload?.conversationId);
+      if (!conversation) return done({ success: false, reason: 'unauthorized' });
+      if (await conversationBlocked(conversation)) return done({ success: false, reason: 'blocked' });
+      const message = conversation.messages.find((entry) => entry.id === payload?.id);
+      if (!message) return done({ success: false, reason: 'not_found' });
+      if (message.from !== user.id) return done({ success: false, reason: 'forbidden' });
+      if (message.deletedAt) return done({ success: false, reason: 'deleted' });
+      if (now() - message.timestamp > PRIVATE_EDIT_WINDOW_MS) return done({ success: false, reason: 'edit_window' });
+      if (typeof payload?.text !== 'string' || !payload.text.trim() || payload.text.length > PRIVATE_MAX_TEXT_LENGTH) {
+        return done({ success: false, reason: 'invalid_message' });
+      }
+      const nextText = payload.text.trim();
+      const nextBufferedChars = totalBufferedChars + nextText.length - message.text.length;
+      if (nextBufferedChars > PRIVATE_MAX_BUFFERED_CHARS) {
+        return done({ success: false, reason: 'buffer_full' });
+      }
+      totalBufferedChars = nextBufferedChars;
+      message.text = nextText;
+      message.editedAt = now();
+      emitToConversationUsers(conversation, 'private:edited', {
+        conversationId: conversation.id,
+        id: message.id,
+        text: nextText,
+        editedAt: message.editedAt
+      });
+      done({ success: true, id: message.id, text: nextText, editedAt: message.editedAt });
+    });
+
+    socket.on('private:delete', async (payload, acknowledge) => {
+      const done = typeof acknowledge === 'function' ? acknowledge : () => {};
+      const conversation = memberConversation(socket, payload?.conversationId);
+      if (!conversation) return done({ success: false, reason: 'unauthorized' });
+      if (await conversationBlocked(conversation)) return done({ success: false, reason: 'blocked' });
+      const message = conversation.messages.find((entry) => entry.id === payload?.id);
+      if (!message) return done({ success: false, reason: 'not_found' });
+      if (message.from !== user.id) return done({ success: false, reason: 'forbidden' });
+      if (!message.deletedAt) {
+        message.deletedAt = now();
+        totalBufferedChars -= message.text.length;
+        message.text = '';
+        message.reactions = {};
+      }
+      emitToConversationUsers(conversation, 'private:deleted', {
+        conversationId: conversation.id,
+        id: message.id
+      });
+      done({ success: true, id: message.id });
+    });
+
+    socket.on('private:react', async (payload, acknowledge) => {
+      const done = typeof acknowledge === 'function' ? acknowledge : () => {};
+      const conversation = memberConversation(socket, payload?.conversationId);
+      if (!conversation) return done({ success: false, reason: 'unauthorized' });
+      if (await conversationBlocked(conversation)) return done({ success: false, reason: 'blocked' });
+      const message = conversation.messages.find((entry) => entry.id === payload?.id);
+      if (!message) return done({ success: false, reason: 'not_found' });
+      if (message.deletedAt) return done({ success: false, reason: 'deleted' });
+      const emoji = typeof payload?.emoji === 'string' ? payload.emoji : '';
+      if (!PRIVATE_REACTION_EMOJIS.has(emoji)) return done({ success: false, reason: 'invalid_reaction' });
+
+      const users = Array.isArray(message.reactions[emoji]) ? message.reactions[emoji] : [];
+      const index = users.indexOf(user.id);
+      if (index === -1) users.push(user.id);
+      else users.splice(index, 1);
+      if (users.length) message.reactions[emoji] = users;
+      else delete message.reactions[emoji];
+
+      emitToConversationUsers(conversation, 'private:reaction', {
+        conversationId: conversation.id,
+        id: message.id,
+        emoji,
+        reactions: message.reactions,
+        by: user.id
+      });
+      done({ success: true, id: message.id, reactions: message.reactions });
     });
 
     socket.on('disconnect', () => {

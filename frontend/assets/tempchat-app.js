@@ -46,8 +46,23 @@
     notifiedRequests: new Set(),
     notificationKeys: new Set(),
     socialLoaded: false,
+    socialError: null,
+    unread: new Map(),
+    mutedFriends: new Set(),
+    notifyPrefs: { messages: true, requests: true, presence: true, invites: true, desktop: false },
+    replyTo: null,
+    editingMessageId: null,
+    chatSearch: '',
+    chatSearchActive: false,
+    messageMenu: null,
     restoring: false,
-    restorePending: false
+    restorePending: false,
+    privacy: null,
+    privacySaving: false,
+    sessions: null,
+    sessionsLoading: false,
+    blocks: null,
+    blocksLoading: false
   };
 
   let accountApp = null;
@@ -228,11 +243,24 @@
 
     item.append(avatar, body);
 
-    if (options.actionsHtml) {
+    if (Array.isArray(options.actions) && options.actions.length) {
       const actions = document.createElement('div');
       actions.className = 'eka-notify-actions';
-      actions.innerHTML = options.actionsHtml;
-      item.appendChild(actions);
+      for (const action of options.actions) {
+        if (!action || typeof action.label !== 'string' || !action.label) continue;
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = typeof action.className === 'string' ? action.className : '';
+        button.textContent = action.label;
+        if (action.dataset && typeof action.dataset === 'object') {
+          for (const [key, value] of Object.entries(action.dataset)) {
+            if (value === undefined || value === null) continue;
+            button.dataset[key] = String(value);
+          }
+        }
+        actions.appendChild(button);
+      }
+      if (actions.children.length) item.appendChild(actions);
     }
 
     const close = document.createElement('button');
@@ -244,6 +272,16 @@
     item.appendChild(close);
 
     stack.appendChild(item);
+    if (state.notifyPrefs.desktop && document.hidden && typeof window.Notification !== 'undefined' && window.Notification.permission === 'granted') {
+      try {
+        const desktopNotice = new window.Notification(String(options.title || 'EKA'), {
+          body: String(options.body || ''),
+          tag: options.key,
+          icon: 'assets/eka-logo.svg'
+        });
+        desktopNotice.onclick = () => { window.focus(); desktopNotice.close(); };
+      } catch (_) { /* Desktop notifications are best effort. */ }
+    }
     if (options.timeout !== 0) {
       setTimeout(() => removeEkaNotification(item), Number(options.timeout) || 6000);
     }
@@ -251,7 +289,7 @@
   }
 
   function notifyFriendOnline(friend) {
-    if (!friend?.id) return;
+    if (!friend?.id || !notifyEnabled('presence')) return;
     const now = Date.now();
     const last = state.presenceNotifiedAt.get(friend.id) || 0;
     if (now - last < EKA_PRESENCE_COOLDOWN_MS) return;
@@ -267,22 +305,29 @@
   }
 
   function notifyPrivateMessage(message) {
-    if (!message?.id || !message?.from) return;
+    if (!message?.id || !message?.from || !notifyEnabled('messages')) return;
     const friend = state.friends.find((entry) => entry.id === message.from)
       || { id: message.from, username: message.sender || 'friend', displayName: message.sender || 'Friend' };
     const preview = String(message.text || '');
+    const lower = preview.toLowerCase();
+    const myUsername = String(state.user?.username || '').toLowerCase();
+    const myName = String(displayNameOf(state.user) || '').toLowerCase();
+    const mentioned = Boolean(myUsername) && new RegExp(`(^|\\s)@${myUsername.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\\\$&')}(\\b|$)`).test(lower);
+    const replied = Boolean(message.replyTo?.sender) && String(message.replyTo.sender).toLowerCase() === myName;
+    const title = mentioned ? `${displayNameOf(friend)} mentioned you` : replied ? `${displayNameOf(friend)} replied to you` : displayNameOf(friend);
     showEkaNotification({
       key: `message:${message.conversationId}:${message.id}`,
+      variant: mentioned || replied ? 'eka-notify-mention' : '',
       user: friend,
-      title: displayNameOf(friend),
+      title,
       body: preview.length > 90 ? `${preview.slice(0, 90)}…` : preview,
-      actionsHtml: `<button type="button" class="eka-notify-accept" data-notify-chat="${esc(friend.id)}">Open chat</button>`,
+      actions: [{ label: 'Open chat', className: 'eka-notify-accept', dataset: { notifyChat: friend.id } }],
       timeout: 9000
     });
   }
 
   function notifyPrivateInvitation(invitation) {
-    if (!invitation?.invitationId) return;
+    if (!invitation?.invitationId || !notifyEnabled('invites')) return;
     const sender = invitation.from || { username: 'A friend', displayName: 'A friend' };
     const name = displayNameOf(sender);
     showEkaNotification({
@@ -291,13 +336,13 @@
       user: sender,
       title: name,
       body: `${name} wants to chat with you`,
-      actionsHtml: `<button type="button" class="eka-notify-accept" data-join-private-room="${esc(invitation.invitationId)}">Join Chat</button>`,
+      actions: [{ label: 'Join Chat', className: 'eka-notify-accept', dataset: { joinPrivateRoom: invitation.invitationId } }],
       timeout: 0
     });
   }
 
   function notifyFriendRequest(request) {
-    if (!request?.id || state.notifiedRequests.has(request.id)) return;
+    if (!request?.id || state.notifiedRequests.has(request.id) || !notifyEnabled('requests')) return;
     state.notifiedRequests.add(request.id);
     const user = request.user || {};
     showEkaNotification({
@@ -306,7 +351,10 @@
       user,
       title: displayNameOf(user),
       body: `@${user.username || 'someone'} is trying to send you a friend request.`,
-      actionsHtml: `<button type="button" class="eka-notify-accept" data-notify-accept="${esc(request.id)}">Accept</button><button type="button" data-notify-decline="${esc(request.id)}">Reject</button>`,
+      actions: [
+        { label: 'Accept', className: 'eka-notify-accept', dataset: { notifyAccept: request.id } },
+        { label: 'Reject', dataset: { notifyDecline: request.id } }
+      ],
       timeout: 12000
     });
   }
@@ -560,6 +608,7 @@
     if (data.refreshToken) {
       await persistRefreshToken(data.refreshToken);
     }
+    loadMutedFriends();
     window.TempChatRoom?.authenticate?.(state.accessToken);
   }
 
@@ -571,10 +620,15 @@
     state.friends = [];
     state.requests = [];
     state.presence.clear();
+    state.unread.clear();
+    state.mutedFriends.clear();
     state.activeChat = null;
     state.viewedProfile = null;
     state.searchResults = [];
     state.socialLoaded = false;
+    state.privacy = null;
+    state.sessions = null;
+    state.blocks = null;
     lastRefreshFailure = null;
     await secureRemove(REFRESH_KEY);
     if (state.socket) {
@@ -585,6 +639,7 @@
     clearChatMemory();
     clearChatInbox();
     clearNotifications();
+    updateUnreadUI();
   }
 
   // ---------------------------------------------------------------------------
@@ -607,6 +662,15 @@
   const NAV_SCREENS = new Set(['home', 'friends', 'requests', 'settings']);
 
   function showScreen(name, options = {}) {
+    // Leaving the chat screen releases the ephemeral conversation. Messages
+    // that arrive while the user is elsewhere go to the in-memory inbox and are
+    // shown when the chat is reopened, with unread counts and alerts.
+    if (state.currentScreen === 'chat' && name !== 'chat' && state.activeChat) {
+      if (state.activeChat.conversationId && state.socket?.connected) {
+        state.socket.emit('private:leave', { conversationId: state.activeChat.conversationId });
+      }
+      clearChatMemory();
+    }
     const { fromBack = false, reset = false } = options;
     const targetId = SCREENS[name] || SCREENS.welcome;
     if (reset || name === 'home') {
@@ -632,7 +696,7 @@
     if (name === 'home') renderHome();
     if (name === 'friends') renderFriends();
     if (name === 'requests') renderRequests();
-    if (name === 'settings') renderSettings();
+    if (name === 'settings') { renderSettings(); if (!state.privacy) loadPrivacy(); }
     if (name === 'profile') renderProfile();
     if (name === 'chat') renderChatHeader();
     if (name === 'add') { renderSearchResults(); byId('tc-search-input')?.focus(); }
@@ -722,20 +786,35 @@
   }
 
   async function loadSocial() {
-    const [friendsData, requestsData] = await Promise.all([
-      apiFetch('/api/auth/friends'),
-      apiFetch('/api/auth/friend-requests')
-    ]);
-    const previousIds = new Set(incomingRequests().map((request) => request.id));
-    state.friends = (friendsData.friends || []).map(normalizeFriend);
-    state.requests = requestsData.requests || [];
-    if (state.socialLoaded) {
-      for (const request of incomingRequests()) {
-        if (request.id && !previousIds.has(request.id)) notifyFriendRequest(request);
+    try {
+      const [friendsData, requestsData] = await Promise.all([
+        apiFetch('/api/auth/friends'),
+        apiFetch('/api/auth/friend-requests')
+      ]);
+      const previousIds = new Set(incomingRequests().map((request) => request.id));
+      state.friends = (friendsData.friends || []).map(normalizeFriend);
+      state.requests = requestsData.requests || [];
+      // A blocked or removed friend can no longer hold a private chat open.
+      if (state.activeChat?.friend && !state.friends.some((friend) => friend.id === state.activeChat.friend.id)) {
+        if (state.activeChat.conversationId && state.socket?.connected) {
+          state.socket.emit('private:leave', { conversationId: state.activeChat.conversationId });
+        }
+        clearChatMemory();
+        if (state.currentScreen === 'chat') showScreen('home');
       }
+      if (state.socialLoaded) {
+        for (const request of incomingRequests()) {
+          if (request.id && !previousIds.has(request.id)) notifyFriendRequest(request);
+        }
+      }
+      state.socialLoaded = true;
+      state.socialError = null;
+      renderAll();
+    } catch (error) {
+      state.socialError = error;
+      if (!state.socialLoaded) renderAll();
+      throw error;
     }
-    state.socialLoaded = true;
-    renderAll();
   }
 
   function renderAll() {
@@ -751,10 +830,11 @@
 
   function friendRowHtml(friend) {
     const status = friend.online ? 'Online' : friend.lastSeenAt ? `Last seen ${formatLastSeen(friend.lastSeenAt)}` : 'Offline';
+    const unread = unreadFor(friend.id);
     return `<div class="tc-row">
       <button type="button" class="tc-avatar" data-profile-user="${esc(friend.id)}" aria-label="Open ${esc(displayNameOf(friend))} profile">${avatarInner(friend)}<span class="tc-dot ${friend.online ? 'online' : ''}"></span></button>
       <div class="tc-row-main" data-profile-user="${esc(friend.id)}" role="button" tabindex="0">
-        <div class="tc-row-name">${esc(displayNameOf(friend))}</div>
+        <div class="tc-row-name">${esc(displayNameOf(friend))}${isMuted(friend.id) ? ' <i class="fa-solid fa-bell-slash" aria-label="Muted"></i>' : ''}${unread ? ` <span class="tc-unread-badge">${unread > 9 ? '9+' : unread}</span>` : ''}</div>
         <div class="tc-row-sub">@${esc(friend.username)} · ${esc(status)}</div>
       </div>
       <div class="tc-row-actions">
@@ -765,6 +845,29 @@
 
   function emptyHtml(icon, title, text) {
     return `<div class="tc-empty"><i class="fa-solid ${esc(icon)}"></i><strong>${esc(title)}</strong><div>${esc(text)}</div></div>`;
+  }
+
+  // Loading placeholders shown until the first social payload arrives, so the
+  // screen never flashes an empty state before real data is available.
+  function skeletonRowsHtml(count) {
+    const row = `<div class="eka-skeleton-row" aria-hidden="true">
+      <span class="eka-skeleton eka-skeleton-avatar"></span>
+      <span class="eka-skeleton-lines">
+        <span class="eka-skeleton eka-skeleton-line"></span>
+        <span class="eka-skeleton eka-skeleton-line short"></span>
+      </span>
+    </div>`;
+    return `<div class="eka-skeleton-list" role="status" aria-label="Loading">${row.repeat(count)}</div>`;
+  }
+
+  function listPlaceholder(skeletonCount, icon, title, text) {
+    if (!state.socialLoaded) {
+      if (state.socialError) {
+        return emptyHtml('fa-cloud-exclamation', 'Could not load', 'Check your connection and pull the screen again.');
+      }
+      return skeletonRowsHtml(skeletonCount);
+    }
+    return emptyHtml(icon, title, text);
   }
 
   function renderHome() {
@@ -782,13 +885,13 @@
     if (onlineList) {
       onlineList.innerHTML = online.length
         ? online.map(friendRowHtml).join('')
-        : emptyHtml('fa-user-clock', 'No friends online', 'When a friend connects, they will appear here with a green dot.');
+        : listPlaceholder(3, 'fa-user-clock', 'No friends online', 'When a friend connects, they will appear here with a green dot.');
     }
     const offlineList = byId('tc-home-offline');
     if (offlineList) {
       offlineList.innerHTML = offline.length
         ? offline.map(friendRowHtml).join('')
-        : emptyHtml('fa-user-group', state.friends.length ? 'Everyone is online' : 'No friends yet', state.friends.length ? 'Your offline friends will appear here.' : 'Add a friend by username to start a temporary private chat.');
+        : listPlaceholder(2, 'fa-user-group', state.friends.length ? 'Everyone is online' : 'No friends yet', state.friends.length ? 'Your offline friends will appear here.' : 'Add a friend by username to start a temporary private chat.');
     }
   }
 
@@ -803,7 +906,7 @@
     if (!container) return;
     container.innerHTML = list.length
       ? list.map(friendRowHtml).join('')
-      : emptyHtml('fa-user-plus', filter === 'all' ? 'No friends yet' : `No ${filter} friends`, filter === 'all' ? 'Search by username and send a friend request.' : 'Try another tab or add a new friend.');
+      : listPlaceholder(5, 'fa-user-plus', filter === 'all' ? 'No friends yet' : `No ${filter} friends`, filter === 'all' ? 'Search by username and send a friend request.' : 'Try another tab or add a new friend.');
   }
 
   function renderRequests() {
@@ -818,7 +921,7 @@
     const container = byId('tc-requests-list');
     if (!container) return;
     if (!list.length) {
-      container.innerHTML = emptyHtml('fa-envelope-open', state.requestsFilter === 'incoming' ? 'No incoming requests' : 'No sent requests', state.requestsFilter === 'incoming' ? 'Friend requests sent to you will appear here.' : 'Requests you send will appear here until they are answered.');
+      container.innerHTML = listPlaceholder(4, 'fa-envelope-open', state.requestsFilter === 'incoming' ? 'No incoming requests' : 'No sent requests', state.requestsFilter === 'incoming' ? 'Friend requests sent to you will appear here.' : 'Requests you send will appear here until they are answered.');
       return;
     }
     container.innerHTML = list.map((request) => {
@@ -996,6 +1099,22 @@
       if (!state.activeChat || payload?.conversationId !== state.activeChat.conversationId) return;
       showTyping(Boolean(payload.isTyping));
     });
+    socket.on('private:edited', (payload) => {
+      if (!state.activeChat || payload?.conversationId !== state.activeChat.conversationId) return;
+      applyEditedMessage(payload);
+    });
+    socket.on('private:deleted', (payload) => {
+      if (!state.activeChat || payload?.conversationId !== state.activeChat.conversationId) return;
+      applyDeletedMessage(payload);
+    });
+    socket.on('private:reaction', (payload) => {
+      if (!state.activeChat || payload?.conversationId !== state.activeChat.conversationId) return;
+      applyReaction(payload);
+    });
+    socket.on('private:seen', (payload) => {
+      if (!state.activeChat || payload?.conversationId !== state.activeChat.conversationId) return;
+      updateSeenStatus(payload.messageIds);
+    });
   }
 
   function emitAck(event, payload, timeout = 8000) {
@@ -1075,6 +1194,103 @@
     state.chatInbox.clear();
   }
 
+  const MUTED_KEY_PREFIX = 'eka.muted.v1';
+  const NOTIFY_PREFS_KEY = 'eka.notify-prefs.v1';
+  const NOTIFY_PREF_DEFAULTS = { messages: true, requests: true, presence: true, invites: true, desktop: false };
+
+  // Muted friends are account data, so they are stored per account instead of
+  // sharing one device-wide list between different users of the same browser.
+  function mutedKeyFor(userId) {
+    return userId ? `${MUTED_KEY_PREFIX}:${userId}` : MUTED_KEY_PREFIX;
+  }
+
+  function loadMutedFriends() {
+    const key = mutedKeyFor(state.user?.id);
+    try {
+      const saved = JSON.parse(localStorage.getItem(key) || '[]');
+      state.mutedFriends = new Set(Array.isArray(saved) ? saved.filter((id) => typeof id === 'string') : []);
+    } catch (_) {
+      state.mutedFriends = new Set();
+    }
+  }
+
+  function saveMutedFriends() {
+    if (!state.user?.id) return;
+    try { localStorage.setItem(mutedKeyFor(state.user.id), JSON.stringify([...state.mutedFriends])); } catch (_) { /* session-only */ }
+  }
+
+  function loadNotifyPrefs() {
+    try {
+      const saved = JSON.parse(localStorage.getItem(NOTIFY_PREFS_KEY) || '{}');
+      state.notifyPrefs = { ...NOTIFY_PREF_DEFAULTS, ...(saved && typeof saved === 'object' ? saved : {}) };
+    } catch (_) {
+      state.notifyPrefs = { ...NOTIFY_PREF_DEFAULTS };
+    }
+    renderNotifyPrefs();
+  }
+
+  function saveNotifyPrefs() {
+    try { localStorage.setItem(NOTIFY_PREFS_KEY, JSON.stringify(state.notifyPrefs)); } catch (_) { /* session-only */ }
+  }
+
+  function renderNotifyPrefs() {
+    for (const input of document.querySelectorAll('[data-notify-pref]')) {
+      const key = input.getAttribute('data-notify-pref');
+      if (key in state.notifyPrefs) input.checked = Boolean(state.notifyPrefs[key]);
+    }
+    const desktop = document.querySelector('[data-notify-pref="desktop"]');
+    if (desktop) {
+      const supported = typeof window.Notification !== 'undefined';
+      desktop.disabled = !supported;
+      desktop.closest('label')?.classList.toggle('is-disabled', !supported);
+    }
+  }
+
+  function notifyEnabled(kind) {
+    return state.notifyPrefs[kind] !== false;
+  }
+
+  function isMuted(friendId) {
+    return Boolean(friendId && state.mutedFriends.has(friendId));
+  }
+
+  function setMuted(friendId, muted) {
+    if (!friendId) return;
+    if (muted) state.mutedFriends.add(friendId);
+    else state.mutedFriends.delete(friendId);
+    saveMutedFriends();
+    renderChatHeader();
+    renderAll();
+  }
+
+  function unreadFor(friendId) {
+    return state.unread.get(friendId) || 0;
+  }
+
+  function bumpUnread(friendId) {
+    if (!friendId) return;
+    state.unread.set(friendId, unreadFor(friendId) + 1);
+    updateUnreadUI();
+  }
+
+  function clearUnread(friendId) {
+    if (!friendId) return;
+    state.unread.delete(friendId);
+    updateUnreadUI();
+  }
+
+  function updateUnreadUI() {
+    let total = 0;
+    for (const count of state.unread.values()) total += count;
+    const badge = byId('tc-nav-unread-badge');
+    if (badge) {
+      badge.textContent = total > 9 ? '9+' : String(total);
+      badge.classList.toggle('hidden', total === 0);
+    }
+    renderHome();
+    renderFriends();
+  }
+
   function acceptIncomingMessage(message) {
     if (!state.user
       || typeof message?.id !== 'string'
@@ -1086,6 +1302,14 @@
       if (chat.messages.some((entry) => entry.id === message.id)) return true;
       chat.messages.push(message);
       appendMessage(message, message.from === state.user.id);
+      const visible = state.currentScreen === 'chat' && !document.hidden;
+      if (message.from !== state.user.id) {
+        if (visible) markConversationSeen([message.id]);
+        else {
+          bumpUnread(message.from);
+          if (!isMuted(message.from)) notifyPrivateMessage(message);
+        }
+      }
       return true;
     }
 
@@ -1097,8 +1321,22 @@
     if (inbox.some((entry) => entry.id === message.id)) return true;
     inbox.push(message);
     while (inbox.length > CHAT_INBOX_LIMIT) inbox.shift();
-    notifyPrivateMessage(message);
+    if (message.from !== state.user.id) {
+      bumpUnread(message.from);
+      if (!isMuted(message.from)) notifyPrivateMessage(message);
+    }
     return true;
+  }
+
+  function markConversationSeen(messageIds) {
+    const chat = state.activeChat;
+    if (!chat?.ready || !chat.conversationId || !state.socket?.connected) return;
+    if (chat.friend?.id) clearUnread(chat.friend.id);
+    const ids = (messageIds || chat.messages
+      .filter((message) => message.from !== state.user?.id && !message.seenBy?.includes(state.user?.id))
+      .map((message) => message.id)).filter(Boolean);
+    if (!ids.length) return;
+    state.socket.emit('private:seen', { conversationId: chat.conversationId, messageIds: ids });
   }
 
   function markChatDisconnected() {
@@ -1149,6 +1387,7 @@
       }
       renderChatMessages();
       renderChatHeader();
+      markConversationSeen();
     } finally {
       chat.restoring = false;
     }
@@ -1222,6 +1461,10 @@
       restoring: false
     };
     state.activeChat = chat;
+    clearUnread(friendId);
+    state.replyTo = null;
+    state.editingMessageId = null;
+    resetChatSearch();
     showScreen('chat');
     renderChatHeader();
     renderChatMessages();
@@ -1264,12 +1507,16 @@
     }
     renderChatMessages();
     renderChatHeader();
+    markConversationSeen();
     byId('tc-chat-input')?.focus();
   }
 
   function clearChatMemory() {
     state.chatOpenSeq += 1;
     state.activeChat = null;
+    state.replyTo = null;
+    state.editingMessageId = null;
+    resetChatSearch();
     const container = byId('tc-chat-messages');
     if (container) container.innerHTML = '';
     showTyping(false);
@@ -1284,6 +1531,83 @@
     }
     clearChatMemory();
     showScreen('friends', { fromBack: true });
+  }
+
+  function messageById(id) {
+    return state.activeChat?.messages.find((message) => message.id === id) || null;
+  }
+
+  function resetChatSearch() {
+    state.chatSearch = '';
+    state.chatSearchActive = false;
+    const bar = byId('tc-chat-search-bar');
+    if (bar) bar.classList.add('hidden');
+    const input = byId('tc-chat-search');
+    if (input) input.value = '';
+    byId('tc-chat-search-toggle')?.classList.remove('is-on');
+  }
+
+  function toggleChatSearch(force) {
+    const next = typeof force === 'boolean' ? force : !state.chatSearchActive;
+    state.chatSearchActive = next;
+    const bar = byId('tc-chat-search-bar');
+    if (bar) bar.classList.toggle('hidden', !next);
+    byId('tc-chat-search-toggle')?.classList.toggle('is-on', next);
+    if (next) byId('tc-chat-search')?.focus();
+    else { state.chatSearch = ''; const input = byId('tc-chat-search'); if (input) input.value = ''; }
+    renderChatMessages();
+  }
+
+  function renderReplyBar() {
+    const bar = byId('tc-chat-reply');
+    if (!bar) return;
+    const message = state.replyTo;
+    if (!message) { bar.classList.add('hidden'); return; }
+    setText('tc-chat-reply-name', message.from === state.user?.id ? 'You' : (displayNameOf(state.activeChat?.friend) || message.sender || 'Message'));
+    setText('tc-chat-reply-text', message.deletedAt ? 'Message deleted' : String(message.text || '').slice(0, 160));
+    bar.classList.remove('hidden');
+  }
+
+  function startReply(message) {
+    if (!message || message.deletedAt) return;
+    state.replyTo = { id: message.id, sender: message.sender, text: message.text };
+    state.editingMessageId = null;
+    const input = byId('tc-chat-input');
+    if (input) {
+      input.placeholder = 'Write a temporary message…';
+      input.focus();
+    }
+    renderReplyBar();
+  }
+
+  function cancelReply() {
+    state.replyTo = null;
+    renderReplyBar();
+  }
+
+  function startEdit(message) {
+    if (!message || message.from !== state.user?.id || message.deletedAt) return;
+    state.editingMessageId = message.id;
+    state.replyTo = null;
+    const input = byId('tc-chat-input');
+    if (input) {
+      input.value = message.text;
+      input.placeholder = 'Edit message…';
+      input.focus();
+      input.style.height = 'auto';
+      input.style.height = `${Math.min(input.scrollHeight, 120)}px`;
+    }
+    renderReplyBar();
+  }
+
+  function cancelEdit() {
+    state.editingMessageId = null;
+    const input = byId('tc-chat-input');
+    if (input) {
+      input.value = '';
+      input.placeholder = 'Write a temporary message…';
+      input.style.height = '';
+    }
   }
 
   function renderChatHeader() {
@@ -1306,11 +1630,26 @@
             : 'Offline';
     const statusEl = byId('tc-chat-status');
     if (statusEl) statusEl.innerHTML = `<span class="tc-dot ${online ? 'online' : ''}"></span>${esc(status)}`;
+    const muteButton = byId('tc-chat-mute');
+    if (muteButton) {
+      const muted = isMuted(friend.id);
+      muteButton.setAttribute('aria-pressed', muted ? 'true' : 'false');
+      muteButton.setAttribute('aria-label', muted ? 'Unmute conversation' : 'Mute conversation');
+      muteButton.classList.toggle('is-on', muted);
+      muteButton.innerHTML = `<i class="fa-solid ${muted ? 'fa-bell-slash' : 'fa-bell'}"></i>`;
+    }
     const input = byId('tc-chat-input');
     const send = byId('tc-chat-send');
     const canSend = ready && Boolean(state.socket?.connected);
     if (input) input.disabled = !canSend;
-    if (send) send.disabled = !canSend;
+    if (send) {
+      send.disabled = !canSend;
+      send.innerHTML = state.editingMessageId
+        ? '<i class="fa-solid fa-check"></i>'
+        : '<i class="fa-solid fa-paper-plane"></i>';
+      send.setAttribute('aria-label', state.editingMessageId ? 'Save edit' : 'Send message');
+    }
+    renderReplyBar();
   }
 
   function renderChatNotice(message, { retry = false } = {}) {
@@ -1360,43 +1699,86 @@
       container.appendChild(empty);
       return;
     }
-    for (const message of chat.messages) appendMessage(message, message.from === state.user?.id, true);
+    const query = state.chatSearch.trim().toLowerCase();
+    const messages = query
+      ? chat.messages.filter((message) => String(message.text || '').toLowerCase().includes(query))
+      : chat.messages;
+    if (!messages.length) {
+      const empty = document.createElement('div');
+      empty.className = 'tc-chat-empty';
+      empty.innerHTML = `<i class="fa-solid fa-magnifying-glass"></i><strong>No matches</strong><div>No message in this conversation contains “${esc(state.chatSearch.trim())}”.</div>`;
+      container.appendChild(empty);
+      return;
+    }
+    for (const message of messages) appendMessage(message, message.from === state.user?.id, true);
     scrollChatToBottom();
+  }
+
+  function replyQuoteHtml(message) {
+    if (!message.replyTo) return '';
+    const original = messageById(message.replyTo.id);
+    const sender = original
+      ? (original.from === state.user?.id ? 'You' : displayNameOf(state.activeChat?.friend) || original.sender || 'Message')
+      : (message.replyTo.sender || 'Message');
+    const excerpt = original
+      ? (original.deletedAt ? 'Message deleted' : String(original.text || '').slice(0, 160))
+      : (message.replyTo.excerpt || 'Message unavailable');
+    return `<div class="tc-reply-quote"><strong>${esc(sender)}</strong><span>${esc(excerpt)}</span></div>`;
+  }
+
+  function reactionsHtml(message) {
+    const entries = Object.entries(message.reactions || {}).filter(([, users]) => Array.isArray(users) && users.length);
+    if (!entries.length) return '';
+    const mine = state.user?.id;
+    const html = entries.map(([emoji, users]) => {
+      const isMine = users.includes(mine);
+      return `<button type="button" class="tc-reaction ${isMine ? 'mine' : ''}" data-react-id="${esc(message.id)}" data-react-emoji="${esc(emoji)}" aria-label="React ${esc(emoji)}">${esc(emoji)}<span>${users.length}</span></button>`;
+    }).join('');
+    return `<div class="tc-reactions" data-reactions-for="${esc(message.id)}">${html}</div>`;
   }
 
   function appendMessage(message, mine, skipScroll = false) {
     const container = byId('tc-chat-messages');
     if (!container) return;
     byId('tc-chat-empty')?.remove();
-    if (message?.id && container.querySelector(`[data-msg-id="${message.id}"]`)) return;
+    if (message?.id && container.querySelector(`[data-msg-id="${CSS.escape(message.id)}"]`)) return;
     const row = document.createElement('div');
-    row.className = `tc-msg-row ${mine ? 'me' : 'them'}`;
+    row.className = `tc-msg-row ${mine ? 'me' : 'them'}${message.deletedAt ? ' is-deleted' : ''}`;
     if (message.id) row.dataset.msgId = message.id;
     const bubble = document.createElement('div');
     bubble.className = 'tc-bubble';
+    if (message.replyTo) bubble.insertAdjacentHTML('beforeend', replyQuoteHtml(message));
     const text = document.createElement('div');
-    text.textContent = String(message.text || '');
+    if (message.deletedAt) {
+      text.className = 'tc-msg-deleted';
+      text.textContent = 'Message deleted';
+    } else {
+      text.textContent = String(message.text || '');
+    }
     const meta = document.createElement('div');
     meta.className = 'tc-msg-meta';
     const time = document.createElement('span');
     time.textContent = new Date(message.timestamp || Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     meta.appendChild(time);
+    if (message.editedAt && !message.deletedAt) {
+      const edited = document.createElement('span');
+      edited.className = 'tc-msg-edited';
+      edited.textContent = ' · edited';
+      meta.appendChild(edited);
+    }
     if (mine) {
       const status = document.createElement('span');
       status.dataset.statusFor = message.id || '';
-      status.textContent = message.delivery === 'delivered' ? 'Delivered' : message.delivery === 'failed' ? 'Not delivered' : 'Sending…';
+      const seen = Array.isArray(message.seenBy) && message.seenBy.length > 0;
+      status.textContent = seen ? 'Seen' : message.delivery === 'delivered' ? 'Delivered' : message.delivery === 'failed' ? 'Not delivered' : 'Sending…';
       meta.appendChild(status);
     }
     bubble.append(text, meta);
     row.appendChild(bubble);
+    row.insertAdjacentHTML('beforeend', reactionsHtml(message));
+    row.insertAdjacentHTML('beforeend', `<button type="button" class="tc-msg-menu-btn" data-msg-menu="${esc(message.id || '')}" aria-label="Message actions"><i class="fa-solid fa-ellipsis"></i></button>`);
     container.appendChild(row);
     if (!skipScroll) scrollChatToBottom();
-  }
-
-  function updateMessageStatus(id, text) {
-    if (!id) return;
-    const el = byId('tc-chat-messages')?.querySelector(`[data-status-for="${id}"]`);
-    if (el) el.textContent = text;
   }
 
   function scrollChatToBottom() {
@@ -1431,6 +1813,37 @@
     if (!state.socket?.connected) { toast('You are offline. Reconnect to send.', 'error'); return; }
     if (text.length > 4000) { toast('Messages are limited to 4000 characters.', 'error'); return; }
 
+    if (state.editingMessageId) {
+      const id = state.editingMessageId;
+      const response = await emitAck('private:edit', {
+        conversationId: state.activeChat.conversationId,
+        id,
+        text
+      });
+      if (!response?.success) {
+        const reason = response?.reason;
+        toast(reason === 'edit_window'
+          ? 'This message is too old to edit.'
+          : reason === 'forbidden'
+            ? 'You can only edit your own messages.'
+            : 'Could not edit that message.', 'error');
+        return;
+      }
+      const message = messageById(id);
+      if (message) { message.text = text; message.editedAt = response.editedAt || Date.now(); }
+      cancelEdit();
+      renderChatMessages();
+      renderChatHeader();
+      return;
+    }
+
+    const replyTo = state.replyTo
+      ? {
+        id: state.replyTo.id,
+        sender: state.replyTo.sender,
+        excerpt: String(state.replyTo.text || '').slice(0, 180)
+      }
+      : null;
     const message = {
       id: newMessageId(),
       conversationId: state.activeChat.conversationId,
@@ -1438,14 +1851,24 @@
       sender: displayNameOf(state.user),
       text,
       timestamp: Date.now(),
-      delivery: 'sending'
+      delivery: 'sending',
+      replyTo,
+      reactions: {},
+      seenBy: []
     };
     state.activeChat.messages.push(message);
     appendMessage(message, true);
     if (input) { input.value = ''; input.style.height = ''; }
+    cancelReply();
     emitTyping(false);
 
-    const response = await emitAck('private:send', { conversationId: message.conversationId, id: message.id, text: message.text }, 10000);
+    const response = await emitAck('private:send', {
+      conversationId: message.conversationId,
+      id: message.id,
+      text: message.text,
+      replyTo,
+      forwarded: Boolean(message.forwarded)
+    }, 10000);
     if (response?.delivered) {
       message.delivery = 'delivered';
       updateMessageStatus(message.id, 'Delivered');
@@ -1470,6 +1893,243 @@
       // the chat so the user can retry without losing the screen.
       restoreActiveChat().catch(() => {});
     }
+  }
+
+  function updateMessageStatus(id, text) {
+    if (!id) return;
+    const el = byId('tc-chat-messages')?.querySelector(`[data-status-for="${CSS.escape(id)}"]`);
+    if (el) el.textContent = text;
+  }
+
+  function updateSeenStatus(ids) {
+    for (const id of ids || []) {
+      const message = messageById(id);
+      if (message && message.from === state.user?.id) {
+        message.seenBy = [...new Set([...(message.seenBy || []), state.activeChat?.friend?.id])].filter(Boolean);
+        updateMessageStatus(id, 'Seen');
+      }
+    }
+  }
+
+  function applyEditedMessage(payload) {
+    const message = messageById(payload?.id);
+    if (!message) return;
+    message.text = String(payload.text || '');
+    message.editedAt = payload.editedAt || Date.now();
+    renderChatMessages();
+  }
+
+  function applyDeletedMessage(payload) {
+    const message = messageById(payload?.id);
+    if (!message) return;
+    message.deletedAt = Date.now();
+    message.text = '';
+    message.reactions = {};
+    if (state.replyTo?.id === message.id) cancelReply();
+    if (state.editingMessageId === message.id) cancelEdit();
+    renderChatMessages();
+  }
+
+  function applyReaction(payload) {
+    const message = messageById(payload?.id);
+    if (!message) return;
+    message.reactions = payload.reactions || {};
+    renderChatMessages();
+  }
+
+  // ---------------------------------------------------------------------------
+  // Message actions
+  // ---------------------------------------------------------------------------
+
+  function closeMessageMenu() {
+    document.querySelector('.tc-msg-actions')?.remove();
+    document.querySelector('.tc-forward-sheet')?.remove();
+    state.messageMenu = null;
+  }
+
+  function openMessageMenu(anchor, messageId) {
+    closeMessageMenu();
+    const message = messageById(messageId);
+    if (!message) return;
+    const mine = message.from === state.user?.id;
+    const menu = document.createElement('div');
+    menu.className = 'tc-msg-actions';
+    menu.setAttribute('role', 'menu');
+    const reactions = ['👍', '❤️', '😂', '😮', '😢', '🙏'];
+    menu.innerHTML = `
+      <div class="tc-react-row" role="group" aria-label="React">
+        ${reactions.map((emoji) => `<button type="button" role="menuitem" data-menu-react="${esc(emoji)}" aria-label="React ${esc(emoji)}">${esc(emoji)}</button>`).join('')}
+      </div>
+      <div class="tc-action-sep"></div>
+      ${message.deletedAt ? '' : '<button type="button" role="menuitem" data-menu-action="reply"><i class="fa-solid fa-reply"></i> Reply</button>'}
+      ${message.deletedAt ? '' : '<button type="button" role="menuitem" data-menu-action="copy"><i class="fa-regular fa-copy"></i> Copy</button>'}
+      ${message.deletedAt ? '' : '<button type="button" role="menuitem" data-menu-action="forward"><i class="fa-solid fa-share"></i> Forward</button>'}
+      ${mine && !message.deletedAt ? '<div class="tc-action-sep"></div><button type="button" role="menuitem" data-menu-action="edit"><i class="fa-solid fa-pen"></i> Edit</button>' : ''}
+      ${mine ? '<button type="button" role="menuitem" class="danger" data-menu-action="delete"><i class="fa-solid fa-trash"></i> Delete</button>' : ''}
+    `;
+    document.body.appendChild(menu);
+    const rect = anchor.getBoundingClientRect();
+    const width = 196;
+    const left = Math.min(window.innerWidth - width - 8, Math.max(8, rect.right - width));
+    const top = Math.min(window.innerHeight - menu.offsetHeight - 8, rect.bottom + 6);
+    menu.style.left = `${left}px`;
+    menu.style.top = `${Math.max(8, top)}px`;
+    state.messageMenu = message.id;
+    menu.addEventListener('click', (event) => {
+      const react = event.target.closest('[data-menu-react]');
+      if (react) { reactToMessage(message.id, react.getAttribute('data-menu-react')); closeMessageMenu(); return; }
+      const action = event.target.closest('[data-menu-action]');
+      if (!action) return;
+      const name = action.getAttribute('data-menu-action');
+      closeMessageMenu();
+      if (name === 'reply') startReply(message);
+      else if (name === 'copy') copyMessage(message);
+      else if (name === 'forward') openForwardSheet(message);
+      else if (name === 'edit') { startEdit(message); renderChatHeader(); }
+      else if (name === 'delete') deleteMessage(message);
+    });
+  }
+
+  async function reactToMessage(messageId, emoji) {
+    if (!state.activeChat?.ready || !state.socket?.connected) return;
+    const response = await emitAck('private:react', {
+      conversationId: state.activeChat.conversationId,
+      id: messageId,
+      emoji
+    });
+    if (!response?.success) {
+      if (response?.reason !== 'deleted') toast('Could not add that reaction.', 'error');
+    }
+  }
+
+  async function copyMessage(message) {
+    const text = String(message.text || '');
+    if (!text) return;
+    try {
+      await navigator.clipboard.writeText(text);
+      toast('Copied to clipboard.', 'success');
+    } catch (_) {
+      const area = document.createElement('textarea');
+      area.value = text;
+      area.style.position = 'fixed';
+      area.style.opacity = '0';
+      document.body.appendChild(area);
+      area.select();
+      try { document.execCommand('copy'); toast('Copied to clipboard.', 'success'); }
+      catch (error) { toast('Could not copy the message.', 'error'); }
+      area.remove();
+    }
+  }
+
+  async function deleteMessage(message) {
+    if (!state.activeChat?.ready || !state.socket?.connected) return;
+    if (!window.confirm('Delete this message for both of you?')) return;
+    const response = await emitAck('private:delete', {
+      conversationId: state.activeChat.conversationId,
+      id: message.id
+    });
+    if (!response?.success) toast('Could not delete that message.', 'error');
+  }
+
+  function openForwardSheet(message) {
+    closeMessageMenu();
+    if (!message || message.deletedAt || !state.friends.length) {
+      toast('Add a friend before forwarding messages.', 'info');
+      return;
+    }
+    const sheet = document.createElement('div');
+    sheet.className = 'tc-forward-sheet';
+    sheet.innerHTML = `
+      <div class="tc-forward-panel" role="dialog" aria-modal="true" aria-label="Forward message">
+        <h3>Forward message</h3>
+        <p>Choose a friend. The forwarded copy starts a new temporary conversation.</p>
+        <div class="tc-forward-list">
+          ${state.friends.map((friend) => `<button type="button" data-forward-to="${esc(friend.id)}"><span class="tc-avatar tc-avatar-sm">${avatarInner(friend)}</span><span>${esc(displayNameOf(friend))}</span></button>`).join('')}
+        </div>
+        <button type="button" class="tc-btn tc-btn-ghost tc-btn-block" data-forward-cancel style="margin-top:12px">Cancel</button>
+      </div>
+    `;
+    document.body.appendChild(sheet);
+    sheet.addEventListener('click', (event) => {
+      if (event.target === sheet || event.target.closest('[data-forward-cancel]')) { closeMessageMenu(); return; }
+      const target = event.target.closest('[data-forward-to]');
+      if (target) {
+        const friendId = target.getAttribute('data-forward-to');
+        closeMessageMenu();
+        forwardToFriend(friendId, message);
+      }
+    });
+  }
+
+  async function forwardToFriend(friendId, message) {
+    if (!message || message.deletedAt) return;
+    if (state.activeChat?.friend?.id === friendId) {
+      // Forward into the open conversation without changing screens.
+      state.replyTo = null;
+      const input = byId('tc-chat-input');
+      const text = String(message.text || '');
+      if (!text) return;
+      const payload = {
+        id: newMessageId(),
+        conversationId: state.activeChat.conversationId,
+        from: state.user?.id,
+        sender: displayNameOf(state.user),
+        text,
+        timestamp: Date.now(),
+        delivery: 'sending',
+        forwarded: true,
+        replyTo: null,
+        reactions: {},
+        seenBy: []
+      };
+      state.activeChat.messages.push(payload);
+      appendMessage(payload, true);
+      if (input) { input.value = ''; input.style.height = ''; }
+      const response = await emitAck('private:send', {
+        conversationId: payload.conversationId,
+        id: payload.id,
+        text: payload.text,
+        forwarded: true
+      }, 10000);
+      payload.delivery = response?.delivered ? 'delivered' : 'failed';
+      updateMessageStatus(payload.id, response?.delivered ? 'Delivered' : 'Not delivered');
+      return;
+    }
+    toast('Opening the conversation with that friend…', 'info');
+    await openChat(friendId);
+    if (state.activeChat?.ready) {
+      const text = String(message.text || '');
+      const payload = {
+        id: newMessageId(),
+        conversationId: state.activeChat.conversationId,
+        from: state.user?.id,
+        sender: displayNameOf(state.user),
+        text,
+        timestamp: Date.now(),
+        delivery: 'sending',
+        forwarded: true,
+        replyTo: null,
+        reactions: {},
+        seenBy: []
+      };
+      state.activeChat.messages.push(payload);
+      appendMessage(payload, true);
+      const response = await emitAck('private:send', {
+        conversationId: payload.conversationId,
+        id: payload.id,
+        text: payload.text,
+        forwarded: true
+      }, 10000);
+      payload.delivery = response?.delivered ? 'delivered' : 'failed';
+      updateMessageStatus(payload.id, response?.delivered ? 'Delivered' : 'Not delivered');
+    }
+  }
+
+  function toggleMuteCurrent() {
+    const friend = state.activeChat?.friend;
+    if (!friend) return;
+    setMuted(friend.id, !isMuted(friend.id));
+    toast(isMuted(friend.id) ? 'Conversation muted.' : 'Conversation unmuted.', 'info');
   }
 
   // ---------------------------------------------------------------------------
@@ -1549,7 +2209,7 @@
     const friend = state.friends.find((entry) => entry.id === userId);
     try {
       const data = await apiFetch(`/api/auth/users/${encodeURIComponent(userId)}`);
-      state.viewedProfile = { self: false, user: { ...data.user, id: data.user.id }, friendsCount: data.friendsCount, online: Boolean(data.user.online), isFriend: Boolean(data.isFriend), fallbackFriend: friend };
+      state.viewedProfile = { self: false, user: { ...data.user, id: data.user.id }, friendsCount: data.friendsCount, online: Boolean(data.user.online), isFriend: Boolean(data.isFriend), blocked: Boolean(data.blocked), fallbackFriend: friend };
       showScreen('profile');
     } catch (error) { toast(error.message, 'error'); }
   }
@@ -1567,6 +2227,7 @@
       <h2>${esc(displayNameOf(user))}</h2>
       <p class="tc-handle">@${esc(user.username || 'unknown')}</p>
       <div class="tc-chips" style="margin-top:10px"><span class="tc-chip"><span class="tc-dot ${online ? 'online' : ''}"></span>${esc(status)}</span><span class="tc-chip"><i class="fa-solid fa-user-group"></i>${esc(friendCount)} friend${friendCount === 1 ? '' : 's'}</span></div>
+      ${profile.blocked ? '<div class="tc-error show" role="status" style="margin-top:12px">Contact is unavailable because one of you blocked the other. If you blocked them, unblock from Settings → Blocked accounts.</div>' : ''}
       <div class="tc-profile-stats">
         <div><strong>${esc(friendCount)}</strong><span>Friends</span></div>
         <div><strong>${esc(formatDate(user.createdAt))}</strong><span>Joined</span></div>
@@ -1576,19 +2237,31 @@
     const edit = byId('tc-profile-form');
     const actions = byId('tc-profile-actions');
     const nonfriend = byId('tc-profile-nonfriend');
+    const blocked = Boolean(profile.blocked);
     if (edit) edit.classList.toggle('hidden', !profile.self);
-    if (actions) actions.classList.toggle('hidden', profile.self || !profile.isFriend);
-    if (nonfriend) nonfriend.classList.toggle('hidden', profile.self || Boolean(profile.isFriend));
+    if (actions) actions.classList.toggle('hidden', profile.self || !profile.isFriend || blocked);
+    if (nonfriend) nonfriend.classList.toggle('hidden', profile.self || Boolean(profile.isFriend) || blocked);
     if (profile.self) {
       const nameInput = byId('tc-profile-display-name');
       const avatarInput = byId('tc-profile-avatar-url');
       if (nameInput && document.activeElement !== nameInput) nameInput.value = user.displayName || user.username || '';
       if (avatarInput && document.activeElement !== avatarInput) avatarInput.value = user.avatarUrl || '';
-    } else if (profile.isFriend) {
-      const chatButton = byId('tc-profile-chat');
-      if (chatButton) chatButton.dataset.chatUser = user.id || '';
-      const removeButton = byId('tc-profile-remove');
-      if (removeButton) removeButton.dataset.removeFriend = user.id || '';
+    } else if (!blocked) {
+      const userId = user.id || '';
+      if (profile.isFriend) {
+        const chatButton = byId('tc-profile-chat');
+        if (chatButton) chatButton.dataset.chatUser = userId;
+        const removeButton = byId('tc-profile-remove');
+        if (removeButton) removeButton.dataset.removeFriend = userId;
+      }
+      for (const id of ['tc-profile-block', 'tc-profile-block-nonfriend']) {
+        const button = byId(id);
+        if (button) button.dataset.blockUser = userId;
+      }
+      for (const id of ['tc-profile-report', 'tc-profile-report-nonfriend']) {
+        const button = byId(id);
+        if (button) button.dataset.reportUser = userId;
+      }
     }
   }
 
@@ -1659,6 +2332,235 @@
     setText('tc-settings-name', state.user ? `${displayNameOf(state.user)} · @${state.user.username}` : '');
     setText('tc-settings-friends', `${state.friends.length} friend${state.friends.length === 1 ? '' : 's'}`);
     setText('tc-settings-requests', `${state.requests.filter((request) => request.direction === 'incoming').length} pending`);
+
+    // Reflect the server-side privacy choices without clobbering a select the
+    // user is actively changing.
+    const onlineSelect = byId('tc-privacy-online');
+    const requestsSelect = byId('tc-privacy-requests');
+    if (state.privacy) {
+      if (onlineSelect && document.activeElement !== onlineSelect) onlineSelect.value = state.privacy.onlineStatusVisibility || 'friends';
+      if (requestsSelect && document.activeElement !== requestsSelect) requestsSelect.value = state.privacy.friendRequestPolicy || 'everyone';
+    }
+    renderSessions();
+    renderBlocks();
+  }
+
+  // ---------------------------------------------------------------------------
+  // Privacy, sessions, blocks and reports
+  // ---------------------------------------------------------------------------
+
+  async function loadPrivacy() {
+    try {
+      const data = await apiFetch('/api/auth/privacy');
+      state.privacy = data.privacy || null;
+      renderSettings();
+    } catch (error) {
+      if (error.code !== 'network') toast(error.message, 'error');
+    }
+  }
+
+  async function savePrivacy() {
+    if (state.privacySaving) return;
+    const button = byId('tc-privacy-save');
+    const online = String(byId('tc-privacy-online')?.value || 'friends');
+    const requests = String(byId('tc-privacy-requests')?.value || 'everyone');
+    setError('tc-privacy-error', '');
+    state.privacySaving = true;
+    setBusy(button, true, 'Saving…');
+    try {
+      const data = await apiFetch('/api/auth/privacy', {
+        method: 'PATCH',
+        body: { onlineStatusVisibility: online, friendRequestPolicy: requests }
+      });
+      state.privacy = data.privacy || state.privacy;
+      renderSettings();
+      toast('Privacy settings saved.', 'success');
+    } catch (error) {
+      setError('tc-privacy-error', error.message);
+    } finally {
+      state.privacySaving = false;
+      setBusy(button, false);
+    }
+  }
+
+  function sessionLabel(userAgent) {
+    const agent = String(userAgent || '');
+    if (/TempChatAndroid|EKA-Android/i.test(agent)) return 'EKA for Android';
+    if (/android/i.test(agent)) return 'Android device';
+    if (/iphone|ipad|ios/i.test(agent)) return 'iOS device';
+    if (/edg\//i.test(agent)) return 'Microsoft Edge';
+    if (/chrome\//i.test(agent)) return 'Chrome browser';
+    if (/firefox\//i.test(agent)) return 'Firefox browser';
+    if (/safari\//i.test(agent)) return 'Safari browser';
+    return agent ? 'Web browser' : 'Unknown device';
+  }
+
+  function renderSessions() {
+    const list = byId('tc-sessions-list');
+    if (!list) return;
+    if (state.sessionsLoading && !state.sessions) {
+      list.innerHTML = '<div class="eka-skeleton-list"><span></span><span></span></div>';
+      return;
+    }
+    const sessions = state.sessions || [];
+    if (!sessions.length) {
+      list.innerHTML = emptyHtml('fa-desktop', 'No active sessions', 'Sessions appear here after you sign in.');
+      return;
+    }
+    list.innerHTML = sessions.map((session) => {
+      const when = formatDate(session.createdAt);
+      return `<div class="tc-row">
+        <span class="tc-avatar tc-avatar-sm"><i class="fa-solid ${session.current ? 'fa-mobile-screen' : 'fa-desktop'}"></i></span>
+        <div class="tc-row-main">
+          <div class="tc-row-name">${esc(sessionLabel(session.userAgent))}${session.current ? ' <span class="tc-chip">This device</span>' : ''}</div>
+          <div class="tc-row-sub">Signed in ${esc(when)} · expires ${esc(formatDate(session.expiresAt))}</div>
+        </div>
+        <div class="tc-row-actions">
+          ${session.current ? '' : `<button type="button" class="tc-btn tc-btn-ghost tc-btn-sm" data-revoke-session="${esc(session.id)}"><i class="fa-solid fa-right-from-bracket"></i> Sign out</button>`}
+        </div>
+      </div>`;
+    }).join('');
+  }
+
+  async function loadSessions() {
+    state.sessionsLoading = true;
+    setVisible('tc-sessions-card', true);
+    renderSessions();
+    try {
+      const data = await apiFetch('/api/auth/sessions');
+      state.sessions = data.sessions || [];
+    } catch (error) {
+      state.sessions = [];
+      toast(error.message, 'error');
+    } finally {
+      state.sessionsLoading = false;
+      renderSessions();
+    }
+  }
+
+  async function revokeSession(id, button) {
+    if (!id) return;
+    setBusy(button, true, 'Signing out…');
+    try {
+      const data = await apiFetch(`/api/auth/sessions/${encodeURIComponent(id)}`, { method: 'DELETE' });
+      toast(data.current ? 'Signed out of this device.' : 'That session was signed out.', 'success');
+      if (data.current) { await handleSessionExpired(); return; }
+      await loadSessions();
+    } catch (error) {
+      toast(error.message, 'error');
+      setBusy(button, false);
+    }
+  }
+
+  function renderBlocks() {
+    const list = byId('tc-blocks-list');
+    if (!list) return;
+    if (state.blocksLoading && !state.blocks) {
+      list.innerHTML = '<div class="eka-skeleton-list"><span></span><span></span></div>';
+      return;
+    }
+    const blocked = state.blocks || [];
+    if (!blocked.length) {
+      list.innerHTML = emptyHtml('fa-ban', 'No blocked accounts', 'People you block will appear here.');
+      return;
+    }
+    list.innerHTML = blocked.map((user) => `<div class="tc-row">
+      <span class="tc-avatar">${avatarInner(user)}</span>
+      <div class="tc-row-main">
+        <div class="tc-row-name">${esc(displayNameOf(user))}</div>
+        <div class="tc-row-sub">@${esc(user.username)} · blocked ${esc(formatDate(user.blockedAt))}</div>
+      </div>
+      <div class="tc-row-actions">
+        <button type="button" class="tc-btn tc-btn-ghost tc-btn-sm" data-unblock-user="${esc(user.id)}"><i class="fa-solid fa-unlock"></i> Unblock</button>
+      </div>
+    </div>`).join('');
+  }
+
+  async function loadBlocks() {
+    state.blocksLoading = true;
+    setVisible('tc-blocks-card', true);
+    renderBlocks();
+    try {
+      const data = await apiFetch('/api/auth/blocks');
+      state.blocks = data.blocked || [];
+    } catch (error) {
+      state.blocks = [];
+      toast(error.message, 'error');
+    } finally {
+      state.blocksLoading = false;
+      renderBlocks();
+    }
+  }
+
+  async function unblockUser(userId, button) {
+    if (!userId) return;
+    setBusy(button, true, 'Unblocking…');
+    try {
+      await apiFetch(`/api/auth/users/${encodeURIComponent(userId)}/block`, { method: 'DELETE' });
+      toast('Account unblocked.', 'success');
+      state.blocks = (state.blocks || []).filter((entry) => entry.id !== userId);
+      renderBlocks();
+    } catch (error) {
+      toast(error.message, 'error');
+      setBusy(button, false);
+    }
+  }
+
+  async function logoutAll() {
+    if (!window.confirm('Sign out of every device, including this one?')) return;
+    try {
+      await apiFetch('/api/auth/sessions/logout-all', { method: 'POST' });
+    } catch (_) { /* local sign-out still proceeds */ }
+    await clearSession();
+    state.sessions = null;
+    state.blocks = null;
+    state.privacy = null;
+    setAccountMode(true);
+    showScreen('welcome');
+    toast('Signed out of all devices.', 'success');
+  }
+
+  async function blockProfileUser(userId, button) {
+    if (!userId) return;
+    if (!window.confirm('Block this account? They will no longer be able to message you or send friend requests.')) return;
+    setBusy(button, true, 'Blocking…');
+    try {
+      await apiFetch(`/api/auth/users/${encodeURIComponent(userId)}/block`, { method: 'POST' });
+      toast('Account blocked.', 'success');
+      state.blocks = null;
+      if (state.viewedProfile?.user) state.viewedProfile.blocked = true;
+      if (state.viewedProfile?.user?.id === userId) {
+        state.viewedProfile.isFriend = false;
+        state.viewedProfile.blocked = true;
+      }
+      await loadSocial().catch(() => {});
+      renderProfile();
+    } catch (error) {
+      toast(error.message, 'error');
+    } finally {
+      setBusy(button, false);
+    }
+  }
+
+  async function reportProfileUser(userId, button) {
+    if (!userId) return;
+    const reason = window.prompt('Report this account. Choose a reason: spam, harassment, impersonation, inappropriate, or other.', 'spam');
+    if (reason === null) return;
+    const allowed = new Set(['spam', 'harassment', 'impersonation', 'inappropriate', 'other']);
+    const normalized = String(reason).trim().toLowerCase();
+    const finalReason = allowed.has(normalized) ? normalized : 'other';
+    setBusy(button, true, 'Reporting…');
+    try {
+      await apiFetch(`/api/auth/users/${encodeURIComponent(userId)}/report`, {
+        method: 'POST',
+        body: { reason: finalReason }
+      });
+      toast('Report received. Thank you for helping keep EKA safe.', 'success');
+    } catch (error) {
+      toast(error.message, 'error');
+    } finally {
+      setBusy(button, false);
+    }
   }
 
   // ---------------------------------------------------------------------------
@@ -1786,7 +2688,10 @@
     const retryWhenOnline = () => { window.TempChatApp?.handleForeground?.(); };
     window.addEventListener('online', retryWhenOnline);
     document.addEventListener('visibilitychange', () => {
-      if (document.visibilityState === 'visible') retryWhenOnline();
+      if (document.visibilityState === 'visible') {
+        retryWhenOnline();
+        if (state.currentScreen === 'chat') markConversationSeen();
+      }
     });
     try {
       window.TempChatNative?.App?.addListener?.('appStateChange', ({ isActive }) => {
@@ -1820,6 +2725,75 @@
       }
     });
     byId('tc-chat-send')?.addEventListener('click', sendMessage);
+
+    byId('tc-chat-search-toggle')?.addEventListener('click', () => toggleChatSearch());
+    byId('tc-chat-search-close')?.addEventListener('click', () => toggleChatSearch(false));
+    byId('tc-chat-search')?.addEventListener('input', (event) => {
+      state.chatSearch = String(event.target.value || '');
+      renderChatMessages();
+    });
+    byId('tc-chat-mute')?.addEventListener('click', toggleMuteCurrent);
+    byId('tc-chat-reply-cancel')?.addEventListener('click', cancelReply);
+    byId('tc-privacy-save')?.addEventListener('click', savePrivacy);
+
+    document.addEventListener('change', async (event) => {
+      const input = event.target.closest('[data-notify-pref]');
+      if (!input) return;
+      const key = input.getAttribute('data-notify-pref');
+      if (!(key in state.notifyPrefs)) return;
+      if (key === 'desktop' && input.checked) {
+        if (typeof window.Notification === 'undefined') {
+          input.checked = false;
+          toast('This browser does not support desktop notifications.', 'error');
+          return;
+        }
+        if (window.Notification.permission === 'default') {
+          try { await window.Notification.requestPermission(); } catch (_) { /* denied */ }
+        }
+        if (window.Notification.permission !== 'granted') {
+          input.checked = false;
+          state.notifyPrefs.desktop = false;
+          saveNotifyPrefs();
+          toast('Desktop notifications were not allowed by the browser.', 'error');
+          return;
+        }
+      }
+      state.notifyPrefs[key] = Boolean(input.checked);
+      saveNotifyPrefs();
+    });
+
+    byId('tc-chat-messages')?.addEventListener('click', (event) => {
+      const menuButton = event.target.closest('[data-msg-menu]');
+      if (menuButton) {
+        event.preventDefault();
+        openMessageMenu(menuButton, menuButton.getAttribute('data-msg-menu'));
+        return;
+      }
+      const reaction = event.target.closest('[data-react-id]');
+      if (reaction) {
+        event.preventDefault();
+        reactToMessage(reaction.getAttribute('data-react-id'), reaction.getAttribute('data-react-emoji'));
+      }
+    });
+    byId('tc-chat-messages')?.addEventListener('contextmenu', (event) => {
+      const row = event.target.closest('[data-msg-id]');
+      if (!row) return;
+      event.preventDefault();
+      openMessageMenu(row.querySelector('[data-msg-menu]') || row, row.getAttribute('data-msg-id'));
+    });
+    document.addEventListener('click', (event) => {
+      if (!event.target.closest('.tc-msg-actions') && !event.target.closest('[data-msg-menu]')) {
+        document.querySelector('.tc-msg-actions')?.remove();
+      }
+    });
+    document.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape') {
+        closeMessageMenu();
+        if (state.chatSearchActive) toggleChatSearch(false);
+        if (state.replyTo) cancelReply();
+        if (state.editingMessageId) { cancelEdit(); renderChatHeader(); }
+      }
+    });
 
     accountApp?.addEventListener('click', (event) => {
       const nav = event.target.closest('[data-nav]');
@@ -1856,6 +2830,18 @@
       const remove = event.target.closest('[data-remove-friend]');
       if (remove) { event.preventDefault(); removeFriend(remove.getAttribute('data-remove-friend')); return; }
 
+      const blockUser = event.target.closest('[data-block-user]');
+      if (blockUser) { event.preventDefault(); blockProfileUser(blockUser.getAttribute('data-block-user'), blockUser); return; }
+
+      const reportUser = event.target.closest('[data-report-user]');
+      if (reportUser) { event.preventDefault(); reportProfileUser(reportUser.getAttribute('data-report-user'), reportUser); return; }
+
+      const unblockUserButton = event.target.closest('[data-unblock-user]');
+      if (unblockUserButton) { event.preventDefault(); unblockUser(unblockUserButton.getAttribute('data-unblock-user'), unblockUserButton); return; }
+
+      const revokeSessionButton = event.target.closest('[data-revoke-session]');
+      if (revokeSessionButton) { event.preventDefault(); revokeSession(revokeSessionButton.getAttribute('data-revoke-session'), revokeSessionButton); return; }
+
       const friendsFilter = event.target.closest('[data-friends-filter]');
       if (friendsFilter) { state.friendsFilter = friendsFilter.getAttribute('data-friends-filter'); renderFriends(); return; }
 
@@ -1874,6 +2860,9 @@
         else if (name === 'open-profile' && state.user) openProfile(state.user.id);
         else if (name === 'open-chat' && state.activeChat?.friend) openChat(state.activeChat.friend.id);
         else if (name === 'retry-chat' && state.activeChat?.friend) openChat(state.activeChat.friend.id);
+        else if (name === 'open-sessions') loadSessions();
+        else if (name === 'open-blocks') loadBlocks();
+        else if (name === 'logout-all') logoutAll();
       }
     });
   }
@@ -1920,6 +2909,8 @@
     state.booted = true;
     accountApp = byId('account-app');
     backButton = byId('tc-back-to-account');
+    loadMutedFriends();
+    loadNotifyPrefs();
 
     // Private one-to-one room invitations are delivered by the room socket.
     // Registering here means a notification received during session restore is

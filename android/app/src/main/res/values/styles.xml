@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <!-- Native chrome mirrors TempChat's shared blossom canvas. -->
+    <style name="AppTheme" parent="Theme.AppCompat.Light.NoActionBar">
+        <item name="colorPrimary">#7A4E9B</item>
+        <item name="colorPrimaryDark">#633C82</item>
+        <item name="colorAccent">#A854B2</item>
+        <item name="android:windowBackground">#FFF6FA</item>
+        <item name="android:navigationBarColor">#FFF6FA</item>
+        <item name="android:statusBarColor">#FFF6FA</item>
+        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:windowLightNavigationBar">true</item>
+    </style>
+
+    <style name="AppTheme.NoActionBar" parent="Theme.AppCompat.Light.NoActionBar">
+        <item name="windowActionBar">false</item>
+        <item name="windowNoTitle">true</item>
+        <item name="android:windowBackground">#FFF6FA</item>
+        <item name="android:navigationBarColor">#FFF6FA</item>
+        <item name="android:statusBarColor">#FFF6FA</item>
+        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:windowLightNavigationBar">true</item>
+    </style>
+
+
+    <style name="AppTheme.NoActionBarLaunch" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">#FFF6FA</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/splash</item>
+        <item name="postSplashScreenTheme">@style/AppTheme.NoActionBar</item>
+        <item name="android:navigationBarColor">#FFF6FA</item>
+        <item name="android:statusBarColor">#FFF6FA</item>
+        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:windowLightNavigationBar">true</item>
+    </style>
+</resources>

@@ -1,14 +1,43 @@
 # Dependencies
 node_modules/
 
-# Environment variables
+# Environment variables and secrets (never commit real values)
 .env
 .env.*
+!.env.example
+!backend/.env.example
+
+# Android signing material and Firebase credentials
+*.jks
+*.keystore
+google-services.json
+
+# Build artifacts / installable packages
+*.apk
+*.aab
+*.ap_
+*.dex
+*.class
+*.hprof
+
+# Generated Android web bundle (rebuilt by `npm run build`)
+/www/*
+!/www/app-config.js
+
+# Gradle and Android build output
+.gradle/
+android/**/build/
+android/.tempchat-build/
+android/.tempchat-assets/
+
+# Local SDK configuration
+local.properties
 
 # Logs
 npm-debug.log*
 yarn-debug.log*
 pnpm-debug.log*
+*.log
 
 # OS files
 .DS_Store
@@ -17,3 +46,9 @@ Thumbs.db
 # IDE files
 .vscode/
 .idea/
+
+# Temporary files
+*.tmp
+*.temp
+*.bak
+*.swp

@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <meta name="theme-color" content="#fff7fb">
-  <meta name="description" content="EKA �?" private, real-time conversations that disappear when you leave.">
+  <meta name="description" content="EKA — private, real-time conversations that disappear when you leave.">
   <title>EKA | Talk in the now</title>
 
   <script>
@@ -13,6 +13,17 @@
         document.documentElement.classList.add('eka-onboarding-complete');
       }
     } catch (_) { /* The onboarding module finishes this check once storage is available. */ }
+    // Resolve the saved appearance before the first paint so a dark-theme
+    // session never flashes a white surface.
+    try {
+      const savedTheme = JSON.parse(localStorage.getItem('tempchat_theme') || 'null');
+      const savedMode = savedTheme && savedTheme.mode ? savedTheme.mode : 'system';
+      const systemDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+      const resolved = savedMode === 'dark' || (savedMode === 'system' && systemDark) ? 'dark' : 'light';
+      document.documentElement.dataset.theme = resolved;
+      document.documentElement.dataset.atmosphere = resolved;
+      document.documentElement.style.colorScheme = resolved;
+    } catch (_) { /* Storage unavailable: the theme script applies the default later. */ }
   </script>
   <link rel="icon" type="image/svg+xml" href="assets/eka-logo.svg">
   <link rel="apple-touch-icon" href="assets/eka-logo.svg">
@@ -1504,6 +1515,7 @@
   <link rel="stylesheet" href="assets/tempchat-app.css">
   <link rel="stylesheet" href="assets/eka.css">
   <link rel="stylesheet" href="assets/eka-onboarding.css">
+  <link rel="stylesheet" href="assets/eka-ui.css">
 </head>
 <body class="h-screen w-screen flex flex-col font-sans antialiased text-sm md:text-base account-mode">
 
@@ -1812,9 +1824,22 @@
         <button type="button" class="tc-icon-btn" data-action="leave-chat" aria-label="Leave chat"><i class="fa-solid fa-arrow-left"></i></button>
         <span id="tc-chat-avatar" class="tc-avatar tc-avatar-sm"></span>
         <div class="tc-chat-head"><h1 id="tc-chat-name">Chat</h1><p id="tc-chat-status"><span class="tc-dot"></span>Offline</p></div>
+        <div class="tc-chat-actions">
+          <button type="button" id="tc-chat-search-toggle" class="tc-icon-btn tc-icon-btn-sm" aria-label="Search conversation"><i class="fa-solid fa-magnifying-glass"></i></button>
+          <button type="button" id="tc-chat-mute" class="tc-icon-btn tc-icon-btn-sm" aria-label="Mute conversation" aria-pressed="false"><i class="fa-solid fa-bell"></i></button>
+        </div>
+      </div>
+      <div id="tc-chat-search-bar" class="tc-chat-search hidden">
+        <i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i>
+        <input id="tc-chat-search" type="search" placeholder="Search this conversation" aria-label="Search this conversation" autocomplete="off">
+        <button type="button" id="tc-chat-search-close" class="tc-icon-btn tc-icon-btn-sm" aria-label="Close search"><i class="fa-solid fa-xmark"></i></button>
       </div>
       <div id="tc-chat-messages" class="tc-chat-body"></div>
       <div id="tc-chat-typing" class="tc-typing" aria-live="polite"></div>
+      <div id="tc-chat-reply" class="tc-reply-bar hidden" aria-live="polite">
+        <div class="tc-reply-bar-copy"><strong id="tc-chat-reply-name"></strong><span id="tc-chat-reply-text"></span></div>
+        <button type="button" id="tc-chat-reply-cancel" class="tc-icon-btn tc-icon-btn-sm" aria-label="Cancel reply"><i class="fa-solid fa-xmark"></i></button>
+      </div>
       <div class="tc-composer">
         <textarea id="tc-chat-input" rows="1" maxlength="4000" placeholder="Write a temporary message…" aria-label="Message"></textarea>
         <button id="tc-chat-send" type="button" class="tc-send" aria-label="Send message"><i class="fa-solid fa-paper-plane"></i></button>
@@ -1833,10 +1858,14 @@
           <div id="tc-profile-actions" class="tc-card hidden" style="margin-top:14px">
             <button id="tc-profile-chat" type="button" class="tc-btn tc-btn-primary tc-btn-block" data-chat-user=""><i class="fa-solid fa-comment"></i> Chat privately</button>
             <button id="tc-profile-remove" type="button" class="tc-btn tc-btn-danger tc-btn-block" data-remove-friend="" style="margin-top:8px"><i class="fa-solid fa-user-minus"></i> Remove friend</button>
+            <button id="tc-profile-block" type="button" class="tc-btn tc-btn-ghost tc-btn-block" data-block-user="" style="margin-top:8px"><i class="fa-solid fa-ban"></i> Block</button>
+            <button id="tc-profile-report" type="button" class="tc-btn tc-btn-ghost tc-btn-block" data-report-user="" style="margin-top:8px"><i class="fa-solid fa-flag"></i> Report</button>
           </div>
           <div id="tc-profile-nonfriend" class="tc-card hidden" style="margin-top:14px">
             <p class="tc-hint" style="margin:0 0 10px;line-height:1.5">You are not friends yet. Add this person from the Add Friends screen to start a private chat.</p>
             <button type="button" class="tc-btn tc-btn-primary tc-btn-block" data-nav="add"><i class="fa-solid fa-user-plus"></i> Add friends</button>
+            <button id="tc-profile-block-nonfriend" type="button" class="tc-btn tc-btn-ghost tc-btn-block" data-block-user="" style="margin-top:8px"><i class="fa-solid fa-ban"></i> Block</button>
+            <button id="tc-profile-report-nonfriend" type="button" class="tc-btn tc-btn-ghost tc-btn-block" data-report-user="" style="margin-top:8px"><i class="fa-solid fa-flag"></i> Report</button>
           </div>
           <form id="tc-profile-form" class="tc-card hidden" style="margin-top:14px" novalidate>
             <h3 style="margin:0 0 12px;font-size:0.9rem">Edit profile</h3>
@@ -1888,12 +1917,82 @@
             </div>
           </div>
 
+          <div class="tc-card" style="margin-top:14px">
+            <div class="eka-settings-card-head">
+              <span class="eka-settings-card-icon"><i class="fa-solid fa-circle-half-stroke"></i></span>
+              <div><h3>Appearance</h3><p>Choose how EKA looks on this device.</p></div>
+            </div>
+            <div class="eka-theme-switch" role="radiogroup" aria-label="Appearance">
+              <button type="button" class="eka-theme-option" data-theme-option="light" role="radio" aria-checked="false" onclick="setThemeMode('light')">
+                <i class="fa-solid fa-sun"></i><span>Light</span>
+              </button>
+              <button type="button" class="eka-theme-option" data-theme-option="dark" role="radio" aria-checked="false" onclick="setThemeMode('dark')">
+                <i class="fa-solid fa-moon"></i><span>Dark</span>
+              </button>
+              <button type="button" class="eka-theme-option" data-theme-option="system" role="radio" aria-checked="false" onclick="setThemeMode('system')">
+                <i class="fa-solid fa-laptop"></i><span>System</span>
+              </button>
+            </div>
+          </div>
+
           <div class="tc-card eka-settings-notification-card" style="margin-top:14px">
             <div class="eka-settings-card-head">
               <span class="eka-settings-card-icon"><i class="fa-solid fa-bell"></i></span>
               <div><h3>Notifications</h3><p id="eka-notification-setting-status" role="status" aria-live="polite">Checking notification status...</p></div>
             </div>
             <button id="eka-notification-setting-button" type="button" class="tc-btn tc-btn-ghost tc-btn-block" data-eka-action="notifications">Manage</button>
+            <div class="eka-settings-prefs">
+              <label><input type="checkbox" data-notify-pref="messages" checked><span><strong>New messages</strong><small>Show an alert when a friend messages you.</small></span></label>
+              <label><input type="checkbox" data-notify-pref="requests" checked><span><strong>Friend requests</strong><small>Alert me when someone wants to connect.</small></span></label>
+              <label><input type="checkbox" data-notify-pref="invites" checked><span><strong>Private room invites</strong><small>Alert me when a friend invites me to chat.</small></span></label>
+              <label><input type="checkbox" data-notify-pref="presence" checked><span><strong>Friend online</strong><small>Show a quiet alert when a friend comes online.</small></span></label>
+              <label><input type="checkbox" data-notify-pref="desktop"><span><strong>Desktop alerts</strong><small>Use browser notifications while EKA is in the background.</small></span></label>
+            </div>
+          </div>
+
+          <div id="tc-privacy-card" class="tc-card" style="margin-top:14px">
+            <div class="eka-settings-card-head">
+              <span class="eka-settings-card-icon"><i class="fa-solid fa-user-shield"></i></span>
+              <div><h3>Privacy &amp; safety</h3><p>Control what others can see and who can reach you.</p></div>
+            </div>
+            <div class="tc-field">
+              <label class="tc-label" for="tc-privacy-online">Online status</label>
+              <select id="tc-privacy-online" class="tc-input">
+                <option value="everyone">Everyone</option>
+                <option value="friends">Friends only</option>
+                <option value="nobody">Nobody</option>
+              </select>
+            </div>
+            <div class="tc-field">
+              <label class="tc-label" for="tc-privacy-requests">Friend requests</label>
+              <select id="tc-privacy-requests" class="tc-input">
+                <option value="everyone">Everyone</option>
+                <option value="nobody">Nobody</option>
+              </select>
+            </div>
+            <div id="tc-privacy-error" class="tc-error" role="alert"></div>
+            <button id="tc-privacy-save" type="button" class="tc-btn tc-btn-primary tc-btn-block" style="margin-top:12px">Save privacy settings</button>
+            <div class="eka-settings-legal-links" style="margin-top:12px">
+              <button type="button" data-action="open-sessions"><span><i class="fa-solid fa-desktop"></i> Active sessions</span><i class="fa-solid fa-chevron-right"></i></button>
+              <button type="button" data-action="open-blocks"><span><i class="fa-solid fa-ban"></i> Blocked accounts</span><i class="fa-solid fa-chevron-right"></i></button>
+            </div>
+            <button type="button" class="tc-btn tc-btn-danger tc-btn-block" data-action="logout-all" style="margin-top:10px"><i class="fa-solid fa-power-off"></i> Log out of all devices</button>
+          </div>
+
+          <div id="tc-sessions-card" class="tc-card hidden" style="margin-top:14px">
+            <div class="eka-settings-card-head">
+              <span class="eka-settings-card-icon"><i class="fa-solid fa-desktop"></i></span>
+              <div><h3>Active sessions</h3><p>Devices currently signed in to your account.</p></div>
+            </div>
+            <div id="tc-sessions-list" class="tc-list" style="margin-top:12px"></div>
+          </div>
+
+          <div id="tc-blocks-card" class="tc-card hidden" style="margin-top:14px">
+            <div class="eka-settings-card-head">
+              <span class="eka-settings-card-icon"><i class="fa-solid fa-ban"></i></span>
+              <div><h3>Blocked accounts</h3><p>Blocked people cannot message you or send friend requests.</p></div>
+            </div>
+            <div id="tc-blocks-list" class="tc-list" style="margin-top:12px"></div>
           </div>
 
           <div class="tc-card eka-settings-legal-card" style="margin-top:14px">
@@ -1950,7 +2049,7 @@
 
     <nav id="tc-bottom-nav" class="tc-bottom-nav hidden" aria-label="Account navigation">
       <button type="button" class="tc-nav-item" data-nav="home"><i class="fa-solid fa-house"></i><span>Home</span></button>
-      <button type="button" class="tc-nav-item" data-nav="friends"><i class="fa-solid fa-user-group"></i><span>Friends</span></button>
+      <button type="button" class="tc-nav-item" data-nav="friends"><i class="fa-solid fa-user-group"></i><span>Friends</span><span id="tc-nav-unread-badge" class="tc-nav-badge hidden">0</span></button>
       <button type="button" class="tc-nav-item" data-nav="requests"><i class="fa-solid fa-envelope"></i><span>Requests</span><span id="tc-nav-requests-badge" class="tc-nav-badge hidden">0</span></button>
       <button type="button" class="tc-nav-item" data-nav="settings"><i class="fa-solid fa-gear"></i><span>Settings</span></button>
     </nav>
@@ -2087,6 +2186,35 @@
           <p id="entry-helper" class="eka-field-hint">Ask the host for the six-digit code.</p>
         </div>
 
+        <div id="create-room-settings" class="hidden space-y-3 rounded-2xl border border-[var(--border-color)] bg-[var(--bg-base)] p-3">
+          <p class="text-xs font-bold uppercase tracking-wider text-[var(--text-muted)]">Room limits</p>
+          <div class="grid grid-cols-2 gap-2">
+            <div>
+              <label class="eka-field-label" for="create-max-members">Members</label>
+              <input id="create-max-members" type="number" min="2" max="50" step="1" value="8" class="eka-field-input">
+            </div>
+            <div>
+              <label class="eka-field-label" for="create-expiry">Expires</label>
+              <select id="create-expiry" class="eka-field-input">
+                <option value="15">15 minutes</option>
+                <option value="60">1 hour</option>
+                <option value="240">4 hours</option>
+                <option value="1440" selected>24 hours</option>
+              </select>
+            </div>
+          </div>
+          <div>
+            <label class="eka-field-label" for="create-message-ttl">Message expiry</label>
+            <select id="create-message-ttl" class="eka-field-input">
+              <option value="0" selected>Off</option>
+              <option value="15">15 minutes</option>
+              <option value="60">1 hour</option>
+              <option value="240">4 hours</option>
+              <option value="1440">24 hours</option>
+            </select>
+          </div>
+        </div>
+
         <div class="flex items-center justify-between text-sm mt-2">
           <button id="toggle-mode-btn" onclick="toggleEntryMode()" class="text-[var(--accent-color)] hover:underline">Want to create a room instead?</button>
         </div>
@@ -2133,8 +2261,14 @@
       </div>
       
       <div class="flex items-center gap-2 lg:gap-4">
+        <button id="room-search-button" onclick="toggleRoomSearch()" aria-label="Search messages" class="header-action h-10 w-10 rounded-full text-[var(--text-muted)] transition-colors">
+          <i class="fa-solid fa-magnifying-glass"></i>
+        </button>
         <button id="join-requests-button" onclick="toggleJoinRequests()" aria-label="Review join requests" class="header-action hidden h-10 min-w-10 rounded-full px-3 text-[var(--text-muted)] transition-colors relative">
           <i class="fa-solid fa-user-clock"></i><span id="join-request-count" class="hidden request-count">0</span>
+        </button>
+        <button id="room-governance-button" onclick="openRoomGovernance()" aria-label="Room settings and members" class="header-action hidden h-10 min-w-10 rounded-full px-3 text-[var(--text-muted)] transition-colors">
+          <i class="fa-solid fa-user-shield"></i>
         </button>
         <button id="share-room-button" onclick="openShareRoomModal()" aria-label="Share this room" class="header-action hidden h-10 rounded-full px-3 text-xs font-bold text-[var(--text-muted)] transition-colors">
           <i class="fa-solid fa-share-nodes mr-1.5"></i><span class="hidden sm:inline">Share</span>
@@ -2173,6 +2307,12 @@
       <div id="join-requests-list" class="join-requests-list"></div>
     </section>
 
+    <div id="room-search-bar" class="tc-chat-search hidden">
+      <i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i>
+      <input id="room-search-input" type="search" placeholder="Search messages in this room" aria-label="Search messages in this room" autocomplete="off">
+      <button type="button" id="room-search-close" class="tc-icon-btn tc-icon-btn-sm" aria-label="Close search"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+
     <!-- Message Area -->
     <main id="message-container" class="message-stage flex-1 min-h-0 overflow-y-auto p-4 lg:p-8 flex flex-col gap-4 relative" aria-live="polite">
       <!-- Background pattern layer -->
@@ -2199,6 +2339,10 @@
     <!-- Input Area -->
     <footer class="composer-dock glass p-3 lg:p-4 border-t border-[var(--border-color)] shrink-0 z-10">
       <div class="max-w-4xl mx-auto">
+        <div id="room-reply-bar" class="tc-reply-bar hidden" aria-live="polite">
+          <div class="tc-reply-bar-copy"><strong id="room-reply-name"></strong><span id="room-reply-text"></span></div>
+          <button type="button" onclick="cancelRoomReply()" class="tc-icon-btn tc-icon-btn-sm" aria-label="Cancel reply"><i class="fa-solid fa-xmark"></i></button>
+        </div>
         <div id="attachment-preview" class="attachment-preview hidden" aria-live="polite"></div>
         <div class="composer-shell flex items-end gap-2 bg-[var(--bg-surface)] border border-[var(--border-color)] rounded-2xl p-1.5 shadow-sm focus-within:border-[var(--accent-color)] focus-within:ring-1 focus-within:ring-[var(--accent-color)] transition-all">
         <input id="attachment-input" type="file" class="hidden" multiple aria-label="Choose files to attach">
@@ -2213,6 +2357,9 @@
 
         <textarea id="message-input" rows="1" class="flex-1 bg-transparent border-none focus:outline-none focus:ring-0 resize-none py-2.5 px-2 text-[var(--text-main)] max-h-32 min-h-[44px]" placeholder="Message..."></textarea>
         
+        <button id="voice-button" type="button" onclick="toggleVoiceRecording()" aria-label="Record a voice message" title="Record voice message" class="composer-action w-10 h-10 shrink-0 rounded-xl text-[var(--text-muted)] flex items-center justify-center transition-colors">
+          <i class="fa-solid fa-microphone"></i>
+        </button>
         <button onclick="sendMessage()" id="send-btn" aria-label="Send message" disabled class="send-button w-10 h-10 shrink-0 rounded-xl bg-[var(--accent-color)] text-white flex items-center justify-center hover:bg-[var(--accent-hover)] transition-colors shadow-sm mb-0.5 mr-0.5 disabled:cursor-not-allowed disabled:opacity-45 disabled:shadow-none">
           <i class="fa-solid fa-paper-plane"></i>
         </button>
@@ -2245,6 +2392,59 @@
         <button type="button" onclick="shareRoomForInstagram()" class="share-action col-span-2 sm:col-span-1"><i class="fa-brands fa-instagram"></i><span>Instagram</span></button>
       </div>
       <p id="instagram-share-note" class="mt-3 text-xs leading-5 text-[var(--text-faint)]">Instagram does not offer a universal browser share link. On supported phones, this opens the device share sheet; otherwise, copy the link.</p>
+    </section>
+  </div>
+
+  <!-- Host/admin room governance -->
+  <div id="room-governance-modal" class="fixed inset-0 z-50 hidden flex items-end justify-center p-3 sm:items-center sm:p-4" role="dialog" aria-modal="true" aria-labelledby="room-governance-title">
+    <button type="button" class="absolute inset-0 bg-black/60 backdrop-blur-sm" aria-label="Close room settings" onclick="closeModal('room-governance-modal')"></button>
+    <section class="glass relative z-10 flex max-h-[88vh] w-full max-w-md flex-col overflow-hidden rounded-3xl shadow-2xl">
+      <div class="flex items-start justify-between gap-4 border-b border-[var(--border-color)] p-5">
+        <div>
+          <p class="text-xs font-bold uppercase tracking-[0.16em] text-[var(--accent-color)]">Room controls</p>
+          <h2 id="room-governance-title" class="mt-1 text-xl font-bold text-[var(--text-main)]">Settings &amp; members</h2>
+          <p id="room-governance-summary" class="mt-1 text-xs text-[var(--text-muted)]">—</p>
+        </div>
+        <button type="button" onclick="closeModal('room-governance-modal')" class="header-action grid h-9 w-9 place-items-center rounded-full text-[var(--text-muted)]" aria-label="Close"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      <div class="flex-1 overflow-y-auto p-5">
+        <div id="room-governance-host-fields" class="space-y-3">
+          <label class="flex items-center justify-between gap-3 rounded-2xl border border-[var(--border-color)] bg-[var(--bg-base)] p-3">
+            <span><strong class="block text-sm text-[var(--text-main)]">Lock room</strong><small class="text-xs text-[var(--text-muted)]">Stop new join requests.</small></span>
+            <input id="room-governance-locked" type="checkbox" class="h-5 w-5 accent-[var(--accent-color)]">
+          </label>
+          <div>
+            <label class="eka-field-label" for="room-governance-max">Member limit</label>
+            <input id="room-governance-max" type="number" min="2" max="50" step="1" class="eka-field-input">
+          </div>
+          <div>
+            <label class="eka-field-label" for="room-governance-message-ttl">Message expiry</label>
+            <select id="room-governance-message-ttl" class="eka-field-input">
+              <option value="0">Off (messages live until the room closes)</option>
+              <option value="15">15 minutes</option>
+              <option value="60">1 hour</option>
+              <option value="240">4 hours</option>
+              <option value="1440">24 hours</option>
+            </select>
+          </div>
+          <div>
+            <label class="eka-field-label" for="room-governance-expiry">Room expires in</label>
+            <select id="room-governance-expiry" class="eka-field-input">
+              <option value="15">15 minutes</option>
+              <option value="60">1 hour</option>
+              <option value="240">4 hours</option>
+              <option value="1440">24 hours</option>
+            </select>
+          </div>
+          <p id="room-governance-expiry-note" class="text-xs text-[var(--text-muted)]"></p>
+          <div id="room-governance-error" class="tc-error" role="alert"></div>
+          <button id="room-governance-save" type="button" onclick="saveRoomGovernance()" class="tc-btn tc-btn-primary tc-btn-block"><i class="fa-solid fa-floppy-disk"></i> Save settings</button>
+        </div>
+        <div class="mt-5 border-t border-[var(--border-color)] pt-4">
+          <h3 class="text-xs font-bold uppercase tracking-wider text-[var(--text-muted)]">Members</h3>
+          <div id="room-members-list" class="mt-2 space-y-2"></div>
+        </div>
+      </div>
     </section>
   </div>
 
@@ -2445,8 +2645,8 @@
     // --- STATE ---
     const AppState = {
       user: { id: null, username: '' },
-      room: { code: '', users: [], token: '', isHost: false, pending: [], private: false },
-      theme: { mode: 'light', accent: '#ec4899', bg: 'plain', bgColor: 'none' },
+      room: { code: '', users: [], token: '', isHost: false, role: 'member', pending: [], private: false, settings: null },
+      theme: { mode: 'system', accent: '#d6336c', bg: 'plain', bgColor: 'none' },
       currentGame: null,
       gameSession: null
     };
@@ -2828,6 +3028,7 @@
     }
 
     const ACCENT_PALETTES = {
+      '#d6336c': { gradient: 'linear-gradient(135deg, #d6336c 0%, #b02a5b 100%)', wash: 'rgba(214, 51, 108, 0.1)', hover: '#b02a5b' },
       '#5d5ce6': { gradient: 'linear-gradient(135deg, #5857dc 0%, #7a66e9 52%, #d478a8 100%)', wash: 'rgba(93, 92, 230, 0.11)', hover: '#4d4bd4' },
       '#3b82f6': { gradient: 'linear-gradient(135deg, #377ee6 0%, #5c9aef 52%, #78b9d9 100%)', wash: 'rgba(59, 130, 246, 0.11)', hover: '#2871d6' },
       '#a855f7': { gradient: 'linear-gradient(135deg, #8045d5 0%, #a855f7 52%, #d477ca 100%)', wash: 'rgba(168, 85, 247, 0.11)', hover: '#903fdc' },
@@ -2837,19 +3038,39 @@
       '#ef4444': { gradient: 'linear-gradient(135deg, #ce5367 0%, #e96670 52%, #e89a75 100%)', wash: 'rgba(239, 68, 68, 0.11)', hover: '#d93745' }
     };
 
-    function applyTheme() {
-      const { mode, accent, bg } = AppState.theme;
-      const root = document.documentElement;
-      const palette = ACCENT_PALETTES[accent.toLowerCase()] || ACCENT_PALETTES['#5d5ce6'];
+    function resolvedTheme(mode) {
+      if (mode === 'dark') return 'dark';
+      if (mode === 'light') return 'light';
+      return window.matchMedia?.('(prefers-color-scheme: dark)')?.matches ? 'dark' : 'light';
+    }
 
-      // All available atmospheres remain deliberately light for comfortable
-      // long-form messaging, including previously saved "dark" selections.
-      root.classList.remove('dark');
-      root.dataset.atmosphere = mode;
+    function applyTheme() {
+      const { mode, bg } = AppState.theme;
+      const accent = /^#[0-9a-f]{6}$/i.test(String(AppState.theme.accent || '')) ? AppState.theme.accent : '#d6336c';
+      const root = document.documentElement;
+      const palette = ACCENT_PALETTES[accent.toLowerCase()] || ACCENT_PALETTES['#d6336c'];
+      const theme = resolvedTheme(mode);
+
+      // A real light/dark theme: the resolved value drives both the legacy
+      // atmosphere attribute and the v2 design tokens.
+      root.classList.toggle('dark', theme === 'dark');
+      root.dataset.theme = theme;
+      root.dataset.atmosphere = theme;
+      root.style.colorScheme = theme;
       root.style.setProperty('--accent-color', accent);
       root.style.setProperty('--accent-hover', palette.hover);
-      root.style.setProperty('--accent-gradient', palette.gradient);
+      root.style.setProperty('--accent-gradient', accent);
       root.style.setProperty('--accent-wash', palette.wash);
+      root.style.setProperty('--eka-accent', accent);
+      root.style.setProperty('--eka-accent-strong', palette.hover);
+      root.style.setProperty('--eka-accent-soft', palette.wash);
+
+      const themeMeta = document.querySelector('meta[name="theme-color"]');
+      if (themeMeta) themeMeta.setAttribute('content', theme === 'dark' ? '#0f0d12' : '#f6f5f7');
+      try {
+        window.Capacitor?.Plugins?.StatusBar?.setStyle?.({ style: theme === 'dark' ? 'DARK' : 'LIGHT' });
+        window.Capacitor?.Plugins?.StatusBar?.setBackgroundColor?.({ color: theme === 'dark' ? '#0f0d12' : '#f6f5f7' });
+      } catch (_) { /* Native status bar is optional (web and tests). */ }
 
       // Background
       const bgLayer = document.getElementById('chat-bg-layer');
@@ -2867,6 +3088,12 @@
       document.querySelectorAll('[id^="theme-btn-"]').forEach(el => el.classList.remove('ring-2', 'ring-[var(--accent-color)]'));
       document.getElementById(`theme-btn-${mode}`)?.classList.add('ring-2', 'ring-[var(--accent-color)]');
 
+      document.querySelectorAll('[data-theme-option]').forEach(el => {
+        const active = el.dataset.themeOption === mode;
+        el.classList.toggle('is-active', active);
+        el.setAttribute('aria-checked', active ? 'true' : 'false');
+      });
+
       document.querySelectorAll('[id^="accent-"]').forEach(el => el.classList.remove('scale-125'));
       const activeColorBtn = Array.from(document.querySelectorAll('[id^="accent-"]')).find(btn => btn.getAttribute('onclick').includes(accent));
       if (activeColorBtn) activeColorBtn.classList.add('scale-125');
@@ -2881,6 +3108,12 @@
     function setAccent(c) { AppState.theme.accent = c; applyTheme(); }
     function setChatBg(b) { AppState.theme.bg = b; applyTheme(); }
     function setChatBgColor(id) { AppState.theme.bgColor = id; applyTheme(); }
+
+    // Re-resolve the palette when the OS switches light/dark while EKA is set
+    // to "system".
+    window.matchMedia?.('(prefers-color-scheme: dark)')?.addEventListener?.('change', () => {
+      if (AppState.theme.mode === 'system') applyTheme();
+    });
 
     const reducedMotionQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
     function syncMotionPreference() { document.documentElement.dataset.reducedMotion = reducedMotionQuery.matches ? 'true' : 'false'; }
@@ -2922,11 +3155,13 @@
       if (mode === 'create') {
         title.innerText = 'Create a Room';
         codeInput.style.display = 'none';
+        document.getElementById('create-room-settings')?.classList.remove('hidden');
         toggleBtn.innerText = 'Want to join an existing room?';
         entryButton.innerText = 'Create Room';
       } else {
         title.innerText = 'Join a Room';
         codeInput.style.display = 'block';
+        document.getElementById('create-room-settings')?.classList.add('hidden');
         toggleBtn.innerText = 'Want to create a room instead?';
         entryButton.innerText = 'Join Room';
       }
@@ -3021,14 +3256,18 @@
 
     function renderRoomControls() {
       const showHostControls = AppState.room.isHost && Boolean(AppState.room.code) && !AppState.room.private;
+      const showGovernance = Boolean(AppState.room.code) && !AppState.room.private
+        && (AppState.room.isHost || AppState.room.role === 'admin');
       document.getElementById('share-room-button').classList.toggle('hidden', !showHostControls);
       document.getElementById('join-requests-button').classList.toggle('hidden', !showHostControls);
+      document.getElementById('room-governance-button')?.classList.toggle('hidden', !showGovernance);
       if (!showHostControls) {
         joinRequestsManuallyOpen = false;
         document.getElementById('join-requests-popover').classList.add('hidden');
         document.getElementById('join-requests-popover').classList.remove('collapsed');
       }
       renderPendingRequests();
+      renderRoomGovernance();
     }
 
     function toggleJoinRequests() {
@@ -3065,10 +3304,11 @@
       list.innerHTML = '';
       requests.forEach((request) => {
         const item = document.createElement('article');
-        const safeName = escapeHTML(request.username || 'Guest');
+        const rawName = String(request.username || 'Guest');
+        const safeName = escapeHTML(rawName);
         item.className = 'join-request-item flex items-center gap-3 p-3';
         item.innerHTML = `
-          <div class="request-avatar">${safeName.charAt(0).toUpperCase()}</div>
+          <div class="request-avatar">${escapeHTML(rawName.charAt(0).toUpperCase())}</div>
           <div class="min-w-0 flex-1"><p class="truncate text-sm font-bold text-[var(--text-main)]">${safeName}</p><p class="mt-0.5 text-xs text-[var(--text-muted)]">Wants to join</p></div>
           <div class="flex shrink-0 gap-1.5">
             <button type="button" class="request-reject px-2.5" data-request-id="${escapeHTML(request.requestId)}" data-request-action="reject">Reject</button>
@@ -3086,6 +3326,149 @@
       socket.emit(approve ? 'join-request-approve' : 'join-request-reject', { requestId });
     }
 
+    // --- Room governance -----------------------------------------------------
+    function formatRoomExpiry(value) {
+      if (!value) return 'no expiry';
+      const diff = Number(value) - Date.now();
+      if (!Number.isFinite(diff) || diff <= 0) return 'expired';
+      const minutes = Math.round(diff / 60000);
+      if (minutes < 60) return `in ${minutes}m`;
+      const hours = Math.floor(minutes / 60);
+      const rest = minutes % 60;
+      return rest ? `in ${hours}h ${rest}m` : `in ${hours}h`;
+    }
+
+    function roomRoleOf(member) {
+      if (!member) return 'member';
+      if (member.role) return member.role;
+      if (member.isHost) return 'host';
+      if (member.isAdmin) return 'admin';
+      return 'member';
+    }
+
+    function renderRoomGovernance() {
+      const settings = AppState.room.settings || {};
+      const summary = document.getElementById('room-governance-summary');
+      if (summary) {
+        const count = Array.isArray(AppState.room.users) ? AppState.room.users.length : 0;
+        const max = settings.maxMembers || '—';
+        summary.textContent = `${count}/${max} members · ${settings.locked ? 'Locked' : 'Open'} · Expires ${formatRoomExpiry(settings.expiresAt)}`;
+      }
+
+      const hostFields = document.getElementById('room-governance-host-fields');
+      if (hostFields) hostFields.classList.toggle('hidden', !AppState.room.isHost);
+      if (AppState.room.isHost) {
+        const locked = document.getElementById('room-governance-locked');
+        if (locked && document.activeElement !== locked) locked.checked = Boolean(settings.locked);
+        const maxInput = document.getElementById('room-governance-max');
+        if (maxInput && document.activeElement !== maxInput) maxInput.value = String(settings.maxMembers || 8);
+        const ttl = document.getElementById('room-governance-message-ttl');
+        if (ttl && document.activeElement !== ttl) ttl.value = String(settings.messageTtlMinutes || 0);
+        const expiry = document.getElementById('room-governance-expiry');
+        if (expiry && document.activeElement !== expiry) {
+          const minutes = settings.expiresAt ? Math.max(15, Math.round((Number(settings.expiresAt) - Date.now()) / 60000)) : 1440;
+          const allowed = [15, 60, 240, 1440];
+          const nearest = allowed.find((option) => option >= minutes) || 1440;
+          expiry.value = String(nearest);
+          // Remember the server value so saving without touching this field keeps
+          // the original expiry instead of silently extending the room.
+          expiry.dataset.baseline = expiry.value;
+        }
+        const note = document.getElementById('room-governance-expiry-note');
+        if (note) note.textContent = settings.expiresAt ? `This room closes automatically ${formatRoomExpiry(settings.expiresAt)}.` : 'Choose how long the room should stay open.';
+      }
+
+      const list = document.getElementById('room-members-list');
+      if (!list) return;
+      const members = Array.isArray(AppState.room.users) ? AppState.room.users : [];
+      if (!members.length) {
+        list.innerHTML = '<p class="text-xs text-[var(--text-muted)]">No members yet.</p>';
+        return;
+      }
+      list.innerHTML = members.map((member) => {
+        const role = roomRoleOf(member);
+        const isMe = member.id === socket?.id;
+        const actorRole = AppState.room.role || (AppState.room.isHost ? 'host' : 'member');
+        const canKick = !isMe && ((actorRole === 'host' && role !== 'host') || (actorRole === 'admin' && role === 'member'));
+        const canPromote = actorRole === 'host' && !isMe && role === 'member';
+        const canDemote = actorRole === 'host' && !isMe && role === 'admin';
+        const name = escapeHTML(member.username || 'Member');
+        return `<div class="flex items-center gap-2 rounded-xl border border-[var(--border-color)] bg-[var(--bg-base)] p-2.5">
+          <div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[var(--bg-surface)] text-xs font-bold text-[var(--text-main)]">${escapeHTML((member.username || '?').charAt(0).toUpperCase())}</div>
+          <div class="min-w-0 flex-1">
+            <p class="truncate text-sm font-semibold text-[var(--text-main)]">${name}${isMe ? ' (you)' : ''}</p>
+            <p class="text-xs text-[var(--text-muted)]">${role === 'host' ? 'Host' : role === 'admin' ? 'Admin' : 'Member'}</p>
+          </div>
+          <div class="flex shrink-0 items-center gap-1">
+            ${canPromote ? `<button type="button" class="tc-btn tc-btn-ghost tc-btn-sm" onclick="promoteRoomMember('${escapeHTML(member.id)}')" aria-label="Make ${name} an admin" title="Make admin"><i class="fa-solid fa-user-shield"></i></button>` : ''}
+            ${canDemote ? `<button type="button" class="tc-btn tc-btn-ghost tc-btn-sm" onclick="demoteRoomMember('${escapeHTML(member.id)}')" aria-label="Remove admin rights from ${name}" title="Remove admin"><i class="fa-solid fa-user-minus"></i></button>` : ''}
+            ${canKick ? `<button type="button" class="tc-btn tc-btn-ghost tc-btn-sm" onclick="kickRoomMember('${escapeHTML(member.id)}')" aria-label="Remove ${name} from the room" title="Remove from room"><i class="fa-solid fa-user-xmark"></i></button>` : ''}
+          </div>
+        </div>`;
+      }).join('');
+    }
+
+    function openRoomGovernance() {
+      if (!AppState.room.code || AppState.room.private) return;
+      if (!AppState.room.isHost && AppState.room.role !== 'admin') return;
+      renderRoomGovernance();
+      openModal('room-governance-modal');
+    }
+
+    function saveRoomGovernance() {
+      const error = document.getElementById('room-governance-error');
+      if (error) { error.textContent = ''; error.classList.remove('show'); }
+      if (!socket || !AppState.room.isHost) return;
+      const expiryEl = document.getElementById('room-governance-expiry');
+      const payload = {
+        locked: Boolean(document.getElementById('room-governance-locked')?.checked),
+        maxMembers: Number(document.getElementById('room-governance-max')?.value || 8),
+        messageTtlMinutes: Number(document.getElementById('room-governance-message-ttl')?.value || 0)
+      };
+      if (!expiryEl || expiryEl.dataset.baseline !== expiryEl.value) {
+        payload.expiresInMinutes = Number(expiryEl?.value || 1440);
+      }
+      socket.emit('room:update-settings', payload, (result) => {
+        if (!result?.success) {
+          if (error) { error.textContent = result?.message || 'Could not save room settings.'; error.classList.add('show'); }
+          return;
+        }
+        AppState.room.settings = result.settings || AppState.room.settings;
+        renderRoomControls();
+        showToast('Room settings saved.', 'success');
+      });
+    }
+
+    function kickRoomMember(socketId) {
+      if (!socket || !socketId) return;
+      if (!window.confirm('Remove this person from the room?')) return;
+      socket.emit('room:kick', { socketId }, (result) => {
+        if (!result?.success) showToast(result?.message || 'Could not remove that member.', 'error');
+      });
+    }
+
+    function promoteRoomMember(socketId) {
+      if (!socket || !socketId) return;
+      socket.emit('room:promote', { socketId }, (result) => {
+        if (!result?.success) showToast(result?.message || 'Could not promote that member.', 'error');
+      });
+    }
+
+    function demoteRoomMember(socketId) {
+      if (!socket || !socketId) return;
+      socket.emit('room:demote', { socketId }, (result) => {
+        if (!result?.success) showToast(result?.message || 'Could not update that member.', 'error');
+      });
+    }
+
+    function removeExpiredRoomMessages(ids) {
+      if (!Array.isArray(ids) || !ids.length) return;
+      for (const id of ids) {
+        roomMessages.delete(id);
+        document.querySelector(`#messages-list [data-msg-id="${CSS.escape(String(id))}"]`)?.remove();
+      }
+    }
+
     function showToast(message, type = 'info') {
       const container = document.getElementById('toast-container');
       const toast = document.createElement('div');
@@ -3095,7 +3478,12 @@
       if (type === 'error') icon = 'fa-circle-xmark text-red-500';
       
       toast.className = `glass px-4 py-3 rounded-xl shadow-lg border border-[var(--border-color)] flex items-center gap-3 animate-fade-in-up transition-all duration-300`;
-      toast.innerHTML = `<i class="fa-solid ${icon}"></i> <span class="text-sm font-semibold text-[var(--text-main)]">${message}</span>`;
+      const iconEl = document.createElement('i');
+      iconEl.className = `fa-solid ${icon}`;
+      const textEl = document.createElement('span');
+      textEl.className = 'text-sm font-semibold text-[var(--text-main)]';
+      textEl.textContent = String(message ?? '');
+      toast.append(iconEl, textEl);
       container.appendChild(toast);
       
       setTimeout(() => {
@@ -3208,7 +3596,7 @@
       socket.emit('rejoin-room', saved, (result) => {
         if (!result?.success) {
           clearRoomSession();
-          AppState.room = { code: '', users: [], token: '', isHost: false, pending: [] };
+          AppState.room = { code: '', users: [], token: '', isHost: false, role: 'member', pending: [], settings: null };
           showEntryView('join');
           document.getElementById('room-input').value = saved.roomCode;
           const unavailable = /not found|no longer available/i.test(result?.message || '');
@@ -3218,9 +3606,11 @@
         completeRoomEntry(result.username || saved.username, result.roomCode, {
           token: result.token || saved.token,
           isHost: Boolean(result.isHost),
+          role: result.role || (result.isHost ? 'host' : 'member'),
           pending: result.pending || [],
           private: Boolean(result.private || saved.private),
           invitationId: result.invitationId || saved.invitationId || null,
+          settings: result.settings || null,
           reconnect: true
         });
       });
@@ -3311,12 +3701,22 @@
     function handleRoomLeftLocally() {
       const users = AppState.room.users;
       const wasPrivate = Boolean(AppState.room.private);
+      if (typeof stopVoiceRecording === 'function') stopVoiceRecording();
       resetPeerKeyRetry();
       void clearRoomSession();
-      AppState.room = { code: '', users: [], token: '', isHost: false, pending: [], private: false };
+      closeModal('room-governance-modal');
+      AppState.room = { code: '', users: [], token: '', isHost: false, role: 'member', pending: [], private: false, settings: null };
       joinRequestsManuallyOpen = false;
       showLandingView();
       document.getElementById('messages-list').innerHTML = '';
+      roomMessages.clear();
+      outgoingDeliveries.clear();
+      lastMessageSender = null;
+      lastMessageTime = 0;
+      roomObjectUrls.splice(0).forEach((url) => { try { URL.revokeObjectURL(url); } catch (_) {} });
+      roomReplyTo = null;
+      roomEditingId = null;
+      roomSearchQuery = '';
       document.getElementById('send-btn').disabled = true;
       users.forEach((user) => {
         if (user.id !== socket?.id) Crypto.removePeer(user.id);
@@ -3533,6 +3933,11 @@
       // Bind all standard events required by your architecture
       socket.on('update-users', (users) => {
         AppState.room.users = users;
+        const me = Array.isArray(users) ? users.find((user) => user.id === socket.id) : null;
+        if (me) {
+          AppState.room.role = roomRoleOf(me);
+          AppState.room.isHost = Boolean(me.isHost) || AppState.room.role === 'host';
+        }
         updatePresenceUI();
         updateComposerAvailability();
         ensurePeerKeys();
@@ -3540,6 +3945,84 @@
 
       socket.on('message:delivered', (receipt) => updateMessageDelivery(receipt, true));
       socket.on('message:delivery-failed', (receipt) => updateMessageDelivery(receipt, false));
+
+      // Read receipts, edits, deletes and reactions for room messages. These
+      // events carry metadata only; message content stays end-to-end encrypted
+      // and is never stored by the server.
+      socket.on('message:seen', (payload) => {
+        const entry = roomMessages.get(payload?.id);
+        if (!entry || !payload?.by) return;
+        if (!entry.seenBy.includes(payload.by)) entry.seenBy.push(payload.by);
+        const status = document.querySelector(`#messages-list [data-msg-id="${CSS.escape(payload.id)}"] .delivery-status`);
+        if (status) {
+          status.textContent = 'Seen';
+          status.dataset.state = 'read';
+        }
+      });
+
+      socket.on('message:edited', async (payload) => {
+        if (!payload || payload.to !== socket.id || !payload.id) return;
+        const entry = roomMessages.get(payload.id);
+        if (!entry) return;
+        try {
+          const plaintext = await Crypto.decryptMessage(payload);
+          entry.text = plaintext;
+          entry.editedAt = Date.now();
+          refreshRoomMessage(payload.id);
+        } catch (error) {
+          console.error('[E2EE] Failed to decrypt an edited message:', error);
+        }
+      });
+
+      socket.on('message:deleted', (payload) => {
+        const entry = roomMessages.get(payload?.id);
+        if (!entry) return;
+        entry.deletedAt = Date.now();
+        entry.text = '';
+        entry.reactions = {};
+        if (roomReplyTo === entry.id) cancelRoomReply();
+        if (roomEditingId === entry.id) roomEditingId = null;
+        refreshRoomMessage(entry.id);
+      });
+
+      socket.on('message:reaction', (payload) => {
+        const entry = roomMessages.get(payload?.id);
+        if (!entry || !payload?.emoji) return;
+        const users = entry.reactions[payload.emoji] || new Set();
+        if (payload.from) {
+          if (payload.remove) users.delete(payload.from);
+          else users.add(payload.from);
+        }
+        if (users.size) entry.reactions[payload.emoji] = users;
+        else delete entry.reactions[payload.emoji];
+        refreshRoomMessage(entry.id);
+      });
+
+      socket.on('message:expired', (payload) => {
+        removeExpiredRoomMessages(payload?.ids);
+      });
+
+      // Room governance updates are server-authoritative. Clients only mirror
+      // the settings the server broadcasts.
+      socket.on('room:settings', (settings) => {
+        if (!AppState.room.code) return;
+        AppState.room.settings = settings || AppState.room.settings;
+        renderRoomControls();
+      });
+
+      socket.on('room:kicked', (payload) => {
+        if (!AppState.room.code || payload?.roomCode !== AppState.room.code) return;
+        closeModal('room-governance-modal');
+        showToast(payload?.message || 'You were removed from the room.', 'error');
+        handleRoomLeftLocally();
+      });
+
+      socket.on('room:closed', (payload) => {
+        if (!AppState.room.code || payload?.roomCode !== AppState.room.code) return;
+        closeModal('room-governance-modal');
+        showToast(payload?.message || 'This room closed.', 'info');
+        handleRoomLeftLocally();
+      });
 
       // Host approval flow. The server is the source of truth for every request;
       // this UI only renders requests that the server sent to the actual host.
@@ -3571,7 +4054,7 @@
         if (!pendingJoinRequest || data?.roomCode !== pendingJoinRequest.roomCode) return;
         const username = pendingJoinRequest.username;
         hidePendingJoinPanel();
-        completeRoomEntry(username, data.roomCode, { token: data.token, isHost: false });
+        completeRoomEntry(username, data.roomCode, { token: data.token, isHost: false, role: 'member' });
       });
 
       socket.on('join-request-rejected', (data) => {
@@ -3588,7 +4071,9 @@
       socket.on('host-changed', (data) => {
         if (!AppState.room.code || !data?.token) return;
         AppState.room.isHost = true;
+        AppState.room.role = 'host';
         AppState.room.token = data.token;
+        AppState.room.settings = data.settings || AppState.room.settings;
         AppState.room.pending = Array.isArray(data.pending) ? data.pending : [];
         persistRoomSession();
         renderRoomControls();
@@ -3649,8 +4134,16 @@
           const plaintext = await Crypto.decryptMessage(data);
           const senderUser = AppState.room.users.find(u => u.id === data.from);
           const senderName = senderUser ? senderUser.username : data.from;
-          renderMessage({ ...data, sender: senderName, text: plaintext }, false);
+          renderMessage({
+            ...data,
+            sender: senderName,
+            text: plaintext,
+            replyToId: data.replyToId || null,
+            forwarded: Boolean(data.forwarded)
+          }, false);
           receivedMessageIds.add(data.id);
+          // Tell the author this device has actually displayed the message.
+          if (socket?.connected) socket.emit('message:seen', { id: data.id });
           ack(true);
         } catch (e) {
           console.error('[E2EE] Decryption failed:', e);
@@ -3689,24 +4182,24 @@
             }
           });
 
-          // Create download link
           const url = URL.createObjectURL(result.blob);
-          const a = document.createElement('a');
-          a.href = url;
-          a.download = result.name;
-          a.click();
-          URL.revokeObjectURL(url);
-
-          // Find sender username from socket.id
+          roomObjectUrls.push(url);
           const senderUser = AppState.room.users.find(u => u.id === data.from);
           const senderName = senderUser ? senderUser.username : data.from;
+          const isAudio = data.voice || String(result.type || '').startsWith('audio/');
+          const isImage = String(result.type || '').startsWith('image/');
+          const kind = isAudio ? 'audio' : isImage ? 'image' : 'file';
+          const label = isAudio
+            ? `Voice message${data.voiceDuration ? ` (${formatDuration(data.voiceDuration)})` : ''}`
+            : result.name;
 
-          // Show in chat
+          // Render media inline instead of forcing an automatic download.
           renderMessage({
             sender: senderName,
-            text: `📎 Received encrypted file: ${escapeHTML(result.name)} (${formatFileSize(result.size)})`,
+            text: isAudio ? label : `📎 ${label}`,
             timestamp: Date.now(),
-            id: generateMessageId()
+            id: data.id,
+            attachment: { kind, url, name: result.name, size: result.size, type: result.type || '' }
           }, false);
           receivedMessageIds.add(data.id);
 
@@ -3818,7 +4311,9 @@
       AppState.room.code = roomCode;
       AppState.room.token = options.token || AppState.room.token;
       AppState.room.isHost = Boolean(options.isHost);
+      AppState.room.role = options.role || (options.isHost ? 'host' : 'member');
       AppState.room.private = Boolean(options.private);
+      AppState.room.settings = options.settings || AppState.room.settings || null;
       AppState.room.pending = Array.isArray(options.pending) ? options.pending : (AppState.room.pending || []);
       AppState.room.invitationId = options.invitationId || null;
       persistRoomSession();
@@ -3919,7 +4414,7 @@
         setEntryBusy(false);
         if (!result?.success) return showToast(result?.message || 'Unable to enter that room', 'error');
         if (entryMode === 'create') {
-          completeRoomEntry(username, result.roomCode, { token: result.token, isHost: true, pending: [] });
+          completeRoomEntry(username, result.roomCode, { token: result.token, isHost: true, role: result.role || 'host', pending: [], settings: result.settings || null });
           return;
         }
         if (!result.pending) return showToast('Unable to request access to that room.', 'error');
@@ -3930,8 +4425,12 @@
         acknowledgeRoom({ success: false, message: 'The server took too long to respond. Please try again.' });
       }, 10000);
 
-      if (entryMode === 'create') socket.emit('create-room', { username }, acknowledgeRoom);
-      else socket.emit('join-request', { username, roomCode }, acknowledgeRoom);
+      if (entryMode === 'create') {
+        const maxMembers = Number(document.getElementById('create-max-members')?.value || 8);
+        const expiresInMinutes = Number(document.getElementById('create-expiry')?.value || 1440);
+        const messageTtlMinutes = Number(document.getElementById('create-message-ttl')?.value || 0);
+        socket.emit('create-room', { username, settings: { maxMembers, expiresInMinutes, messageTtlMinutes } }, acknowledgeRoom);
+      } else socket.emit('join-request', { username, roomCode }, acknowledgeRoom);
     }
 
     ['username-input', 'room-input'].forEach((id) => {
@@ -3976,6 +4475,15 @@
     let remoteTypingTimeout;
     let isTyping = false;
     const outgoingDeliveries = new Map();
+    // Ephemeral, in-memory view of the room's messages. Plaintext lives only
+    // in this browser tab and is discarded when the room is left.
+    const roomMessages = new Map();
+    // Object URLs for inline images/audio; revoked when the room is left so
+    // decrypted media never lingers in memory longer than the session.
+    const roomObjectUrls = [];
+    let roomReplyTo = null;
+    let roomEditingId = null;
+    let roomSearchQuery = '';
 
     function updateComposerAvailability() {
       const button = document.getElementById('send-btn');
@@ -4041,8 +4549,11 @@
         tracker.element?.querySelector('.delivery-status')?.replaceChildren(document.createTextNode('Sending…'));
         return;
       }
-      const label = tracker.failed.size === 0 ? 'Delivered' : tracker.confirmed.size ? 'Partially delivered' : 'Not delivered';
-      const state = tracker.failed.size === 0 ? 'delivered' : 'failed';
+      // A read receipt may arrive before the delivery acknowledgement settles.
+      // Never downgrade an already-seen message back to Delivered.
+      const seen = roomMessages.get(receipt.id)?.seenBy?.length > 0;
+      const label = seen ? 'Seen' : tracker.failed.size === 0 ? 'Delivered' : tracker.confirmed.size ? 'Partially delivered' : 'Not delivered';
+      const state = seen ? 'read' : tracker.failed.size === 0 ? 'delivered' : 'failed';
       const status = tracker.element?.querySelector('.delivery-status');
       if (status) {
         status.textContent = label;
@@ -4071,9 +4582,35 @@
         return;
       }
 
+      if (roomEditingId) {
+        const editingId = roomEditingId;
+        const entry = roomMessages.get(editingId);
+        if (!entry) { roomEditingId = null; return; }
+        try {
+          await Promise.all(peers.map(async (peer) => {
+            const encrypted = await Crypto.encryptMessage(peer.id, text, AppState.user.id, editingId);
+            socket.emit('message:edit', encrypted);
+          }));
+          entry.text = text;
+          entry.editedAt = Date.now();
+          roomEditingId = null;
+          input.value = '';
+          input.placeholder = 'Message...';
+          input.style.height = 'auto';
+          refreshRoomMessage(editingId);
+          showToast('Message updated.', 'success');
+        } catch (error) {
+          console.error('[E2EE] Message edit failed:', error);
+          showToast('Could not edit that message.', 'error');
+        }
+        return;
+      }
+
       const messageId = generateMessageId();
       const timestamp = Date.now();
-      const messageElement = renderMessage({ sender: AppState.user.username, text, timestamp, id: messageId }, true, 'Sending…');
+      const replyToId = roomReplyTo || null;
+      const messageElement = renderMessage({ sender: AppState.user.username, text, timestamp, id: messageId, replyToId }, true, 'Sending…');
+      cancelRoomReply();
       const tracker = { expected: new Set(peers.map((peer) => peer.id)), confirmed: new Set(), failed: new Set(), element: messageElement };
       outgoingDeliveries.set(messageId, tracker);
       window.setTimeout(() => {
@@ -4087,6 +4624,7 @@
         await Promise.all(peers.map(async (peer) => {
           try {
             const encrypted = await Crypto.encryptMessage(peer.id, text, AppState.user.id, messageId);
+            encrypted.replyToId = replyToId || undefined;
             if (!socket?.connected || socket.id !== AppState.user.id) {
               updateMessageDelivery({ id: messageId, to: peer.id }, false);
               return;
@@ -4102,6 +4640,7 @@
       }
       stopTyping();
       input.value = '';
+      input.placeholder = 'Message...';
       input.style.height = 'auto';
     }
 
@@ -4117,6 +4656,49 @@
         e.preventDefault();
         sendMessage();
       }
+    });
+
+    // Room message actions: open the menu, react, search and cancel replies.
+    document.getElementById('messages-list')?.addEventListener('click', (event) => {
+      const menuButton = event.target.closest('[data-room-menu]');
+      if (menuButton) {
+        event.preventDefault();
+        openRoomMessageMenu(menuButton, menuButton.getAttribute('data-room-menu'));
+        return;
+      }
+      const reaction = event.target.closest('[data-room-react-id]');
+      if (reaction) {
+        event.preventDefault();
+        toggleRoomReaction(reaction.getAttribute('data-room-react-id'), reaction.getAttribute('data-room-react'));
+      }
+    });
+    document.getElementById('messages-list')?.addEventListener('contextmenu', (event) => {
+      const row = event.target.closest('[data-msg-id]');
+      if (!row) return;
+      event.preventDefault();
+      openRoomMessageMenu(row.querySelector('[data-room-menu]') || row, row.getAttribute('data-msg-id'));
+    });
+    document.getElementById('room-search-input')?.addEventListener('input', (event) => {
+      roomSearchQuery = String(event.target.value || '');
+      filterRoomMessages();
+    });
+    document.getElementById('room-search-close')?.addEventListener('click', () => toggleRoomSearch(false));
+    document.addEventListener('click', (event) => {
+      if (!event.target.closest('.tc-msg-actions') && !event.target.closest('[data-room-menu]')) {
+        document.querySelector('.tc-msg-actions')?.remove();
+      }
+    });
+    document.addEventListener('keydown', (event) => {
+      if (event.key !== 'Escape') return;
+      document.querySelector('.tc-msg-actions')?.remove();
+      if (roomReplyTo) cancelRoomReply();
+      if (roomEditingId) {
+        roomEditingId = null;
+        const input = document.getElementById('message-input');
+        if (input) { input.value = ''; input.style.height = 'auto'; }
+      }
+      const searchBar = document.getElementById('room-search-bar');
+      if (searchBar && !searchBar.classList.contains('hidden')) toggleRoomSearch(false);
     });
 
     function announceTyping() {
@@ -4150,44 +4732,298 @@
       remoteTypingTimeout = setTimeout(() => indicator.classList.add('hidden'), 1600);
     }
 
+    function attachmentHtml(attachment) {
+      if (!attachment || !attachment.url) return '';
+      const url = escapeHTML(attachment.url);
+      const name = escapeHTML(attachment.name || 'Attachment');
+      const size = attachment.size ? formatFileSize(attachment.size) : '';
+      if (attachment.kind === 'audio') {
+        return `<div class="tc-attachment tc-attachment-audio">
+          <audio controls preload="metadata" src="${url}"></audio>
+          <a class="tc-attachment-link" href="${url}" download="${name}" aria-label="Download ${name}"><i class="fa-solid fa-download"></i>${size}</a>
+        </div>`;
+      }
+      if (attachment.kind === 'image') {
+        return `<figure class="tc-attachment tc-attachment-image">
+          <img src="${url}" alt="${name}" loading="lazy">
+          <figcaption><a class="tc-attachment-link" href="${url}" download="${name}"><i class="fa-solid fa-download"></i>${size}</a></figcaption>
+        </figure>`;
+      }
+      return `<div class="tc-attachment tc-attachment-file">
+        <i class="fa-solid fa-file" aria-hidden="true"></i>
+        <a class="tc-attachment-link" href="${url}" download="${name}"><span>${name}</span><small>${size}</small><i class="fa-solid fa-download"></i></a>
+      </div>`;
+    }
+
     function renderMessage(data, isMe, deliveryLabel = '') {
       const container = document.getElementById('messages-list');
-      const isNewGroup = lastMessageSender !== data.sender || (Date.now() - lastMessageTime > 60000); // 1 min grouping
-      
-      const wrapper = document.createElement('div');
-      wrapper.className = `message-row flex flex-col ${isMe ? 'items-end message-row--outgoing' : 'items-start'} max-w-full ${isNewGroup ? 'mt-3' : 'mt-0.5'}`;
-      
-      let html = '';
-      
-      // Header for new group (Them only, usually don't need my own name)
-      if (isNewGroup && !isMe) {
-        html += `<div class="message-sender text-xs text-[var(--text-muted)] ml-2 mb-1 font-medium">${escapeHTML(data.sender)}</div>`;
+      const id = data.id || generateMessageId();
+      let entry = roomMessages.get(id);
+      if (!entry) {
+        entry = {
+          id,
+          sender: data.sender,
+          text: String(data.text ?? ''),
+          timestamp: data.timestamp || Date.now(),
+          mine: Boolean(isMe),
+          replyToId: data.replyToId || null,
+          forwarded: Boolean(data.forwarded),
+          reactions: {},
+          editedAt: null,
+          deletedAt: null,
+          seenBy: [],
+          attachment: data.attachment || null
+        };
+        roomMessages.set(id, entry);
+      } else {
+        entry.text = String(data.text ?? entry.text);
+        entry.sender = data.sender || entry.sender;
+        if (data.attachment) entry.attachment = data.attachment;
       }
-      
-      // Bubble
+
+      const isNewGroup = lastMessageSender !== entry.sender || (Date.now() - lastMessageTime > 60000);
+      let wrapper = container.querySelector(`[data-msg-id="${CSS.escape(id)}"]`);
+      if (!wrapper) {
+        wrapper = document.createElement('div');
+        wrapper.dataset.msgId = id;
+        container.appendChild(wrapper);
+      }
+      wrapper.className = `message-row flex flex-col ${isMe ? 'items-end message-row--outgoing' : 'items-start'} max-w-full ${isNewGroup ? 'mt-3' : 'mt-0.5'}${entry.deletedAt ? ' is-deleted' : ''}`;
+
       const bubbleClass = isMe ? 'bubble-me rounded-2xl rounded-tr-sm' : 'bubble-them rounded-2xl rounded-tl-sm';
-      // If not new group, round all corners for a stacked look
-      const stackClass = isNewGroup ? '' : 'rounded-2xl'; 
-      
-      html += `
+      const stackClass = isNewGroup ? '' : 'rounded-2xl';
+
+      let replyHtml = '';
+      if (entry.replyToId) {
+        const original = roomMessages.get(entry.replyToId);
+        const quoteSender = original ? original.sender : 'Message';
+        const quoteText = original ? (original.deletedAt ? 'Message deleted' : original.text) : 'Message unavailable';
+        replyHtml = `<div class="tc-reply-quote"><strong>${escapeHTML(quoteSender)}</strong><span>${escapeHTML(String(quoteText).slice(0, 160))}</span></div>`;
+      }
+
+      const reactionEntries = Object.entries(entry.reactions || {})
+        .filter(([, users]) => users && users.size)
+        .map(([emoji, users]) => {
+          const mine = users.has(socket?.id);
+          return `<button type="button" class="tc-reaction ${mine ? 'mine' : ''}" data-room-react="${escapeHTML(emoji)}" data-room-react-id="${escapeHTML(id)}" aria-label="React ${escapeHTML(emoji)}">${escapeHTML(emoji)}<span>${users.size}</span></button>`;
+        }).join('');
+      const reactionsHtml = reactionEntries ? `<div class="tc-reactions" data-room-reactions="${escapeHTML(id)}">${reactionEntries}</div>` : '';
+
+      const bodyText = entry.deletedAt
+        ? '<span class="tc-msg-deleted">Message deleted</span>'
+        : `${entry.attachment ? attachmentHtml(entry.attachment) : ''}<div class="tc-msg-text">${escapeHTML(entry.text)}</div>`;
+      const seen = entry.seenBy.length > 0;
+      const status = isMe
+        ? `<span class="delivery-status" data-state="${seen ? 'read' : 'sending'}">${seen ? 'Seen' : (deliveryLabel || 'Sent')}</span>`
+        : '';
+
+      wrapper.innerHTML = `
+        ${isNewGroup && !isMe ? `<div class="message-sender text-xs text-[var(--text-muted)] ml-2 mb-1 font-medium">${escapeHTML(entry.sender)}</div>` : ''}
         <div class="relative group max-w-[85%] md:max-w-[70%]">
           <div class="message-bubble px-4 py-2.5 shadow-sm text-[15px] leading-relaxed break-words ${bubbleClass} ${stackClass}">
-            ${escapeHTML(data.text)}
+            ${entry.forwarded && !entry.deletedAt ? '<div class="tc-forward-label"><i class="fa-solid fa-share"></i> Forwarded</div>' : ''}
+            ${replyHtml}
+            <div class="tc-msg-body">${bodyText}</div>
+            <div class="message-meta text-[10px] text-[var(--text-muted)] mt-1 ${isMe ? 'text-right mr-1' : 'ml-1'} whitespace-nowrap">
+              <span>${new Date(entry.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
+              ${entry.editedAt && !entry.deletedAt ? '<span class="tc-msg-edited"> · edited</span>' : ''}
+              ${status}
+            </div>
           </div>
-          <div class="message-meta text-[10px] text-[var(--text-muted)] mt-1 ${isMe ? 'text-right mr-1' : 'ml-1'} whitespace-nowrap">
-            <span>${new Date(data.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
-            ${isMe ? `<span class="delivery-status" data-state="sending">${deliveryLabel || 'Sent'}</span>` : ''}
-          </div>
+          <button type="button" class="tc-msg-menu-btn" data-room-menu="${escapeHTML(id)}" aria-label="Message actions"><i class="fa-solid fa-ellipsis"></i></button>
+          ${reactionsHtml}
         </div>
       `;
-      
-      wrapper.innerHTML = html;
-      container.appendChild(wrapper);
       scrollToBottom();
-      
-      lastMessageSender = data.sender;
-      lastMessageTime = data.timestamp;
+
+      lastMessageSender = entry.sender;
+      lastMessageTime = entry.timestamp;
       return wrapper;
+    }
+
+    function refreshRoomMessage(id) {
+      const entry = roomMessages.get(id);
+      if (!entry) return;
+      // Preserve the live delivery state; re-rendering from the store alone
+      // would reset a pending message back to its initial label.
+      const existing = document.querySelector(`#messages-list [data-msg-id="${CSS.escape(id)}"] .delivery-status`);
+      const previousLabel = existing?.textContent;
+      const previousState = existing?.dataset.state;
+      // Re-render only this row by rebuilding it from the stored entry.
+      const previousSender = lastMessageSender;
+      const previousTime = lastMessageTime;
+      lastMessageSender = null;
+      lastMessageTime = 0;
+      const fresh = renderMessage({ id, sender: entry.sender, text: entry.text, timestamp: entry.timestamp }, entry.mine);
+      lastMessageSender = previousSender;
+      lastMessageTime = previousTime;
+      const status = fresh?.querySelector('.delivery-status');
+      if (status && previousLabel) {
+        status.textContent = previousLabel;
+        status.dataset.state = previousState || status.dataset.state;
+      }
+      return fresh;
+    }
+
+    function showRoomReplyBar() {
+      const bar = document.getElementById('room-reply-bar');
+      if (!bar) return;
+      const entry = roomReplyTo ? roomMessages.get(roomReplyTo) : null;
+      if (!entry) { bar.classList.add('hidden'); return; }
+      document.getElementById('room-reply-name').textContent = entry.mine ? 'You' : entry.sender;
+      document.getElementById('room-reply-text').textContent = entry.deletedAt ? 'Message deleted' : String(entry.text).slice(0, 160);
+      bar.classList.remove('hidden');
+    }
+
+    function startRoomReply(id) {
+      const entry = roomMessages.get(id);
+      if (!entry || entry.deletedAt) return;
+      roomReplyTo = id;
+      roomEditingId = null;
+      showRoomReplyBar();
+      document.getElementById('message-input')?.focus();
+    }
+
+    function cancelRoomReply() {
+      roomReplyTo = null;
+      showRoomReplyBar();
+    }
+
+    function toggleRoomSearch(force) {
+      const bar = document.getElementById('room-search-bar');
+      if (!bar) return;
+      const next = typeof force === 'boolean' ? force : bar.classList.contains('hidden');
+      bar.classList.toggle('hidden', !next);
+      if (next) document.getElementById('room-search-input')?.focus();
+      else {
+        roomSearchQuery = '';
+        document.getElementById('room-search-input').value = '';
+        filterRoomMessages();
+      }
+    }
+
+    function filterRoomMessages() {
+      const query = roomSearchQuery.trim().toLowerCase();
+      document.querySelectorAll('#messages-list [data-msg-id]').forEach((row) => {
+        const entry = roomMessages.get(row.dataset.msgId);
+        const match = !query || (entry && String(entry.text || '').toLowerCase().includes(query));
+        row.style.display = match ? '' : 'none';
+      });
+    }
+
+    const ROOM_REACTION_EMOJIS = ['👍', '❤️', '😂', '😮', '😢', '🙏'];
+
+    function closeRoomMessageMenu() {
+      document.querySelector('.tc-msg-actions')?.remove();
+    }
+
+    function openRoomMessageMenu(anchor, id) {
+      closeRoomMessageMenu();
+      const entry = roomMessages.get(id);
+      if (!entry) return;
+      const menu = document.createElement('div');
+      menu.className = 'tc-msg-actions';
+      menu.setAttribute('role', 'menu');
+      menu.innerHTML = `
+        <div class="tc-react-row" role="group" aria-label="React">
+          ${ROOM_REACTION_EMOJIS.map((emoji) => `<button type="button" role="menuitem" data-room-menu-react="${escapeHTML(emoji)}" aria-label="React ${escapeHTML(emoji)}">${escapeHTML(emoji)}</button>`).join('')}
+        </div>
+        <div class="tc-action-sep"></div>
+        ${entry.deletedAt ? '' : '<button type="button" role="menuitem" data-room-action="reply"><i class="fa-solid fa-reply"></i> Reply</button>'}
+        ${entry.deletedAt ? '' : '<button type="button" role="menuitem" data-room-action="copy"><i class="fa-regular fa-copy"></i> Copy</button>'}
+        ${entry.mine && !entry.deletedAt ? '<div class="tc-action-sep"></div><button type="button" role="menuitem" data-room-action="edit"><i class="fa-solid fa-pen"></i> Edit</button>' : ''}
+        ${entry.mine ? '<button type="button" role="menuitem" class="danger" data-room-action="delete"><i class="fa-solid fa-trash"></i> Delete</button>' : ''}
+      `;
+      document.body.appendChild(menu);
+      const rect = anchor.getBoundingClientRect();
+      const width = 196;
+      const left = Math.min(window.innerWidth - width - 8, Math.max(8, rect.right - width));
+      const top = Math.min(window.innerHeight - menu.offsetHeight - 8, rect.bottom + 6);
+      menu.style.left = `${left}px`;
+      menu.style.top = `${Math.max(8, top)}px`;
+      menu.addEventListener('click', (event) => {
+        const react = event.target.closest('[data-room-menu-react]');
+        if (react) {
+          toggleRoomReaction(id, react.getAttribute('data-room-menu-react'));
+          closeRoomMessageMenu();
+          return;
+        }
+        const action = event.target.closest('[data-room-action]');
+        if (!action) return;
+        const name = action.getAttribute('data-room-action');
+        closeRoomMessageMenu();
+        if (name === 'reply') startRoomReply(id);
+        else if (name === 'copy') copyRoomMessage(entry);
+        else if (name === 'edit') startRoomEdit(id);
+        else if (name === 'delete') deleteRoomMessage(id);
+      });
+    }
+
+    function startRoomEdit(id) {
+      const entry = roomMessages.get(id);
+      if (!entry || !entry.mine || entry.deletedAt) return;
+      roomEditingId = id;
+      roomReplyTo = null;
+      showRoomReplyBar();
+      const input = document.getElementById('message-input');
+      if (input) {
+        input.value = entry.text;
+        input.placeholder = 'Edit message…';
+        input.focus();
+        input.style.height = 'auto';
+        input.style.height = `${Math.min(input.scrollHeight, 128)}px`;
+      }
+    }
+
+    async function copyRoomMessage(entry) {
+      const text = String(entry?.text || '');
+      if (!text) return;
+      try {
+        await navigator.clipboard.writeText(text);
+        showToast('Copied to clipboard.', 'success');
+      } catch (_) {
+        const area = document.createElement('textarea');
+        area.value = text;
+        area.style.position = 'fixed';
+        area.style.opacity = '0';
+        document.body.appendChild(area);
+        area.select();
+        try { document.execCommand('copy'); showToast('Copied to clipboard.', 'success'); }
+        catch (error) { showToast('Could not copy the message.', 'error'); }
+        area.remove();
+      }
+    }
+
+    function deleteRoomMessage(id) {
+      if (!socket?.connected) return;
+      if (!window.confirm('Delete this message for everyone in the room?')) return;
+      socket.emit('message:delete', { id });
+      const entry = roomMessages.get(id);
+      if (entry) {
+        entry.deletedAt = Date.now();
+        entry.text = '';
+        entry.reactions = {};
+        refreshRoomMessage(id);
+      }
+      if (roomReplyTo === id) cancelRoomReply();
+      if (roomEditingId === id) {
+        roomEditingId = null;
+        const input = document.getElementById('message-input');
+        if (input) { input.value = ''; input.placeholder = 'Message...'; input.style.height = 'auto'; }
+      }
+    }
+
+    function toggleRoomReaction(id, emoji) {
+      const entry = roomMessages.get(id);
+      if (!entry || entry.deletedAt || !socket?.connected) return;
+      const users = entry.reactions[emoji] || new Set();
+      const mine = users.has(socket.id);
+      if (mine) users.delete(socket.id);
+      else users.add(socket.id);
+      if (users.size) entry.reactions[emoji] = users;
+      else delete entry.reactions[emoji];
+      refreshRoomMessage(id);
+      socket.emit('message:react', { id, emoji, remove: mine });
     }
 
     function renderSystemMessage(text) {
@@ -4238,14 +5074,16 @@
         const verificationClass = hasKey ? 'text-green-500' : 'text-amber-500';
         const verificationIcon = hasKey ? 'fa-shield-check' : 'fa-shield-exclamation';
         const verificationTitle = hasKey ? 'E2EE verified - click to verify fingerprint' : 'E2EE pending - key exchange in progress';
+        const role = roomRoleOf(u);
+        const roleLabel = role === 'host' ? '<span class="ml-1 rounded-full bg-[var(--accent-color)]/15 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-[var(--accent-color)]">Host</span>' : role === 'admin' ? '<span class="ml-1 rounded-full bg-[var(--bg-base)] px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-[var(--text-muted)]">Admin</span>' : '';
         
         listContainer.innerHTML += `
           <li class="flex items-center gap-3 p-2 rounded-xl hover:bg-[var(--bg-soft)] cursor-pointer transition-colors" 
-              ${!isMe ? `onclick="showKeyVerification('${escapeHTML(u.id)}', '${escapeHTML(u.username)}')" title="${verificationTitle}"` : ''}>
+              data-peer-id="${escapeHTML(u.id)}" data-peer-name="${escapeHTML(u.username)}" ${!isMe ? 'role="button" tabindex="0"' : ''} title="${verificationTitle}">
             <div class="w-8 h-8 rounded-full bg-gradient-to-br from-gray-200 to-gray-300 dark:from-slate-700 dark:to-slate-600 flex items-center justify-center font-bold text-gray-600 dark:text-gray-300 text-xs shadow-inner">
-              ${u.username.charAt(0).toUpperCase()}
+              ${escapeHTML((u.username || '?').charAt(0).toUpperCase())}
             </div>
-            <span class="font-medium text-[var(--text-main)] text-sm flex-1 truncate">${escapeHTML(u.username)} ${isMe ? '(You)' : ''}</span>
+            <span class="font-medium text-[var(--text-main)] text-sm flex-1 truncate">${escapeHTML(u.username)} ${isMe ? '(You)' : ''}${roleLabel}</span>
             <i class="fa-solid ${verificationIcon} ${verificationClass} text-lg" aria-label="${verificationTitle}"></i>
             <div class="w-2 h-2 rounded-full bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]"></div>
           </li>
@@ -4329,7 +5167,7 @@
     function sendGameInvite(gameId) {
       closeModal('game-menu-modal');
       
-      if(AppState.room.users.length < 2 && !AppState.isMock) {
+      if(AppState.room.users.length < 2) {
         return showToast('Wait for someone to join the room to play.', 'error');
       }
 
@@ -4687,154 +5525,19 @@
       window.gameLoopFrame = requestAnimationFrame(loop);
     }
 
-    // --- MOCK SOCKET (For Sandbox Demonstration Only) ---
-    // This allows you to test the UI, animations, and game logic here.
-    // If window.io exists, this class is NEVER used.
-    class MockSocket {
-      constructor() {
-        this.events = {};
-        this.friendName = "Alex";
-        this.friendId = '2';
-        this.myId = '1';
-        AppState.isMock = true;
-        // Generate mock key pair for demo
-        this.mockKeyPair = this.generateMockKeyPair();
-      }
-
-      generateMockKeyPair() {
-        // Simple deterministic mock keys for demo
-        return {
-          publicKey: 'bW9ja19wdWJsaWNfa2V5X2Zvcl9kZW1vX3B1cnBvc2Vz',
-          privateKey: 'bW9ja19wcml2YXRlX2tleV9mb3JfZGVtb19wdXJwb3Nlcw=='
-        };
-      }
-
-      on(event, cb) { this.events[event] = cb; }
-      trigger(event, data) { if(this.events[event]) this.events[event](data); }
-      off(event, cb) { /* simple mock */ }
-
-      simulateRoomEntry(username, roomCode, callback) {
-        callback({ success: true, roomCode });
-        setTimeout(() => this.trigger('update-users', [{ id: this.myId, username }]), 50);
-        setTimeout(() => {
-          this.trigger('update-users', [{ id: this.myId, username }, { id: this.friendId, username: this.friendName }]);
-          this.trigger('system-message', `${this.friendName} joined the room`);
-          // Simulate friend's public key
-          this.trigger('e2ee:public-key', { sender: this.friendId, publicKey: this.mockKeyPair.publicKey });
-          // Simulate our key being echoed back (server relays to all including sender? No, socket.to excludes sender)
-          // But for mock, we'll simulate the friend receiving our key
-        }, 950);
-        setTimeout(() => this.trigger('typing', { sender: this.friendName, isTyping: true }), 1900);
-        setTimeout(() => {
-          this.trigger('typing', { sender: this.friendName, isTyping: false });
-          // Send encrypted demo message (simulated)
-          this.trigger('chat-message', { 
-            v: 1,
-            id: 'mock-' + Date.now(),
-            from: this.friendId,
-            to: this.myId,
-            ct: 'bW9ja19jaXBoZXJ0ZXh0', // base64 mock ciphertext
-            iv: 'bW9ja19pdl92YWx1ZQ==', // base64 mock iv
-            salt: 'bW9ja19zYWx0X3ZhbHVl' // base64 mock salt
-          });
-        }, 3000);
-      }
-
-      emit(event, data, callback) {
-        console.log(`[MockEmit] ${event}:`, data);
-
-        if (event === 'create-room') {
-          const roomCode = Math.random().toString(36).substring(2, 7).toUpperCase();
-          (callback || (() => {}))({ success: true, roomCode, token: 'mock-host-token', isHost: true });
-          return this.simulateRoomEntry(data.username, roomCode, () => {});
-        }
-        if (event === 'join-request') {
-          (callback || (() => {}))({ success: true, pending: true, roomCode: data.roomCode });
-          return setTimeout(() => this.trigger('join-request-approved', { roomCode: data.roomCode, token: 'mock-member-token' }), 900);
-        }
-        if (event === 'leave-room') return this.trigger('left-room');
-        
-        // E2EE: Handle public key publishing
-        if (event === 'e2ee:public-key') {
-          // In mock, simulate friend receiving our key and responding with theirs
-          setTimeout(() => {
-            this.trigger('e2ee:public-key', { sender: this.friendId, publicKey: this.mockKeyPair.publicKey });
-          }, 100);
-          return;
-        }
-
-        // E2EE: Handle encrypted chat messages
-        if (event === 'chat-message' && data.v === 1 && data.ct) {
-          // Simulate friend receiving and replying
-          setTimeout(() => {
-            // Echo back a simulated encrypted reply (in real app, friend would decrypt and reply)
-            this.trigger('chat-message', { 
-              sender: this.friendName, 
-              text: '[Encrypted reply simulation] Got your message!', 
-              timestamp: Date.now() 
-            });
-          }, 1000);
-          return;
-        }
-        
-        if (event === 'game:invite') {
-           // Simulate friend accepting invite
-           setTimeout(() => {
-             this.trigger('system-message', `${this.friendName} accepted your invite`);
-             this.trigger('game:start', { gameId: data.gameId, players: [AppState.user.username, this.friendName] });
-           }, 1500);
-        }
-        
-        if (event === 'game:move') {
-           if (data.gameId === 'rps') {
-              // Simulate friend move and game end
-              setTimeout(() => {
-                const choices = ['rock', 'paper', 'scissors'];
-                const fChoice = choices[Math.floor(Math.random()*3)];
-                let winner = AppState.user.username; // cheat logic for demo: always win unless draw
-                if(data.move === fChoice) winner = 'draw';
-                this.trigger('game:result', { gameId: 'rps', winner });
-              }, 1000);
-           }
-           
-           if (data.gameId === 'ttt') {
-             // Simulate friend move
-             setTimeout(() => {
-                let empty = [];
-                for(let i=0; i<9; i++) if(!document.getElementById(`cell-${i}`).innerText) empty.push(i);
-                if(empty.length > 0) {
-                   const fMove = empty[Math.floor(Math.random()*empty.length)];
-                   this.trigger('game:state', { move: fMove, player: this.friendName });
-                   
-                   // simple random win check trigger for demo
-                   if(empty.length < 5 && Math.random() > 0.5) {
-                      this.trigger('game:result', { gameId: 'ttt', winner: this.friendName });
-                   }
-                }
-             }, 800);
-           }
-
-           if (data.gameId === 'tap') {
-              setTimeout(() => {
-                const fTime = data.move + Math.floor(Math.random() * 200) - 50; // Random close time
-                const winner = data.move < fTime ? AppState.user.username : this.friendName;
-                this.trigger('game:result', { gameId: 'tap', winner, winningScore: Math.min(data.move, fTime) });
-              }, 500);
-           }
-           
-           if (data.gameId === 'race' && data.type === 'finish') {
-             // Race finish handling
-             this.trigger('game:result', { gameId: 'race', winner: AppState.user.username });
-           }
-        }
-      }
-    }
-
     // Initialize application
     document.addEventListener("DOMContentLoaded", () => {
       syncMotionPreference();
       initTheme();
       initSocket();
+
+      document.getElementById('users-list-container')?.addEventListener('click', (event) => {
+        const item = event.target.closest('[data-peer-id]');
+        if (!item) return;
+        const peerId = item.getAttribute('data-peer-id');
+        if (!peerId || peerId === socket?.id) return;
+        showKeyVerification(peerId, item.getAttribute('data-peer-name') || 'Member');
+      });
 
       const appPlugin = window.Capacitor?.Plugins?.App;
       if (appPlugin?.addListener) {
@@ -4955,32 +5658,45 @@
       document.getElementById('attachment-preview').classList.add('hidden');
     }
 
-    async function sendEncryptedFile(file, peers) {
+    async function sendEncryptedFile(file, peers, options = {}) {
+      const isVoice = Boolean(options.voice);
       const progressContainer = document.getElementById('attachment-preview');
       progressContainer.classList.remove('hidden');
       progressContainer.innerHTML = `
         <div class="flex items-center gap-3 p-3 bg-[var(--bg-surface)] border border-[var(--border-color)] rounded-xl">
           <div class="w-10 h-10 rounded-lg bg-[var(--accent-color)]/20 flex items-center justify-center">
-            <i class="fa-solid fa-file text-[var(--accent-color)]"></i>
+            <i class="fa-solid ${isVoice ? 'fa-microphone' : 'fa-file'} text-[var(--accent-color)]"></i>
           </div>
           <div class="flex-1 min-w-0">
             <p class="font-medium text-[var(--text-main)] truncate">${escapeHTML(file.name)}</p>
             <div class="w-full h-2 bg-[var(--bg-base)] rounded-full overflow-hidden mt-1">
               <div id="file-progress-bar" class="h-full bg-[var(--accent-color)] transition-all duration-300" style="width: 0%"></div>
             </div>
-            <p id="file-progress-text" class="text-xs text-[var(--text-muted)] mt-1">Encrypting...</p>
+            <p id="file-progress-text" class="text-xs text-[var(--text-muted)] mt-1">${isVoice ? 'Preparing voice message…' : 'Encrypting...'}</p>
           </div>
         </div>
       `;
 
+      // Progress elements live outside the per-peer loop: they belong to the
+      // single progress card above and must survive every iteration.
+      const progressBar = document.getElementById('file-progress-bar');
+      const progressText = document.getElementById('file-progress-text');
+
       let fileMessageId;
       try {
         fileMessageId = generateMessageId();
+        const label = isVoice
+          ? `Voice message (${formatDuration(options.duration)})`
+          : `📎 Encrypted file: ${file.name} (${formatFileSize(file.size)})`;
+        const localUrl = URL.createObjectURL(file);
+        roomObjectUrls.push(localUrl);
+        const kind = isVoice ? 'audio' : String(file.type || '').startsWith('image/') ? 'image' : 'file';
         const fileMessageElement = renderMessage({
           sender: AppState.user.username,
-          text: `📎 Encrypted file: ${file.name} (${formatFileSize(file.size)})`,
+          text: label,
           timestamp: Date.now(),
-          id: fileMessageId
+          id: fileMessageId,
+          attachment: { kind, url: localUrl, name: file.name, size: file.size, type: file.type || '' }
         }, true, 'Sending…');
         outgoingDeliveries.set(fileMessageId, {
           expected: new Set(peers.map((peer) => peer.id)),
@@ -4996,29 +5712,24 @@
           });
         }, 7000);
 
-        // Encrypt file for first peer (in group, we'd encrypt for each peer)
-        // For simplicity, encrypt once per peer
         for (const peer of peers) {
-          const progressBar = document.getElementById('file-progress-bar');
-          const progressText = document.getElementById('file-progress-text');
-          
           const encryptedFile = await Crypto.encryptFile(file, peer.id, (loaded, total) => {
             if (progressBar && progressText) {
               const pct = Math.round((loaded / total) * 100);
               progressBar.style.width = `${pct}%`;
-              progressText.textContent = `Encrypting... ${pct}%`;
+              progressText.textContent = `${isVoice ? 'Encrypting voice' : 'Encrypting'}... ${pct}%`;
             }
           });
 
-          // Send each chunk as a separate message (or as a single file message)
-          // For now, send the whole encrypted file as one message
           const filePayload = {
             v: 1,
             id: fileMessageId,
             from: AppState.user.id,
             to: peer.id,
             type: 'file',
-            file: encryptedFile
+            file: encryptedFile,
+            voice: isVoice || undefined,
+            voiceDuration: isVoice ? Math.round(options.duration || 0) : undefined
           };
 
           socket.emit('chat-message', filePayload);
@@ -5038,6 +5749,107 @@
         setTimeout(() => {
           progressContainer.classList.add('hidden');
         }, 2000);
+      }
+    }
+
+    function formatDuration(seconds) {
+      const total = Math.max(0, Math.round(Number(seconds) || 0));
+      const minutes = Math.floor(total / 60);
+      const rest = String(total % 60).padStart(2, '0');
+      return `${minutes}:${rest}`;
+    }
+
+    // --- Voice messages -------------------------------------------------------
+    // Recorded locally with MediaRecorder, then sent through the same
+    // per-recipient encrypted file pipeline. Audio never leaves the browser
+    // unencrypted and is never stored by the server.
+    let voiceRecorder = null;
+    let voiceStream = null;
+    let voiceChunks = [];
+    let voiceStartedAt = 0;
+    let voiceTimer = null;
+
+    function roomPeers() {
+      if (!socket?.connected) return [];
+      return AppState.room.users.filter((user) => user.id !== socket.id);
+    }
+
+    function updateVoiceButton(recording) {
+      const button = document.getElementById('voice-button');
+      if (!button) return;
+      button.classList.toggle('is-recording', Boolean(recording));
+      button.setAttribute('aria-pressed', recording ? 'true' : 'false');
+      button.setAttribute('aria-label', recording ? 'Stop recording' : 'Record a voice message');
+      button.innerHTML = `<i class="fa-solid ${recording ? 'fa-stop' : 'fa-microphone'}"></i>`;
+    }
+
+    async function toggleVoiceRecording() {
+      if (voiceRecorder) { stopVoiceRecording(); return; }
+      if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === 'undefined') {
+        showToast('Voice recording is not supported in this browser.', 'error');
+        return;
+      }
+      const peers = roomPeers();
+      if (!peers.length) { showToast('No one else is in the room yet.', 'info'); return; }
+      if (peers.some((peer) => !Crypto.hasSessionKey(peer.id))) {
+        showToast('Secure setup is still in progress. Try again in a moment.', 'info');
+        return;
+      }
+
+      try {
+        voiceStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        voiceChunks = [];
+        const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
+          ? 'audio/webm;codecs=opus'
+          : 'audio/webm';
+        voiceRecorder = new MediaRecorder(voiceStream, { mimeType });
+        voiceStartedAt = Date.now();
+        voiceRecorder.ondataavailable = (event) => {
+          if (event.data && event.data.size) voiceChunks.push(event.data);
+        };
+        voiceRecorder.onstop = async () => {
+          voiceStream?.getTracks().forEach((track) => track.stop());
+          voiceStream = null;
+          clearTimeout(voiceTimer);
+          const duration = (Date.now() - voiceStartedAt) / 1000;
+          const chunks = voiceChunks;
+          voiceChunks = [];
+          voiceRecorder = null;
+          updateVoiceButton(false);
+          if (duration < 0.6 || !chunks.length) {
+            showToast('Recording was too short.', 'info');
+            return;
+          }
+          const blob = new Blob(chunks, { type: mimeType });
+          if (blob.size < 600) { showToast('Recording was too short.', 'info'); return; }
+          const peers = roomPeers();
+          if (!peers.length) return;
+          const file = new File([blob], `voice-${Date.now()}.webm`, { type: mimeType });
+          await sendEncryptedFile(file, peers, { voice: true, duration });
+        };
+        voiceRecorder.start();
+        updateVoiceButton(true);
+        showToast('Recording… tap the stop button when you are done.', 'info');
+        voiceTimer = setTimeout(() => { if (voiceRecorder) stopVoiceRecording(); }, 120000);
+      } catch (error) {
+        console.error('Voice recording failed:', error);
+        showToast(error?.name === 'NotAllowedError'
+          ? 'Microphone permission was denied.'
+          : 'Could not start recording.', 'error');
+        if (voiceStream) voiceStream.getTracks().forEach((track) => track.stop());
+        voiceStream = null;
+        voiceRecorder = null;
+        updateVoiceButton(false);
+      }
+    }
+
+    function stopVoiceRecording() {
+      clearTimeout(voiceTimer);
+      if (voiceRecorder && voiceRecorder.state !== 'inactive') {
+        voiceRecorder.stop();
+      } else {
+        voiceRecorder = null;
+        updateVoiceButton(false);
       }
     }
 

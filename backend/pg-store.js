@@ -151,10 +151,29 @@ class PgStore {
           delivered_to UUID[] NOT NULL DEFAULT '{}',
           created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
         );
+
+        CREATE TABLE IF NOT EXISTS blocked_users (
+          blocker_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+          blocked_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+          created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+          PRIMARY KEY (blocker_id, blocked_id)
+        );
+
+        CREATE TABLE IF NOT EXISTS user_reports (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          reporter_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+          reported_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+          reason VARCHAR(32) NOT NULL,
+          details VARCHAR(1000) DEFAULT NULL,
+          status VARCHAR(16) NOT NULL DEFAULT 'open',
+          created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        );
       `);
 
       // Existing installations need the column added in place.
       await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS last_seen_at TIMESTAMPTZ DEFAULT NULL;`);
+      await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS online_status_visibility VARCHAR(16) NOT NULL DEFAULT 'friends';`);
+      await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS friend_request_policy VARCHAR(16) NOT NULL DEFAULT 'everyone';`);
 
       // Defense in depth: the frontend never talks to Supabase tables directly.
       // The backend connects as the table owner (postgres), which bypasses RLS,
@@ -167,6 +186,8 @@ class PgStore {
           ALTER TABLE friendships ENABLE ROW LEVEL SECURITY;
           ALTER TABLE private_conversations ENABLE ROW LEVEL SECURITY;
           ALTER TABLE private_messages ENABLE ROW LEVEL SECURITY;
+          ALTER TABLE blocked_users ENABLE ROW LEVEL SECURITY;
+          ALTER TABLE user_reports ENABLE ROW LEVEL SECURITY;
         `);
       } catch (error) {
         console.warn('[pg] Row Level Security could not be enabled:', error.code || error.name);
@@ -196,6 +217,10 @@ class PgStore {
         CREATE INDEX IF NOT EXISTS private_messages_by_conversation ON private_messages(conversation_id, created_at DESC);
         CREATE INDEX IF NOT EXISTS private_messages_by_sender ON private_messages(from_id, created_at DESC);
         CREATE INDEX IF NOT EXISTS private_messages_delivery ON private_messages USING GIN(delivered_to);
+        CREATE INDEX IF NOT EXISTS blocked_users_by_blocker ON blocked_users(blocker_id, created_at DESC);
+        CREATE INDEX IF NOT EXISTS blocked_users_by_blocked ON blocked_users(blocked_id);
+        CREATE INDEX IF NOT EXISTS user_reports_by_reported ON user_reports(reported_id, created_at DESC);
+        CREATE INDEX IF NOT EXISTS user_reports_by_reporter ON user_reports(reporter_id, created_at DESC);
       `);
     } finally {
       client.release();
@@ -308,7 +333,7 @@ class PgStore {
 
   async findPublicUser(userId) {
     const result = await this.pool.query(
-      `SELECT id, username, display_name, avatar_url, created_at, last_seen_at FROM users WHERE id = $1`,
+      `SELECT id, username, display_name, avatar_url, created_at, last_seen_at, online_status_visibility, friend_request_policy FROM users WHERE id = $1`,
       [userId]
     );
     const row = result.rows[0];
@@ -320,6 +345,8 @@ class PgStore {
       avatarUrl: row.avatar_url || null,
       createdAt: row.created_at,
       lastSeenAt: row.last_seen_at || null,
+      onlineStatusVisibility: row.online_status_visibility || 'friends',
+      friendRequestPolicy: row.friend_request_policy || 'everyone',
     };
   }
 
@@ -355,6 +382,8 @@ class PgStore {
       createdAt: row.created_at,
       updatedAt: row.updated_at,
       lastSeenAt: row.last_seen_at || null,
+      onlineStatusVisibility: row.online_status_visibility || 'friends',
+      friendRequestPolicy: row.friend_request_policy || 'everyone',
     };
   }
 
@@ -468,6 +497,125 @@ class PgStore {
       `UPDATE auth_sessions SET revoked_at = NOW() WHERE user_id = $1 AND revoked_at IS NULL`,
       [userId]
     );
+  }
+
+  async listActiveSessions(userId) {
+    const result = await this.pool.query(
+      `SELECT id, user_id, created_at, expires_at, user_agent
+       FROM auth_sessions
+       WHERE user_id = $1 AND revoked_at IS NULL AND expires_at > NOW()
+       ORDER BY created_at DESC`,
+      [userId]
+    );
+    return result.rows.map((row) => ({
+      id: row.id,
+      createdAt: row.created_at,
+      expiresAt: row.expires_at,
+      userAgent: row.user_agent || null,
+    }));
+  }
+
+  // ---------------------------------------------------------------------------
+  // Privacy, blocks and reports
+  // ---------------------------------------------------------------------------
+
+  async getPrivacySettings(userId) {
+    const result = await this.pool.query(
+      `SELECT online_status_visibility, friend_request_policy FROM users WHERE id = $1`,
+      [userId]
+    );
+    const row = result.rows[0];
+    return {
+      onlineStatusVisibility: row?.online_status_visibility || 'friends',
+      friendRequestPolicy: row?.friend_request_policy || 'everyone',
+    };
+  }
+
+  async updatePrivacySettings(userId, settings) {
+    const sets = [];
+    const values = [];
+    let index = 1;
+    if (settings.onlineStatusVisibility !== undefined) {
+      sets.push(`online_status_visibility = $${index++}`);
+      values.push(settings.onlineStatusVisibility);
+    }
+    if (settings.friendRequestPolicy !== undefined) {
+      sets.push(`friend_request_policy = $${index++}`);
+      values.push(settings.friendRequestPolicy);
+    }
+    if (!sets.length) return this.getPrivacySettings(userId);
+    values.push(userId);
+    await this.pool.query(`UPDATE users SET ${sets.join(', ')}, updated_at = NOW() WHERE id = $${index}`, values);
+    return this.getPrivacySettings(userId);
+  }
+
+  async blockUser(blockerId, blockedId) {
+    const client = await this.pool.connect();
+    try {
+      await client.query('BEGIN');
+      await client.query(
+        `INSERT INTO blocked_users (blocker_id, blocked_id) VALUES ($1, $2)
+         ON CONFLICT (blocker_id, blocked_id) DO NOTHING`,
+        [blockerId, blockedId]
+      );
+      // Blocking ends the friendship and any pending request in the same
+      // transaction, so a partial failure cannot leave friends-only access.
+      const key = pairKey(blockerId, blockedId);
+      await client.query(`DELETE FROM friendships WHERE pair_key = $1`, [key]);
+      await client.query(
+        `UPDATE friend_requests SET state = 'removed', responded_at = NOW() WHERE pair_key = $1`,
+        [key]
+      );
+      await client.query('COMMIT');
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  async unblockUser(blockerId, blockedId) {
+    await this.pool.query(
+      `DELETE FROM blocked_users WHERE blocker_id = $1 AND blocked_id = $2`,
+      [blockerId, blockedId]
+    );
+  }
+
+  async listBlockedUsers(userId) {
+    const result = await this.pool.query(
+      `SELECT b.blocked_id, b.created_at, u.username, u.display_name, u.avatar_url
+       FROM blocked_users b JOIN users u ON u.id = b.blocked_id
+       WHERE b.blocker_id = $1 ORDER BY b.created_at DESC`,
+      [userId]
+    );
+    return result.rows.map((row) => ({
+      id: row.blocked_id,
+      username: row.username,
+      displayName: row.display_name,
+      avatarUrl: row.avatar_url || null,
+      blockedAt: row.created_at,
+    }));
+  }
+
+  // A block applies in both directions: neither account can contact the other.
+  async isBlocked(a, b) {
+    const result = await this.pool.query(
+      `SELECT 1 FROM blocked_users
+       WHERE (blocker_id = $1 AND blocked_id = $2) OR (blocker_id = $2 AND blocked_id = $1)
+       LIMIT 1`,
+      [a, b]
+    );
+    return result.rows.length > 0;
+  }
+
+  async createReport(reporterId, reportedId, reason, details) {
+    const result = await this.pool.query(
+      `INSERT INTO user_reports (reporter_id, reported_id, reason, details)
+       VALUES ($1, $2, $3, $4) RETURNING id, created_at`,
+      [reporterId, reportedId, reason, details || null]
+    );
+    return { id: result.rows[0].id, createdAt: result.rows[0].created_at };
   }
 
   // ---------------------------------------------------------------------------
@@ -644,7 +792,8 @@ class PgStore {
       .filter(Boolean);
     if (friendIds.length === 0) return [];
     const result = await this.pool.query(
-      `SELECT id, username, display_name, avatar_url, email_verified, created_at, last_seen_at FROM users WHERE id = ANY($1::UUID[])`,
+      `SELECT id, username, display_name, avatar_url, email_verified, created_at, last_seen_at, online_status_visibility
+       FROM users WHERE id = ANY($1::UUID[])`,
       [friendIds]
     );
     return result.rows.map((r) => this._rowToUser(r));
